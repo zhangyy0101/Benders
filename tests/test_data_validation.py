@@ -2,7 +2,7 @@ import math
 from data import get_data_3new6old_fixed, prepare_instance, validate_instance_units, TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR
 
 def test_handling_rate_is_boxes_per_hour():
-    d=prepare_instance(get_data_3new6old_fixed()); assert d["handling_rate_source"]=="model calibration"; assert set(d["Bay_Handling_Rate"].values())=={TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR}
+    d=prepare_instance(get_data_3new6old_fixed()); assert d["handling_rate_source"]=="model_calibration"; assert set(d["Bay_Handling_Rate"].values())=={TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR}
 def test_nonnegative_instance_data():
     validate_instance_units(prepare_instance(get_data_3new6old_fixed()))
 def test_interval_duration_positive():

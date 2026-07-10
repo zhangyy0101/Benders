@@ -19,7 +19,8 @@ TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
 
 
-def prepare_instance(data: dict, handling_rate_scale: float = 1.0) -> dict:
+def prepare_instance(data: dict, handling_rate_scale: float = 1.0,
+                     old_outbound_release_policy: str = "proportional") -> dict:
     """Attach calibrated boxes/hour rates and validate a fresh instance."""
     scale = float(handling_rate_scale)
     if not math.isfinite(scale) or scale < 0:
@@ -31,16 +32,61 @@ def prepare_instance(data: dict, handling_rate_scale: float = 1.0) -> dict:
     }
     result["handling_rate_base"] = TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR
     result["handling_rate_scale"] = scale
-    result["handling_rate_source"] = "model calibration"
+    result["handling_rate_source"] = "model_calibration"
+    if old_outbound_release_policy not in {"legacy_sorted", "conservative", "proportional"}:
+        raise ValueError("invalid old outbound release policy")
+    result["old_outbound_release_policy"] = old_outbound_release_policy
     validate_instance_units(result)
     return result
+
+
+def simulate_old_inventory(data: dict, release_policy: str | None = None, tolerance: float = 1e-9) -> dict:
+    """Simulate old inventory with an explicit inferred bay-release policy."""
+    policy = release_policy or data.get("old_outbound_release_policy", "proportional")
+    if policy not in {"legacy_sorted", "conservative", "proportional"}:
+        raise ValueError(f"invalid old outbound release policy: {policy}")
+    I, J, S, periods = data["I_list"], data.get("J_old", []), data["S"], sorted(data["N"])
+    logical = {(i,j,s): float(data["initial_inventory_data"].get((i,j,s),0.0)) for i in I for j in J for s in S}
+    capacity_inv = dict(logical); occupancy = {}; unserved = {}; max_violation = 0.0
+    direct = data.get("Old_Outbound_By_Bay", {})
+    for n in periods:
+        for i in I:
+            for j in J:
+                for s in S:
+                    qty=float(data["Fixed_In_Flow"].get((j,s,i,n),0.0)); logical[i,j,s]+=qty; capacity_inv[i,j,s]+=qty
+        if direct:
+            for i in I:
+                for j in J:
+                    for s in S:
+                        req=float(direct.get((i,j,s,n),0.0)); take=min(req,logical[i,j,s]); logical[i,j,s]-=take; capacity_inv[i,j,s]-=take; unserved[i,j,s,n]=max(0.0,req-take)
+        else:
+            for k,bays in data["Bays_in_Block"].items():
+                for j in J:
+                    req=float(data["Block_Outbound_Req"].get((k,j,n),0.0)); available=sum(logical[i,j,s] for i in bays for s in S); unserved[k,j,n]=max(0.0,req-available); target=min(req,available)
+                    if target<=tolerance: continue
+                    if policy=="proportional":
+                        snapshot={(i,s):logical[i,j,s] for i in bays for s in S}; denom=sum(snapshot.values())
+                        for (i,s),qty in snapshot.items():
+                            take=target*qty/denom if denom>tolerance else 0.0; logical[i,j,s]-=take; capacity_inv[i,j,s]-=take
+                    else:
+                        left=target
+                        for i in sorted(bays):
+                            for s in S:
+                                take=min(left,logical[i,j,s]); logical[i,j,s]-=take
+                                if policy=="legacy_sorted": capacity_inv[i,j,s]-=take
+                                left-=take
+        for i in I:
+            occ=sum(capacity_inv[i,j,s] for j in J for s in S); occupancy[i,n]=occ; max_violation=max(max_violation,occ-float(data["I"][i]["cap"]))
+    return {"occupancy":occupancy,"unserved_outbound":unserved,"max_capacity_violation":max(0.0,max_violation),"release_policy":policy}
 
 
 def validate_instance_units(data: dict) -> None:
     """Reject incomplete, dimensionally invalid, or non-finite model data."""
     required = ("K", "I", "I_list", "Bays_in_Block", "J_new", "J_old", "S", "N",
                 "Intervals", "Dist", "Arrivals_interval", "Fixed_Bay_Mode",
-                "Old_Box_Occupancy_Map", "Bay_Handling_Rate")
+                "Old_Box_Occupancy_Map", "Bay_Handling_Rate", "initial_inventory_data",
+                "Fixed_In_Flow", "Block_Outbound_Vol", "Block_Outbound_Req",
+                "Fixed_Mode_Force", "Alpha")
     missing = [key for key in required if key not in data]
     if missing:
         raise ValueError(f"missing instance keys: {missing}")
@@ -50,6 +96,10 @@ def validate_instance_units(data: dict) -> None:
             raise ValueError(f"{label} contains NaN/inf")
         return value
     valid_modes = {int(s) for s in data["S"]}
+    if sorted(data["N"]) != list(range(len(data["N"]))) or any(int(data["Intervals"][n]["id"]) != n for n in data["N"]):
+        raise ValueError("period ids must be contiguous and match Intervals indices")
+    alpha=number(data["Alpha"],"Alpha")
+    if alpha<=0: raise ValueError("Alpha must be positive")
     groups = list(data.get("G") or data["S"])
     for g in groups:
         size = int(data.get("GroupSize", {}).get(g, data.get("GroupAttrs", {}).get(g, {}).get("size", g)))
@@ -80,12 +130,21 @@ def validate_instance_units(data: dict) -> None:
             for s in data["S"]:
                 if (j, s, n) not in data["Arrivals_interval"]:
                     raise ValueError(f"missing arrival key {(j, s, n)}")
+                grouped=data.get("Arrivals_group_interval",{})
+                if data.get("G"):
+                    matching=[g for g in groups if int(data.get("GroupSize",{}).get(g,data["GroupAttrs"][g]["size"]))==int(s)]
+                    if any((j,g,n) not in grouped for g in matching): raise ValueError(f"missing grouped arrival for {(j,s,n)}")
+                    grouped_sum=sum(number(grouped[j,g,n],"grouped arrival") for g in matching)
+                    if abs(grouped_sum-number(data["Arrivals_interval"][j,s,n],"arrival"))>1e-6: raise ValueError(f"grouped arrivals mismatch for {(j,s,n)}")
     numeric_maps = ("Fixed_In_Flow", "Block_Outbound_Vol", "Block_Outbound_Req",
                     "Old_Box_Occupancy_Map", "Arrivals_group_interval")
     for map_name in numeric_maps:
         for key, value in data.get(map_name, {}).items():
             if number(value, f"{map_name}[{key}]") < 0:
                 raise ValueError(f"negative value in {map_name} at {key}")
+    simulation=simulate_old_inventory(data)
+    if simulation["max_capacity_violation"]>1e-6: raise ValueError("fixed inbound overfills old inventory capacity")
+    if max(simulation["unserved_outbound"].values(),default=0.0)>1e-6: raise ValueError("old outbound exceeds available inventory")
 
 
 def _build_yard(num_blocks: int = TOS_NUM_YARD_BLOCKS, bays_per_block: int = TOS_YARD_BAYS):
@@ -207,6 +266,20 @@ def _build_old_box_map(I_list, J_old, initial_inventory_data, fixed_inbound_sche
             old_box_map[(bay, ship)] += float(fix["flow"])
             old_size_map[(bay, ship)] = int(fix["size"])
     return old_box_map, old_size_map
+
+
+def _cap_inferred_outbound_to_initial_inventory(requests, initial_inventory_data, I, safety=0.95):
+    """Keep inferred block-level outbound temporally feasible from initial stock alone."""
+    available = {}
+    for (bay, ship, _size), qty in initial_inventory_data.items():
+        key=(I[bay]["block"],ship);available[key]=available.get(key,0.0)+float(qty)
+    requested={}
+    for req in requests:
+        key=(req["block"],req["ship"]);requested[key]=requested.get(key,0.0)+float(req["total"])
+    for req in requests:
+        key=(req["block"],req["ship"]);total=requested.get(key,0.0);limit=safety*available.get(key,0.0)
+        if total>limit+1e-9:req["total"]*=limit/total if total>0 else 0.0
+    return requests
 
 
 def _finalize_fixed_modes(I, I_list, initial_inventory_data, fixed_inbound_schedule, default_size: int = 40):
@@ -683,6 +756,8 @@ def _build_baptbi_original_adapted(instance_name: str) -> dict:
                 "total": qty * 0.35,
             })
 
+    _cap_inferred_outbound_to_initial_inventory(outbound_requests, initial_inventory_data, I)
+
     Fixed_Bay_Mode = _finalize_fixed_modes(I, I_list, initial_inventory_data, fixed_inbound_schedule, default_size=40)
     touched_bays = {
         bay for (bay, _ship, _size), qty in initial_inventory_data.items()
@@ -1051,6 +1126,8 @@ def _build_barcelona_bap_adapted(instance_name: str) -> dict:
             "end": min(T_max, float(cfg["gate_end"]) + 12.0),
             "total": max(2.0, 0.10 * total_boxes),
         })
+
+    _cap_inferred_outbound_to_initial_inventory(outbound_requests, initial_inventory_data, I)
 
     Fixed_Bay_Mode = _finalize_fixed_modes(
         I, I_list, initial_inventory_data, fixed_inbound_schedule, default_size=40
