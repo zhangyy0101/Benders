@@ -4,7 +4,7 @@ from data import get_data_baptbi_5n_4b_4p,get_data_tiny_concentration,prepare_in
 from model_concentration import concentration_metadata,evaluate_joint_group_concentration,has_joint_attribute_groups
 from model_master import build_master_model
 from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
-from solve_direct_gurobi import solve_direct_gurobi
+from solve_direct_gurobi import solve_direct_alns_pipeline,solve_direct_gurobi
 from solver_alns import OPERATORS,concentration_destroy_pool
 from solver_true_benders import solve_bbc_phase,solve_true_benders_pipeline
 
@@ -39,3 +39,5 @@ def test_height_mix_variables_do_not_exist():
     d=fixture();m,_,_=build_monolithic_model(d,Weights());assert not any("height_mix" in v.VarName for v in m.getVars())
 def test_zero_weight_disables_binaries():
     d=fixture();w=Weights(master=MasterWeights(concentration=0));m,v,_=build_master_model(d,w);assert "concentration_use" not in v
+def test_direct_alns_uses_one_fair_total_budget():
+    d=fixture();r=solve_direct_alns_pipeline(d,Weights(),total_time=2,mip_gap=0);assert r["ok"] and abs(sum(r["time_budget"][k] for k in ("warm","alns","main"))-2)<1e-9 and abs(r["ub"]-19333.3333333333)<1e-5

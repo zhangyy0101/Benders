@@ -3,16 +3,18 @@ from __future__ import annotations
 import argparse,csv,json,os,time
 from config import MasterWeights,Weights
 from data import prepare_instance
-from solve_direct_gurobi import INSTANCES,solve_direct_gurobi
+from solve_direct_gurobi import INSTANCES,solve_direct_alns_pipeline,solve_direct_gurobi
 from solver_true_benders import solve_true_benders_pipeline
 
 FIELDS="instance seed algorithm budget runtime status ub lb gap open_cost concentration_cost distance_cost balance_cost conflict_cost concentration_available concentration_enabled concentration_weight concentration_raw_used_bays concentration_normalized concentration_scale used_bays_total root_open_bound root_concentration_bound root_eta_bound aggregate_recourse_bound cuts sp_solves callback_time alns_improvement nodes alloc_domain".split()
 def configs(suite):
     if suite=="concentration":return [{"algorithm":f"concentration_weight_{w}","weight":w,"enabled":w>0} for w in (0,2,5,10,20)]
-    return [{"algorithm":"model_o_without_concentration","weight":0,"enabled":False},{"algorithm":"model_c_joint_concentration","weight":10,"enabled":True},{"algorithm":"direct_joint_concentration","weight":10,"enabled":True,"direct":True}]
+    return [{"algorithm":"model_o_without_concentration","weight":0,"enabled":False},{"algorithm":"model_c_joint_concentration","weight":10,"enabled":True},{"algorithm":"direct_joint_concentration","weight":10,"enabled":True,"direct":True},{"algorithm":"direct_warm_alns_joint_concentration","weight":10,"enabled":True,"direct_alns":True}]
 def run_one(instance,seed,cfg,budget,threads,domain):
     data=prepare_instance(INSTANCES[instance]());weights=Weights(master=MasterWeights(concentration=cfg["weight"]));started=time.perf_counter()
-    if cfg.get("direct"):
+    if cfg.get("direct_alns"):
+        r=solve_direct_alns_pipeline(data,weights,total_time=budget,mip_gap=.03,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("components") or {};con=components.get("concentration",{});root={};cuts=sp=callback=None;alns=r.get("alns",{}).get("improvement");nodes=r.get("nodes")
+    elif cfg.get("direct"):
         r=solve_direct_gurobi(data,weights,time_limit=budget,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("components") or {};con=components.get("concentration",{});root={};cuts=sp=callback=alns=None;nodes=r.get("nodes")
     else:
         r=solve_true_benders_pipeline(data,weights,total_core_time=budget,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("core_best",{}).get("components",{});con=r.get("concentration",{});root=r.get("phase0_root_prepass",{});main=r.get("phase3_bbc",{});cuts=r.get("total_unique_cuts");sp=main.get("sp_statistics",{}).get("sp_solve_count");callback=main.get("cut_statistics",{}).get("callback_time");alns=r.get("phase2_alns",{}).get("improvement");nodes=main.get("nodes");r={**r,**r.get("core_best",{}),"status_name":main.get("status_name")}

@@ -77,5 +77,10 @@ python main.py --instance 3new6old --total-core-time 180 --concentration-weight 
 python run_experiments.py --instances 3new6old --total-core-time 60 --suite concentration
 ```
 
+论文的算法对比应同时报告裸 `Direct`、共享同一 warm/ALNS 的 `Direct+ALNS` 和
+`BBC+ALNS`。`solve_direct_alns_pipeline` 默认把总预算的 5%/15%/80% 分给
+warm、ALNS、monolithic main；BBC 使用 20%/5%/15%/60% 分给 root、warm、
+ALNS、BBC main。二者复用完全相同的 warm-start 函数和 ALNS 实现。
+
 权重敏感性使用 0、2、5、10、20，并应采用多 seed、统一充分预算。由于目标已从
 block excess 改为直接 bay usage，旧实验数值不可与新指标直接比较。
