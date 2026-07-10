@@ -25,13 +25,17 @@ def solve_core_mip(data, weights, *, time_limit_s, mip_gap, alloc_domain="intege
     model.Params.Presolve = 2; model.Params.Cuts = 2 if proof else 1; model.Params.MIPFocus = 3 if proof else 1; model.Params.Heuristics = 0.02 if proof else 0.20
     if proof: model.Params.Symmetry = 2
     if start_solution: _start(variables, start_solution, alloc_domain)
-    t0=time.perf_counter(); model.optimize(); runtime=time.perf_counter()-t0
+    root={"bound":None}
+    def capture_root(m,where):
+        if where==GRB.Callback.MIPNODE and root["bound"] is None and m.cbGet(GRB.Callback.MIPNODE_NODCNT)<.5:
+            root["bound"]=float(m.cbGet(GRB.Callback.MIPNODE_OBJBND))
+    t0=time.perf_counter(); model.optimize(capture_root); runtime=time.perf_counter()-t0
     has=model.SolCount > 0; solution=extract_solution(expressions["data"], variables) if has else None
     recomputed=evaluate_core_solution(expressions["data"], weights, solution) if has else None
     ub=recomputed["total_core_cost"] if recomputed else None
     if has and abs(float(model.ObjVal)-ub) > 1e-5: raise AssertionError("model objective and recomputed core cost differ")
     lb=float(model.ObjBound) if model.Status not in (GRB.INFEASIBLE, GRB.INF_OR_UNBD) else None
-    return {"ok":has,"status":int(model.Status),"status_name":_status(model.Status),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0.0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"nodes":float(model.NodeCount),"root_bound":lb if float(model.NodeCount)==0 else None,"solution_count":int(model.SolCount),"solution":solution,"components":recomputed}
+    return {"ok":has,"status":int(model.Status),"status_name":_status(model.Status),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0.0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"nodes":float(model.NodeCount),"root_bound":root["bound"],"solution_count":int(model.SolCount),"solution":solution,"components":recomputed}
 
 
 OPERATORS=("random","active-biased","block-focused","interval-focused","ship-focused","conflict-focused","distance-focused")
@@ -45,12 +49,19 @@ def adaptive_lns(data, weights, incumbent, *, time_limit_s=45, repair_time_s=5, 
             block=rng.choice(data["K"]); pool=[k for k in keys if k[0] in data["Bays_in_Block"][block]] or keys
         elif op=="interval-focused": n=rng.choice(data["N"]); pool=[k for k in keys if k[2]==n] or keys
         elif op=="ship-focused": j=rng.choice(data["J_new"]); pool=[k for k in keys if k[1]==j] or keys
+        elif op=="conflict-focused":
+            pressure=data.get("Block_Outbound_Vol",{}); bay_block={i:data["I"][i]["block"] for i in data["I_list"]}; pool=sorted(keys,key=lambda q:pressure.get((bay_block[q[0]],q[2]),0),reverse=True)[:max(count,len(keys)//4)] or keys
+        elif op=="distance-focused":
+            bay_block={i:data["I"][i]["block"] for i in data["I_list"]}; pool=sorted(keys,key=lambda q:data["Dist"][(q[1],bay_block[q[0]])],reverse=True)[:max(count,len(keys)//4)] or keys
         else: pool=keys
         released=set(rng.sample(pool,min(count,len(pool)))); model,variables,expr=build_core_monolithic_model(data,weights,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities)
         _start(variables,current["solution"],alloc_domain)
         released_pairs={(i,j) for i,j,_n in released}; released_alloc=0
         for key,var in variables["x"].items():
             if key not in released: var.LB=var.UB=round(current["solution"]["x"][key])
+        released_blocks={(data["I"][i]["block"],j,n) for i,j,n in released}
+        for key,var in variables["block_use_new"].items():
+            if key not in released_blocks: var.LB=var.UB=round(current["solution"]["block_use_new"][key])
         for key,var in variables["alloc_boxes"].items():
             if (key[0],key[1]) not in released_pairs:
                 value=current["solution"]["alloc_boxes"][key]; value=round(value) if alloc_domain=="integer" else value; var.LB=var.UB=value
@@ -61,7 +72,8 @@ def adaptive_lns(data, weights, incumbent, *, time_limit_s=45, repair_time_s=5, 
             sol=extract_solution(expr["data"],variables); ev=evaluate_core_solution(expr["data"],weights,sol); candidate_cost=ev["total_core_cost"]; delta=candidate_cost-current["ub"]; temp=max(1e-9,abs(best["ub"])*.02*(.98**iteration)); accepted=delta < -1e-6 or rng.random()<math.exp(-max(0,delta)/temp); sa=accepted and delta>=-1e-6
             candidate={"ok":True,"ub":candidate_cost,"solution":sol,"components":ev}
             if accepted: current=candidate
-            if candidate_cost < best["ub"]-1e-6: best=candidate; stats[op]["improved"]+=1; stats[op]["improvement"]+=best["ub"]-candidate_cost; weights_op[op]=.8*weights_op[op]+.2*5
+            if candidate_cost < best["ub"]-1e-6:
+                improvement=best["ub"]-candidate_cost; best=candidate; stats[op]["improved"]+=1; stats[op]["improvement"]+=improvement; weights_op[op]=.8*weights_op[op]+.2*5
         stats[op]["used"]+=1; stats[op]["runtime"]+=rt; stats[op]["accepted" if accepted else "rejected"]+=1; weights_op[op]=.95*weights_op[op]+.05*(2 if accepted else .5)
         log.append({"iteration":iteration,"operator":op,"destroy_fraction":fraction,"released_x_count":len(released),"released_alloc_count":released_alloc,"candidate_core_cost":candidate_cost,"current_core_cost":current["ub"],"best_core_cost":best["ub"],"accepted":accepted,"sa_accepted":sa,"repair_status":_status(model.Status),"repair_runtime":rt,"repair_gap":float(model.MIPGap) if model.SolCount else None,"repair_nodes":float(model.NodeCount)})
     op_summary={op:{**s,"average_improvement":s["improvement"]/max(1,s["improved"]),"average_runtime":s["runtime"]/max(1,s["used"]),"final_adaptive_weight":weights_op[op]} for op,s in stats.items()}
@@ -72,9 +84,9 @@ def solve_attribute_refinement(data, weights, core_best_solution, core_best_ub, 
     model,variables,expr=build_core_monolithic_model(data,weights,alloc_domain=alloc_domain,include_attribute_helpers=True,attribute_scope=attribute_scope,add_valid_inequalities=add_valid_inequalities)
     cap=float(core_best_ub)*(1+float(epsilon)); model.addConstr(expr["core_objective"]<=cap+1e-6,name="epsilon_core_cap"); model.setObjective(expr["attribute_objective"],GRB.MINIMIZE); _start(variables,core_best_solution,alloc_domain)
     model.Params.OutputFlag=0; model.Params.TimeLimit=float(time_limit_s); model.Params.MIPGap=float(mip_gap); model.Params.Seed=int(seed); model.optimize()
-    start_raw=raw_components(data,core_best_solution); start_attr=attribute_score(data,weights,start_raw); accepted=False; solution=core_best_solution; candidate_core=None; candidate_attr=None
+    start_raw=raw_components(data,core_best_solution,attribute_scope=attribute_scope); start_attr=attribute_score(data,weights,start_raw); accepted=False; solution=core_best_solution; candidate_core=None; candidate_attr=None
     if model.SolCount:
-        candidate=extract_solution(expr["data"],variables); ev=evaluate_core_solution(expr["data"],weights,candidate); candidate_core=ev["total_core_cost"]; candidate_attr=ev["attribute_score"]; accepted=candidate_core<=cap+1e-5 and candidate_attr<start_attr-1e-6
+        candidate=extract_solution(expr["data"],variables); ev=evaluate_core_solution(expr["data"],weights,candidate,attribute_scope=attribute_scope); candidate_core=ev["total_core_cost"]; candidate_attr=ev["attribute_score"]; accepted=candidate_core<=cap+1e-5 and candidate_attr<start_attr-1e-6
         if accepted: solution=candidate
     return {"accepted":accepted,"epsilon":epsilon,"core_cap":cap,"start_core_cost":core_best_ub,"candidate_core_cost":candidate_core,"core_degradation":None if candidate_core is None else candidate_core-core_best_ub,"start_attribute_score":start_attr,"candidate_attribute_score":candidate_attr,"solution":solution,"status_name":_status(model.Status)}
 

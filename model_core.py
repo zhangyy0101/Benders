@@ -1,15 +1,15 @@
 """The single complete monolithic core MIP used by every Route-A phase."""
 from __future__ import annotations
 
+import math
 import gurobipy as gp
 from gurobipy import GRB
 
 from config import Weights
 from data import prepare_instance, validate_instance_units
-from model_common import (arrival, attribute_score, compute_old_occupancy,
-                          group_attr, new_groups, objective_scale_factor,
+from model_common import (arrival, attribute_score, attribute_values, compute_old_occupancy,
+                          fixed_in_block, group_attr, group_size, new_groups, objective_scale_factor,
                           objective_scales, outbound_pressure, raw_components)
-from solver_bbc import build_master_v2
 
 
 def build_core_monolithic_model(data: dict, weights: Weights, *,
@@ -20,9 +20,39 @@ def build_core_monolithic_model(data: dict, weights: Weights, *,
     validate_instance_units(data)
     if attribute_scope not in {"final", "horizon"}:
         raise ValueError("attribute_scope must be final or horizon")
-    model, variables = build_master_v2(data, weights,
-        include_attribute_helpers=include_attribute_helpers, alloc_domain=alloc_domain)
     I, J, G, N = data["I_list"], data["J_new"], new_groups(data), data["N"]
+    if alloc_domain not in {"integer","continuous"}: raise ValueError("invalid alloc_domain")
+    model=gp.Model("route_a_core_monolithic"); model.Params.OutputFlag=0
+    alloc=model.addVars(I,J,G,N,lb=0,vtype=GRB.INTEGER if alloc_domain=="integer" else GRB.CONTINUOUS,name="alloc_boxes")
+    x=model.addVars(I,J,N,vtype=GRB.BINARY,name="x"); block=model.addVars(data["K"],J,N,vtype=GRB.BINARY,name="block_use")
+    share=model.addVars(J,data["K"],G,N,lb=0,name="in_share"); total=model.addVars(data["K"],N,lb=0,name="in_total"); avg=model.addVars(N,lb=0,name="avg"); bal=model.addVars(data["K"],N,lb=0,name="g_bal")
+    old=compute_old_occupancy(data); remaining={(i,n):max(0,float(data["I"][i]["cap"])-old.get((i,n),0)) for i in I for n in N}; modes={i:int(data["Fixed_Bay_Mode"][i]) for i in I}
+    variables={"alloc_boxes":alloc,"x":x,"block_use_new":block,"in_share":share,"in_total":total,"avg_n":avg,"g_bal":bal,"remaining_cap":remaining,"old_occupancy":old,"bay_mode_map":modes}
+    for i in I:
+        for n in N:
+            for j in J:
+                model.addConstr(gp.quicksum(alloc[i,j,g,n] for g in G)<=remaining[i,n]*x[i,j,n],name=f"alloc_activation_{i}_{j}_{n}")
+                model.addConstr(x[i,j,n]<=gp.quicksum(alloc[i,j,g,n] for g in G),name=f"activation_alloc_{i}_{j}_{n}")
+                if n>min(N):
+                    for g in G: model.addConstr(alloc[i,j,g,n]>=alloc[i,j,g,n-1],name=f"monotone_alloc_{i}_{j}_{g}_{n}")
+            model.addConstr(gp.quicksum(alloc[i,j,g,n] for j in J for g in G)<=remaining[i,n],name=f"storage_{i}_{n}")
+            for g in G:
+                if group_size(data,g)!=modes[i]: model.addConstr(gp.quicksum(alloc[i,j,g,n] for j in J)==0,name=f"bay_mode_{i}_{g}_{n}")
+    for j in J:
+        for k in data["K"]:
+            bays=data["Bays_in_Block"][k]
+            for n in N:
+                model.addConstr(gp.quicksum(x[i,j,n] for i in bays)<=len(bays)*block[k,j,n],name=f"block_forward_{k}_{j}_{n}")
+                model.addConstr(block[k,j,n]<=gp.quicksum(x[i,j,n] for i in bays),name=f"block_reverse_{k}_{j}_{n}")
+                model.addConstr(gp.quicksum(share[j,k,g,n] for g in G)<=sum(arrival(data,j,g,n) for g in G)*block[k,j,n],name=f"share_block_{j}_{k}_{n}")
+        for g in G:
+            for n in N: model.addConstr(gp.quicksum(share[j,k,g,n] for k in data["K"])==arrival(data,j,g,n),name=f"share_arrival_{j}_{g}_{n}")
+    fixed=fixed_in_block(data)
+    for k in data["K"]:
+        for n in N:
+            model.addConstr(total[k,n]==fixed[k,n]+gp.quicksum(share[j,k,g,n] for j in J for g in G),name=f"total_{k}_{n}")
+            model.addConstr(bal[k,n]>=total[k,n]-avg[n],name=f"balance_pos_{k}_{n}"); model.addConstr(bal[k,n]>=avg[n]-total[k,n],name=f"balance_neg_{k}_{n}")
+    for n in N: model.addConstr(len(data["K"])*avg[n]==gp.quicksum(total[k,n] for k in data["K"]),name=f"average_{n}")
     din = model.addVars(J, G, I, N, lb=0.0, name="din")
     inv = model.addVars(J, G, I, N, lb=0.0, name="inv")
     for j in J:
@@ -51,6 +81,48 @@ def build_core_monolithic_model(data: dict, weights: Weights, *,
             for j in J:
                 for i in I: model.addConstr(variables["x"][i,j,n] >= variables["x"][i,j,n-1], name=f"monotone_x_{i}_{j}_{n}")
                 for k in data["K"]: model.addConstr(variables["block_use_new"][k,j,n] >= variables["block_use_new"][k,j,n-1], name=f"monotone_block_{k}_{j}_{n}")
+    if add_valid_inequalities:
+        alpha=float(data["Alpha"])
+        for j in J:
+            for size in data["S"]:
+                bays=[i for i in I if modes[i]==int(size)]; groups=[g for g in G if group_size(data,g)==int(size)]; cumulative=0.0
+                for n in N:
+                    period_need=sum(arrival(data,j,g,n) for g in groups); cumulative+=period_need
+                    max_work=max([float(data["Bay_Handling_Rate"][(i,n)])*float(data["Intervals"][n]["dur"]) for i in bays]+[0]); max_store=max([remaining[i,n] for i in bays]+[0])
+                    if period_need>1e-9 and max_work>1e-9: model.addConstr(gp.quicksum(x[i,j,n] for i in bays)>=math.ceil(alpha*period_need/max_work-1e-9),name=f"minimum_handling_bays_{j}_{size}_{n}")
+                    if cumulative>1e-9 and max_store>1e-9: model.addConstr(gp.quicksum(x[i,j,n] for i in bays)>=math.ceil(alpha*cumulative/max_store-1e-9),name=f"minimum_storage_bays_{j}_{size}_{n}")
+            for g in G:
+                cumulative=0.0; bays=[i for i in I if modes[i]==group_size(data,g)]
+                for n in N:
+                    cumulative+=arrival(data,j,g,n)
+                    model.addConstr(gp.quicksum(alloc[i,j,g,n] for i in bays)>=float(data["Alpha"])*cumulative,name=f"cumulative_group_capacity_{j}_{g}_{n}")
+    pod_use={}; weight_use={}; height_used={}; height_mix={}; periods=[max(N)] if attribute_scope=="final" else list(N)
+    if include_attribute_helpers:
+        for label,attr,target in (("pod","pod",pod_use),("weight","weight_class",weight_use)):
+            values=attribute_values(data,attr); td=model.addVars(J,values,data["K"],periods,vtype=GRB.BINARY,name=f"{label}_block_use")
+            target.update(td)
+            for j in J:
+                for value in values:
+                    groups=[g for g in G if group_attr(data,g,attr)==value]
+                    for n in periods:
+                        total_need=sum(arrival(data,j,g,nn) for g in groups for nn in N if nn<=n)
+                        feasible=[]
+                        for k in data["K"]:
+                            cap=sum(remaining[i,n] for i in data["Bays_in_Block"][k] if modes[i] in {group_size(data,g) for g in groups}); feasible.append(cap); big_m=min(total_need,cap)
+                            boxes=gp.quicksum(alloc[i,j,g,n] for i in data["Bays_in_Block"][k] for g in groups)
+                            if big_m>1e-9: model.addConstr(boxes<=big_m*td[j,value,k,n],name=f"{label}_link_{j}_{value}_{k}_{n}")
+                            else: model.addConstr(td[j,value,k,n]==0,name=f"{label}_no_capacity_{j}_{value}_{k}_{n}")
+                        max_cap=max(feasible,default=0)
+                        if total_need>1e-9 and max_cap>1e-9: model.addConstr(gp.quicksum(td[j,value,k,n] for k in data["K"])>=math.ceil(total_need/max_cap-1e-9),name=f"{label}_minimum_blocks_{j}_{value}_{n}")
+            for var in td.values(): var.BranchPriority=10
+        heights=attribute_values(data,"height"); hu=model.addVars(I,heights,periods,vtype=GRB.BINARY,name="bay_height_used"); hm=model.addVars(I,periods,lb=0,name="bay_height_mix"); height_used.update(hu); height_mix.update(hm)
+        for i in I:
+            for n in periods:
+                for height in heights:
+                    model.addConstr(gp.quicksum(alloc[i,j,g,n] for j in J for g in G if group_attr(data,g,"height")==height)<=remaining[i,n]*hu[i,height,n],name=f"height_link_{i}_{height}_{n}")
+                model.addConstr(hm[i,n]>=gp.quicksum(hu[i,h,n] for h in heights)-1,name=f"height_mix_{i}_{n}")
+        for var in hu.values(): var.BranchPriority=10
+    variables.update({"pod_block_use":pod_use,"weight_block_use":weight_use,"bay_height_used":height_used,"bay_height_mix":height_mix})
     for var in variables["block_use_new"].values(): var.BranchPriority = 30
     for var in variables["x"].values(): var.BranchPriority = 20
     for var in variables["alloc_boxes"].values(): var.BranchPriority = 5
@@ -75,8 +147,8 @@ def extract_solution(data, variables):
     return {name: {key: float(var.X) for key, var in values.items()} for name, values in variables.items() if hasattr(values, "items") and values and hasattr(next(iter(values.values())), "X")}
 
 
-def evaluate_core_solution(data, weights, solution):
-    raw = raw_components(data, solution)
+def evaluate_core_solution(data, weights, solution, attribute_scope="final"):
+    raw = raw_components(data, solution, attribute_scope=attribute_scope)
     raw["distance"] = sum(float(data["Dist"][(j,k)]) * solution.get("in_share", {}).get((j,k,g,n), 0.0) for j in data["J_new"] for k in data["K"] for g in new_groups(data) for n in data["N"])
     scales = objective_scales(data); factor = objective_scale_factor(weights)
     weighted = {"open": factor*weights.master.x*raw["obj_x"]/scales["open"], "distance": factor*weights.sub.dist*raw["distance"]/scales["distance"], "balance": factor*weights.sub.balance*raw["real_l1"]/scales["balance"], "conflict": factor*weights.sub.conflict*raw["obj_conflict"]/scales["conflict"]}

@@ -50,6 +50,11 @@ def validate_instance_units(data: dict) -> None:
             raise ValueError(f"{label} contains NaN/inf")
         return value
     valid_modes = {int(s) for s in data["S"]}
+    groups = list(data.get("G") or data["S"])
+    for g in groups:
+        size = int(data.get("GroupSize", {}).get(g, data.get("GroupAttrs", {}).get(g, {}).get("size", g)))
+        if size not in valid_modes:
+            raise ValueError(f"group {g} has invalid size {size}")
     for i in data["I_list"]:
         cap = number(data["I"][i]["cap"], f"capacity[{i}]")
         if cap < 0: raise ValueError(f"negative capacity for {i}")
@@ -58,6 +63,8 @@ def validate_instance_units(data: dict) -> None:
         initial = sum(number(v, "initial occupancy") for (bay, _j, _s), v in data.get("initial_inventory_data", {}).items() if bay == i)
         if initial > cap + 1e-9: raise ValueError(f"old occupancy exceeds capacity for {i}")
         for n in data["N"]:
+            if (i, n) not in data["Bay_Handling_Rate"]:
+                raise ValueError(f"missing handling rate for {(i, n)}")
             if number(data["Bay_Handling_Rate"][(i, n)], "handling rate") < 0:
                 raise ValueError(f"negative handling rate for {(i, n)}")
     for n in data["N"]:
@@ -66,7 +73,19 @@ def validate_instance_units(data: dict) -> None:
         if number(value, f"arrival[{key}]") < 0: raise ValueError(f"negative arrival at {key}")
     for j in data["J_new"]:
         for k in data["K"]:
+            if (j, k) not in data["Dist"]:
+                raise ValueError(f"missing Dist key {(j, k)}")
             number(data["Dist"][(j, k)], f"Dist[{j},{k}]")
+        for n in data["N"]:
+            for s in data["S"]:
+                if (j, s, n) not in data["Arrivals_interval"]:
+                    raise ValueError(f"missing arrival key {(j, s, n)}")
+    numeric_maps = ("Fixed_In_Flow", "Block_Outbound_Vol", "Block_Outbound_Req",
+                    "Old_Box_Occupancy_Map", "Arrivals_group_interval")
+    for map_name in numeric_maps:
+        for key, value in data.get(map_name, {}).items():
+            if number(value, f"{map_name}[{key}]") < 0:
+                raise ValueError(f"negative value in {map_name} at {key}")
 
 
 def _build_yard(num_blocks: int = TOS_NUM_YARD_BLOCKS, bays_per_block: int = TOS_YARD_BAYS):
@@ -408,6 +427,42 @@ def get_data_3new6old_fixed() -> dict:
     if _FIXED_3N6O_CACHE is None:
         _FIXED_3N6O_CACHE = get_data_3new6old()
     return copy.deepcopy(_FIXED_3N6O_CACHE)
+
+
+def get_data_tiny_route_a() -> dict:
+    """Small deterministic fixture designed to solve to proven optimality quickly."""
+    K = ["Block_A", "Block_B"]
+    I_list = ["Bay_A01", "Bay_A02", "Bay_B01", "Bay_B02"]
+    I = {i: {"block": "Block_A" if "_A" in i else "Block_B", "cap": 10.0,
+             "fixed_size_ft": 20 if i.endswith("01") else 40} for i in I_list}
+    bays = {k: [i for i in I_list if I[i]["block"] == k] for k in K}
+    J_new, J_old, S, N = ["Ship_New_1"], [], [20, 40], [0, 1]
+    G = ["G20", "G40"]
+    attrs = {"G20": {"size": 20, "pod": "P1", "height": "STD", "weight_class": "LIGHT"},
+             "G40": {"size": 40, "pod": "P2", "height": "HIGH", "weight_class": "HEAVY"}}
+    intervals = [{"id": 0, "start": 0.0, "end": 1.0, "dur": 1.0},
+                 {"id": 1, "start": 1.0, "end": 2.0, "dur": 1.0}]
+    arrivals_group = {(j, g, n): 2.0 for j in J_new for g in G for n in N}
+    arrivals = {(j, s, n): 2.0 for j in J_new for s in S for n in N}
+    return {
+        "K": K, "I": I, "I_list": I_list, "Bays_in_Block": bays,
+        "J_new": J_new, "J_old": J_old, "J_all": J_new, "S": S, "G": G,
+        "GroupAttrs": attrs, "GroupSize": {g: attrs[g]["size"] for g in G},
+        "GroupPOD": {g: attrs[g]["pod"] for g in G},
+        "GroupHeight": {g: attrs[g]["height"] for g in G},
+        "GroupWeightClass": {g: attrs[g]["weight_class"] for g in G},
+        "Alpha": 1.0, "Intervals": intervals, "N": N,
+        "Dist": {(j, k): 100.0 + 100.0 * idx for j in J_new for idx, k in enumerate(K)},
+        "Fixed_Bay_Mode": {i: I[i]["fixed_size_ft"] for i in I_list},
+        "Fixed_Mode_Force": {(i, n): None for i in I_list for n in N},
+        "Old_Ship_Size_Map": {}, "Old_Box_Occupancy_Map": {},
+        "initial_inventory_data": {}, "Arrivals_interval": arrivals,
+        "Arrivals_group_interval": arrivals_group,
+        "Block_Outbound_Vol": {(k, n): 0.0 for k in K for n in N},
+        "Block_Outbound_Req": {}, "Fixed_In_Flow": {},
+        "OldShipType": {"in_only": [], "out_only": [], "fixed_only": []},
+        "ScenarioName": "tiny_route_a", "New_Outbound_Req": {},
+    }
 
 
 # ---------------------------------------------------------------------------
