@@ -35,7 +35,8 @@ def solve_core_mip(data, weights, *, time_limit_s, mip_gap, alloc_domain="intege
     ub=recomputed["total_core_cost"] if recomputed else None
     if has and abs(float(model.ObjVal)-ub) > 1e-5: raise AssertionError("model objective and recomputed core cost differ")
     lb=float(model.ObjBound) if model.Status not in (GRB.INFEASIBLE, GRB.INF_OR_UNBD) else None
-    return {"ok":has,"status":int(model.Status),"status_name":_status(model.Status),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0.0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"nodes":float(model.NodeCount),"root_bound":root["bound"],"solution_count":int(model.SolCount),"solution":solution,"components":recomputed}
+    root_bound=root["bound"] if root["bound"] is not None else (lb if float(model.NodeCount)<=1 else None)
+    return {"ok":has,"status":int(model.Status),"status_name":_status(model.Status),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0.0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"nodes":float(model.NodeCount),"root_bound":root_bound,"solution_count":int(model.SolCount),"solution":solution,"components":recomputed}
 
 
 OPERATORS=("random","active-biased","block-focused","interval-focused","ship-focused","conflict-focused","distance-focused")
@@ -83,20 +84,20 @@ def adaptive_lns(data, weights, incumbent, *, time_limit_s=45, repair_time_s=5, 
 def solve_attribute_refinement(data, weights, core_best_solution, core_best_ub, *, epsilon=.01, attribute_scope="final", time_limit_s=20, mip_gap=.03, alloc_domain="integer", add_valid_inequalities=True, seed=0):
     model,variables,expr=build_core_monolithic_model(data,weights,alloc_domain=alloc_domain,include_attribute_helpers=True,attribute_scope=attribute_scope,add_valid_inequalities=add_valid_inequalities)
     cap=float(core_best_ub)*(1+float(epsilon)); model.addConstr(expr["core_objective"]<=cap+1e-6,name="epsilon_core_cap"); model.setObjective(expr["attribute_objective"],GRB.MINIMIZE); _start(variables,core_best_solution,alloc_domain)
-    model.Params.OutputFlag=0; model.Params.TimeLimit=float(time_limit_s); model.Params.MIPGap=float(mip_gap); model.Params.Seed=int(seed); model.optimize()
+    model.Params.OutputFlag=0; model.Params.TimeLimit=float(time_limit_s); model.Params.MIPGap=float(mip_gap); model.Params.Seed=int(seed); started=time.perf_counter(); model.optimize(); runtime=time.perf_counter()-started
     start_raw=raw_components(data,core_best_solution,attribute_scope=attribute_scope); start_attr=attribute_score(data,weights,start_raw); accepted=False; solution=core_best_solution; candidate_core=None; candidate_attr=None
     if model.SolCount:
         candidate=extract_solution(expr["data"],variables); ev=evaluate_core_solution(expr["data"],weights,candidate,attribute_scope=attribute_scope); candidate_core=ev["total_core_cost"]; candidate_attr=ev["attribute_score"]; accepted=candidate_core<=cap+1e-5 and candidate_attr<start_attr-1e-6
         if accepted: solution=candidate
-    return {"accepted":accepted,"epsilon":epsilon,"core_cap":cap,"start_core_cost":core_best_ub,"candidate_core_cost":candidate_core,"core_degradation":None if candidate_core is None else candidate_core-core_best_ub,"start_attribute_score":start_attr,"candidate_attribute_score":candidate_attr,"solution":solution,"status_name":_status(model.Status)}
+    return {"accepted":accepted,"epsilon":epsilon,"core_cap":cap,"start_core_cost":core_best_ub,"candidate_core_cost":candidate_core,"core_degradation":None if candidate_core is None else candidate_core-core_best_ub,"start_attribute_score":start_attr,"candidate_attribute_score":candidate_attr,"solution":solution,"status_name":_status(model.Status),"runtime":runtime}
 
 
-def solve_strengthened_mip_alns(data,weights,*,phase1_time=20,lns_time=45,phase3_time=20,attribute_time=20,attribute_epsilon=.01,alloc_domain="integer",add_valid_inequalities=True,seed=0,verbose=False):
+def solve_strengthened_mip_alns(data,weights,*,phase1_time=20,lns_time=45,phase3_time=20,attribute_time=20,attribute_epsilon=.01,alloc_domain="integer",add_valid_inequalities=True,seed=0,verbose=False,enable_alns=True,enable_proof=True,enable_refinement=True):
     p1=solve_core_mip(data,weights,time_limit_s=phase1_time,mip_gap=.05,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,seed=seed,verbose=verbose)
     if not p1["ok"]: return {"algorithm":"strengthened_mip_alns","phase1_core_mip":p1,"ok":False}
-    alns=adaptive_lns(data,weights,p1,time_limit_s=lns_time,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,seed=seed)
-    p3=solve_core_mip(data,weights,time_limit_s=phase3_time,mip_gap=.01,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,start_solution=alns["best_solution"],proof=True,seed=seed,verbose=verbose)
+    alns=adaptive_lns(data,weights,p1,time_limit_s=lns_time,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,seed=seed) if enable_alns else {"best_ub":p1["ub"],"best_solution":p1["solution"],"improvement":0.0,"iterations":[],"operators":{},"runtime":0.0,"disabled":True}
+    p3=solve_core_mip(data,weights,time_limit_s=phase3_time,mip_gap=.01,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,start_solution=alns["best_solution"],proof=True,seed=seed,verbose=verbose) if enable_proof else {"ok":False,"disabled":True,"lb":None,"runtime":0.0}
     candidates=[(p1["ub"],p1["solution"]),(alns["best_ub"],alns["best_solution"])]+([(p3["ub"],p3["solution"])] if p3["ok"] else []); ub,solution=min(candidates,key=lambda x:x[0]); lbs=[x for x in (p1["lb"],p3.get("lb")) if x is not None]; lb=max(lbs) if lbs else None
     if lb is not None and lb>ub+1e-5: raise AssertionError("best valid LB exceeds core UB")
-    refinement=solve_attribute_refinement(data,weights,solution,ub,epsilon=attribute_epsilon,time_limit_s=attribute_time,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,seed=seed)
+    refinement=solve_attribute_refinement(data,weights,solution,ub,epsilon=attribute_epsilon,time_limit_s=attribute_time,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,seed=seed) if enable_refinement else {"accepted":False,"disabled":True,"epsilon":attribute_epsilon,"start_core_cost":ub,"candidate_core_cost":None,"core_degradation":None,"start_attribute_score":evaluate_core_solution(data,weights,solution)["attribute_score"],"candidate_attribute_score":None,"solution":solution}
     return {"ok":True,"algorithm":"strengthened_mip_alns","phase1_core_mip":p1,"phase2_alns":alns,"phase3_proof_mip":p3,"core_best":{"ub":ub,"lb":lb,"gap":None if lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"solution":solution},"attribute_refinement":refinement}

@@ -6,7 +6,7 @@
 
 ## 完整 core MIP
 
-`model_core.build_core_monolithic_model()` 是主流程、repair、refinement 和 direct baseline 的唯一公开 builder。变量包括整数/连续 `alloc_boxes`、二元 `x`/`block_use`，以及连续 `din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。它统一包含固定 bay size、存储容量、allocation/activation 双向连接、累计 allocation、arrival conservation、库存平衡、handling rate、block/bay flow 等式、fixed inbound、L1 balance 和 block activation 约束。
+`model_core.build_core_monolithic_model()` 是主流程、repair、refinement 和 direct baseline 的唯一公开 builder；默认路径不再导入旧 `solver_bbc.py`。变量包括整数/连续 `alloc_boxes`、二元 `x`/`block_use`，以及连续 `din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。它统一包含固定 bay size、存储容量、allocation/activation 双向连接、累计 allocation、arrival conservation、库存平衡、handling rate、block/bay flow 等式、fixed inbound、L1 balance 和 block activation 约束。
 
 核心目标只含 open-bay-time、berth-to-block distance、L1 balance 和 outbound conflict。所有阶段共享同一组与解无关且严格为正的 scale。`evaluate_core_solution()` 从变量值重算 raw、normalized、weighted components 和 total；求解时强制检查其与 `ObjVal` 的误差不超过 `1e-5`。
 
@@ -28,12 +28,21 @@ POD、weight 和 height 使用相同的 `final`（默认）或 `horizon` scope�
 ```bash
 python -u main.py --instance 3new6old --phase1-time 20 --lns-time 45 --phase3-time 20 --attribute-time 20 --attribute-epsilon .01
 python solve_direct_gurobi.py --instance 3new6old --time 60 --alloc-domain integer
-python run_experiments.py --instances 3new6old --seeds 0 1 2 --phase-time 20
+python run_experiments.py --instances 3new6old --seeds 0 1 2 --time 20 --suite full
 pytest -q
 ```
 
+`--suite quick` 执行核心算法对比，`--suite full` 进一步执行 allocation domain、handling-rate、epsilon 和 POD/weight/height 消融。
+
 主 summary 记录 allocation domain、handling-rate base/scale/source、valid inequalities、各阶段指标、core UB/LB/gap 和 refinement 的退化/改善。`run_experiments.py` 输出 CSV/JSON，可覆盖 domain、rate scale、epsilon 与 valid-inequality 消融。
+
+## 已运行验证与实验（2026-07-10）
+
+- `python -m pytest -q`：33 passed。
+- tiny instance：Phase 1、Phase 3 和 plain baseline 均达到 OPTIMAL，UB=LB=16000，gap=0；目标重算误差在 `1e-5` 内。
+- tiny full suite：2 seeds × 21 configurations = 42 rows，保存在 `experiment_results/tiny_full/results.csv` 和 JSON。
+- 默认 3new6old（Phase 1/ALNS/Phase 3/refinement = 30/10/20/10 秒）：Phase 1 UB 18206.817915、LB 15720.767818；ALNS 将 UB 改善 418.098623 至 17788.719292；Phase 3 保持 LB 15720.767818，最终 gap 11.6251%。refinement 候选属性分数与起点同为 5977.777778，未满足严格改善条件，因此正确拒绝。
 
 ## 已知限制
 
-旧文件仍作为迁移兼容层保存，其中的 group/occupancy/scale 和既有业务约束由新公共接口复用；默认入口不调用其 callback 或分解求解器。默认 3new6old 模型规模较大，极短 time limit 可能没有 incumbent；此时程序明确报告失败，不生成虚构数值。Barcelona/BAPTBI adapter 规则和数据集未改动。
+旧 `solver_bbc.py` 仅作为历史实现留存，默认入口、公共 helper、core builder、ALNS、refinement 和 direct baseline 均不再导入它。默认 3new6old 在当前受控时间预算内尚未完成最优性证明；上述 UB/LB/gap 是真实 time-limit 结果，而不是最终最优值。属性 refinement 在本次默认实验中没有找到严格改善方案。Barcelona/BAPTBI adapter 规则和数据集未改动，更大规模多 seed 论文实验仍需按可用计算预算继续运行。
