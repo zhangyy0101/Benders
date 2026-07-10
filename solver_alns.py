@@ -10,9 +10,9 @@ OPERATORS=("random","active","block","interval","ship","conflict","distance","co
 def concentration_destroy_pool(data,solution,keys,*,alloc_domain="integer"):
     c=evaluate_joint_group_concentration(data,solution,alloc_domain=alloc_domain,enabled=True)
     if not c["enabled"]:return []
-    ranked=sorted(c["positive_ship_groups"],key=lambda p:len(c["used_blocks"][p])-c["minimum_blocks"][p],reverse=True)
+    ranked=sorted(c["positive_ship_groups"],key=lambda p:len(c["used_bays"][p]),reverse=True)
     if not ranked:return []
-    j,g=ranked[0];blocks=set(c["used_blocks"][j,g]);return [q for q in keys if q[1]==j and data["I"][q[0]]["block"] in blocks]
+    j,g=ranked[0];bays=set(c["used_bays"][j,g]);return [q for q in keys if q[1]==j and q[0] in bays]
 def _start(vars,solution):
     for name in ("x","alloc_boxes","din","inv","in_share"):
         for k,value in solution.get(name,{}).items():

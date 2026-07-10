@@ -36,7 +36,7 @@ def build_master_model(data,weights,*,alloc_domain="integer",relax=False,add_val
     if redundant_block_binary:vars["block_use"]=block
     if cut_pool:
      for record in cut_pool.records:m.addConstr(record.as_expression(vars)>=0,name=f"inherited_{record.signature[:12]}")
-    m.update();return m,vars,{"open_expression":open_expr,"concentration_expression":concentration_expr,"concentration_raw_expression":concentration["raw_excess_blocks"],"concentration_scale":concentration["scale"],"concentration_context":concentration,"remaining_capacity":rem,"aggregate":aggregate}
+    m.update();return m,vars,{"open_expression":open_expr,"concentration_expression":concentration_expr,"concentration_raw_expression":concentration["raw_used_bays"],"concentration_scale":concentration["scale"],"concentration_context":concentration,"remaining_capacity":rem,"aggregate":aggregate}
 def extract_master_point(vars,get_value=lambda v:v.X):
     point={"x":{k:float(get_value(v)) for k,v in vars["x"].items()},"alloc_boxes":{k:float(get_value(v)) for k,v in vars["alloc_boxes"].items()},"eta":float(get_value(vars["eta"]))}
     if "concentration_use" in vars:point["concentration_use"]={k:float(get_value(v)) for k,v in vars["concentration_use"].items()}

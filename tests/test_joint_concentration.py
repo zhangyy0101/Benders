@@ -15,24 +15,23 @@ def allocations(split=False):
     if split:
         g=d["G"][0];a["A20","J1",g,n]=2;a["B20","J1",g,n]=2
     return d,{"alloc_boxes":a}
-
-def test_joint_group_concentration_zero_at_minimum_blocks():
-    d,s=allocations();c=evaluate_joint_group_concentration(d,s);assert c["raw_excess_blocks"]==0 and c["used_blocks_total"]==c["minimum_required_blocks_total"]==2
-def test_joint_group_concentration_positive_when_extra_block_used():
-    d,s=allocations(True);assert evaluate_joint_group_concentration(d,s)["raw_excess_blocks"]==1
-def test_tight_big_m_and_minimum_and_scale():
-    d=fixture();c=concentration_metadata(d);g=d["G"][0];assert c["big_m"]["J1",g,"A"]==4 and c["minimum_blocks"]["J1",g]==1 and c["scale"]>0
-def test_capacity_cover_inequality_exists_and_is_valid():
-    d=fixture();m,_,_=build_master_model(d,Weights());assert any(x.ConstrName.startswith("concentration_cover_") for x in m.getConstrs())
+def test_direct_bay_usage_count():
+    d,s=allocations();c=evaluate_joint_group_concentration(d,s);assert c["raw_used_bays"]==2 and c["used_bays_total"]==2
+def test_extra_bay_increases_direct_count():
+    d,s=allocations(True);assert evaluate_joint_group_concentration(d,s)["raw_used_bays"]==3
+def test_tight_big_m_is_bay_capacity_and_scale_positive():
+    d=fixture();c=concentration_metadata(d);g=d["G"][0];assert c["big_m"]["J1",g,"A20"]==4 and c["scale"]==6
+def test_no_minimum_or_cover_constraints():
+    d=fixture();m,_,_=build_master_model(d,Weights());assert not any("minimum" in x.ConstrName or "concentration_cover" in x.ConstrName for x in m.getConstrs())
 def test_evaluator_matches_monolithic_model():
-    d=fixture();m,v,e=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);q=evaluate_solution(d,Weights(),s);assert abs(e["concentration_objective"].getValue()-q["concentration_cost"])<1e-6 and q["concentration_raw"]==0
+    d=fixture();m,v,e=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);q=evaluate_solution(d,Weights(),s);assert abs(e["concentration_objective"].getValue()-q["concentration_cost"])<1e-6 and q["concentration_raw_used_bays"]==2
 def test_master_objective_and_eta_separate_concentration():
     d=fixture();m,_,c=build_master_model(d,Weights());assert "concentration_expression" in c and "concentration" not in c["aggregate"]
 def test_tiny_direct_matches_bbc_with_concentration():
     d=fixture();direct=solve_direct_gurobi(d,Weights(),time_limit=4,mip_gap=0);bbc=solve_bbc_phase(d,Weights(),time_limit=4,mip_gap=0);assert abs(direct["ub"]-bbc["ub"])<1e-5 and bbc["lb"]<=bbc["ub"]+1e-6 and bbc["cut_statistics"]["exact_incumbents_submitted"]>0
 def test_no_attribute_instance_disables_concentration():
-    d=prepare_instance(get_data_baptbi_5n_4b_4p());assert not has_joint_attribute_groups(d);c=evaluate_joint_group_concentration(d,{"alloc_boxes":{}});assert c["status"]=="NOT_APPLICABLE" and c["raw_excess_blocks"] is None
-def test_concentration_destroy_is_structured():
+    d=prepare_instance(get_data_baptbi_5n_4b_4p());assert not has_joint_attribute_groups(d);c=evaluate_joint_group_concentration(d,{"alloc_boxes":{}});assert c["status"]=="NOT_APPLICABLE" and c["raw_used_bays"] is None
+def test_concentration_destroy_is_bay_structured():
     d=fixture();m,v,_=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);keys=list(s["x"]);pool=concentration_destroy_pool(d,s,keys);assert "concentration" in OPERATORS and pool and len(pool)<len(keys)
 def test_pipeline_has_no_refinement_stage_or_arguments():
     assert "refinement" not in inspect.signature(solve_true_benders_pipeline).parameters;d=fixture();r=solve_true_benders_pipeline(d,Weights(),total_core_time=2);assert "attribute_refinement" not in r

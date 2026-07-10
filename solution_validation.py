@@ -26,12 +26,7 @@ def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalit
      for value in solution["alloc_boxes"].values():rec("integrality",abs(value-round(value)))
     concentration=evaluate_joint_group_concentration(data,solution,alloc_domain=alloc_domain,enabled=concentration_enabled,tolerance=tolerance)
     if concentration["enabled"]:
-     final=concentration["final_period"]
-     for j,g in concentration["positive_ship_groups"]:
-      used=concentration["used_blocks"][j,g];rec("concentration_minimum_blocks",concentration["minimum_blocks"][j,g]-len(used));rec("concentration_cover",required_reserve(data,j,g,final,alloc_domain)-sum(concentration["big_m"][j,g,k] for k in used))
-      for k in used:
-       if "concentration_use" in solution:rec("concentration_support",1-float(solution["concentration_use"].get((j,g,k),0)))
      if "concentration_use" in solution:
-      for (j,g,k),value in solution["concentration_use"].items():rec("concentration_support",abs(float(value)-float(k in concentration["used_blocks"].get((j,g),[]))))
-      modeled=sum(float(v) for v in solution["concentration_use"].values())-sum(concentration["minimum_blocks"].values());rec("concentration_raw",abs(modeled-concentration["raw_excess_blocks"]))
+      for (j,g,i),value in solution["concentration_use"].items():rec("concentration_support",abs(float(value)-float(i in concentration["used_bays"].get((j,g),[]))))
+      modeled=sum(float(v) for v in solution["concentration_use"].values());rec("concentration_raw",abs(modeled-concentration["raw_used_bays"]))
     maximum=max(viol.values(),default=0);return {"feasible":maximum<=tolerance,"max_violation":maximum,"violations_by_family":viol}

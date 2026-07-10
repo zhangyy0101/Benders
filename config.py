@@ -4,7 +4,7 @@ from dataclasses import dataclass
 class MasterWeights:
     """Weights for Master Problem objective terms."""
     x: float = 8.0          # normalized open-bay-time penalty
-    concentration: float = 10.0  # normalized joint ship-group block excess
+    concentration: float = 10.0  # normalized joint ship-group bay usage
 
 @dataclass(frozen=True)
 class SubWeights:

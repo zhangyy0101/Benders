@@ -1,97 +1,81 @@
-# Route B：True BBC + ALNS + 联合属性集中度
+# Route B：True BBC + ALNS + 贝位级联合属性集中度
 
 ## 核心目标
 
-当前核心目标同时优化 open-bay-time、joint group concentration、distance、L1
-workload balance 和 outbound conflict。旧的 ε-constrained attribute refinement、
-POD spread、weight spread 与 bay-level height mix 已全部删除。高度仍属于 group 的
-联合属性，但不再单独惩罚同一 bay 内不同高度。
+核心目标同时包含 open-bay-time、joint-group bay concentration、distance、L1
+workload balance 和 outbound conflict。旧的 attribute refinement、POD spread、
+weight spread、height mix，以及箱区级 excess-block 指标均已删除。
 
-一个 group 同时编码 size、POD、height、weight class。对最终时段定义
-`u[j,g,k]=1` 表示 ship–group 在 block 中有正预留量。binary 只在 master 与
-monolithic 中建立，不进入 global recourse，因此 recourse 仍是纯 LP，原有
-optimality/Farkas cuts 仍只包含 x、alloc 和 eta。
+每个 group 联合编码 size、POD、height、weight class。高度仍属于联合分组属性，
+但不再单独惩罚同一贝位内不同高度。
 
-## 集中度数学定义
+## 贝位级集中度
 
-对正需求 `(j,g)`：
+只在最终时段、只对箱型兼容且剩余容量为正的组合创建：
 
 ```text
-block_alloc[j,g,k] <= M[j,g,k] u[j,g,k]
-sum_k M[j,g,k] u[j,g,k] >= required_final[j,g]
-sum_k u[j,g,k] >= L[j,g]
+u[j,g,i] = 1  当 ship j 的 joint group g 使用 bay i
+alloc[i,j,g,final] <= M[j,g,i] u[j,g,i]
+u[j,g,i] <= x[i,j,final]
 ```
 
-整数 allocation 还使用合法的 `block_alloc >= u`，保证保存的 binary 与 support
-完全一致。tight Big-M 为：
+整数 allocation 下还有 `alloc >= u`，因此 binary 与正 allocation support 完全
+一致。tight Big-M 为：
 
 ```text
-M[j,g,k] = min(required_final[j,g],
-               compatible remaining capacity in block k)
+M[j,g,i] = min(required_final[j,g], remaining_capacity[i,final])
 ```
 
-`L[j,g]` 是按 M 降序累加至 required demand 所需的最少 block 数。指标为：
+直接定义：
 
 ```text
-C_raw   = sum_(j,g) (sum_k u[j,g,k] - L[j,g])
-C_scale = max(1, sum_(j,g) (B[j,g] - L[j,g]))
+C_raw   = sum_(j,g,i) u[j,g,i]
+C_scale = max(1, 所有可行 (j,g,i) 组合数)
 C_norm  = C_raw / C_scale
 ```
 
-因此 raw=0 表示每个 group 都达到容量条件下的最低 block 数，而不是错误地惩罚
-不可避免的分散。统一实现位于 `model_concentration.py`，master、monolithic、
-direct、ALNS、BBC exact UB 与 solution checker 均调用同一 evaluator。
+不再计算 minimum usage，也不再最小化 usage 与 minimum 的差。指标的业务含义是
+“联合属性组占用的 ship–group–bay 总数”，其中包含容量导致的必要贝位占用。
 
-## Benders 目标一致性
+## Benders 一致性
+
+Concentration binary 位于 master，不进入 global recourse：
 
 ```text
-Master objective = weighted_open + weighted_concentration + eta
-Recourse Q        = weighted_distance + weighted_balance + weighted_conflict
-Exact UB          = open + concentration + exact Q(x,alloc)
-LB                = master.ObjBound
+Master = weighted_open + weighted_concentration + eta
+Q      = weighted_distance + weighted_balance + weighted_conflict
+UB     = open + concentration + exact Q(x,alloc)
+LB     = master.ObjBound
 ```
 
-aggregate/analytic lower bound 仍只下界 Q，不包含 concentration。callback 从 alloc
-重建 concentration binaries，与 x、alloc、`eta=Q` 一起提交。summary 分别输出
-root open、concentration、eta 和 aggregate recourse。
+aggregate/analytic relaxation 仍只下界 Q。callback 从 alloc 重建全部 bay-level u，
+与 x、alloc、`eta=Q` 一起提交。direct、monolithic、ALNS、BBC exact UB 和独立
+solution checker 共用 `model_concentration.py` 中的同一套计算。
 
 ## ALNS
 
-ALNS repair 使用完整 monolithic 核心目标，所有 start/candidate/best UB 均包含
-concentration。新增 concentration destroy：选取 excess spread 最大的 `(j,g)`，
-释放其已使用 blocks 上对应 ship 的 x 与 allocation 时间轴。该 operator 参与与
-其他 operators 相同的 roulette 权重更新。
+Concentration destroy 找到使用贝位最多的 `(j,g)`，释放该 group 当前使用贝位上
+对应 ship 的 x 与 allocation 时间轴，让 repair 有机会将其搬到更少贝位。该
+operator 参与 adaptive roulette 统计，不是 random fallback。
 
-## 数据可用性
+## 可用性与规模
 
-只有显式完整提供 POD、height、weight class 联合 group 的实例启用集中度。
-BAPTBI/Barcelona 公开适配器返回 `NOT_APPLICABLE`；其 concentration raw 为 null、
-cost 为 0，不能解释为“完美集中”。`tiny_concentration` 是三 block 专项 fixture。
+只有显式完整提供 POD、height、weight class 的联合 group 才启用。BAPTBI 和
+Barcelona 公开适配器返回 `NOT_APPLICABLE`，raw 为 null、cost 为 0。
+
+`tiny_concentration` 有 2 个 group、3 个兼容贝位/组，共 6 个 u。3new6old 在典型
+50/50 箱型模式下约创建 900 个 u，而原箱区级模型为 180 个，因此求解时间可能
+增加，但业务粒度更精确。
 
 ## 运行
 
 ```bash
 python -m pytest -q
-python main.py --instance tiny_concentration --total-core-time 20 --concentration --concentration-weight 10 --mip-gap 0
-python solve_direct_gurobi.py --instance tiny_concentration --time 20 --concentration --concentration-weight 10 --mip-gap 0
+python main.py --instance tiny_concentration --total-core-time 20 --concentration-mode joint-group-bay --concentration-weight 10 --mip-gap 0
+python solve_direct_gurobi.py --instance tiny_concentration --time 20 --concentration-mode joint-group-bay --concentration-weight 10 --mip-gap 0
 python main.py --instance 3new6old --total-core-time 180 --concentration-weight 10
-python run_experiments.py --instances 3new6old --seeds 0 1 2 --total-core-time 60 --suite concentration
+python run_experiments.py --instances 3new6old --total-core-time 60 --suite concentration
 ```
 
-`--suite concentration` 运行权重 0、2、5、10、20。短预算结果不可用于声称
-单调 trade-off 或选择最终权重；论文应使用多 seed、足够预算，并依据 elbow、
-运营偏好与稳定性选择默认值。
-
-## 当前验证结果
-
-- 44 项测试通过。
-- tiny_concentration：direct=BBC=16000，gap=0，raw excess=0，used/minimum=2/2。
-- 3new6old，weight=10，180 秒：UB=18357.506827，LB=15889.448680，
-  gap=13.4444%；open=1133.333333，concentration=2345.679012，
-  distance=6857.636474，balance=519.722327，conflict=7501.135681；
-  raw excess=38，used/minimum=56/18。
-- 该次 ALNS 将 18453.331701 改善至 18441.740792；concentration operator 被真实
-  使用并接受一次。60 秒 BBC 未找到 exact incumbent，说明加入 180 个 first-stage
-  concentration binaries 后需要更长预算。
-- 单 seed、30 秒权重敏感性保存在 `experiments_joint_sensitivity`；结果尚未收敛，
-  raw 并非单调，不能作为业务权重结论。
+权重敏感性使用 0、2、5、10、20，并应采用多 seed、统一充分预算。由于目标已从
+block excess 改为直接 bay usage，旧实验数值不可与新指标直接比较。
