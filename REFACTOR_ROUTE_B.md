@@ -78,9 +78,14 @@ python run_experiments.py --instances 3new6old --total-core-time 60 --suite conc
 ```
 
 论文的算法对比应同时报告裸 `Direct`、共享同一 warm/ALNS 的 `Direct+ALNS` 和
-`BBC+ALNS`。`solve_direct_alns_pipeline` 默认把总预算的 5%/15%/80% 分给
-warm、ALNS、monolithic main；BBC 使用 20%/5%/15%/60% 分给 root、warm、
+`BBC+ALNS`。`solve_direct_alns_pipeline` 默认把总预算的 15%/25%/60% 分给
+warm、ALNS、monolithic main；BBC 使用 5%/15%/25%/55% 分给 root、warm、
 ALNS、BBC main。二者复用完全相同的 warm-start 函数和 ALNS 实现。
+
+ALNS 的 destroy 单元是完整 `(bay,ship)` trajectory；interval 只释放时间后缀，
+其余 operator 释放全轨迹，并同时开放高成本 source 与评分更优的 destination。
+repair 时间随实际释放的 x/alloc 比例自适应。main BBC 默认关闭 MIPNODE cuts，
+但保留所有 MIPSOL lazy cuts；重复整数 master point 使用 exact recourse cache。
 
 权重敏感性使用 0、2、5、10、20，并应采用多 seed、统一充分预算。由于目标已从
 block excess 改为直接 bay usage，旧实验数值不可与新指标直接比较。

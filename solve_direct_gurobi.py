@@ -22,7 +22,7 @@ def solve_direct_gurobi(data,weights,*,time_limit=30,mip_gap=.03,threads=1,alloc
     if solution and abs(m.ObjVal-evaluation["core_cost"])>1e-5:raise AssertionError("direct objective mismatch")
     ub=evaluation["core_cost"] if evaluation else None;lb=float(m.ObjBound) if m.Status not in (GRB.INFEASIBLE,GRB.INF_OR_UNBD) else None;return {"ok":solution is not None,"status":int(m.Status),"status_name":status_name(m.Status),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"nodes":float(m.NodeCount),"solution":solution,"components":evaluation}
 
-def solve_direct_alns_pipeline(data,weights,*,total_time=180,warm_start_time_share=.05,alns_time_share=.15,mip_gap=.03,threads=1,alloc_domain="integer",add_valid_inequalities=True,concentration_enabled=True,seed=0,lns_options=None):
+def solve_direct_alns_pipeline(data,weights,*,total_time=180,warm_start_time_share=.15,alns_time_share=.25,mip_gap=.03,threads=1,alloc_domain="integer",add_valid_inequalities=True,concentration_enabled=True,seed=0,lns_options=None):
     """Fair-budget monolithic Gurobi baseline with the same warm/ALNS stages as BBC."""
     from solver_alns import adaptive_lns
     from solver_true_benders import _warm_start
