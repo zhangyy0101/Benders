@@ -4,6 +4,9 @@ __pycache__/
 *.pyd
 
 outputs/
+audit_outputs/
+audit_experiments/
+experiment_results/
 *.log
 
 .venv/
