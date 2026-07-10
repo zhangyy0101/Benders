@@ -6,7 +6,7 @@
 
 ## 完整 core MIP
 
-`model_core.build_core_monolithic_model()` 是主流程、repair、refinement 和 direct baseline 的唯一公开 builder；默认路径不再导入旧 `solver_bbc.py`。变量包括整数/连续 `alloc_boxes`、二元 `x`/`block_use`，以及连续 `din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。它统一包含固定 bay size、存储容量、allocation/activation 双向连接、累计 allocation、arrival conservation、库存平衡、handling rate、block/bay flow 等式、fixed inbound、L1 balance 和 block activation 约束。
+`model_core.build_core_monolithic_model()` 是主流程、repair、refinement 和 direct baseline 的唯一公开 builder；旧的分解求解文件已从默认项目结构删除，仍可通过 Git 历史回退。变量包括整数/连续 `alloc_boxes`、二元 `x`/`block_use`，以及连续 `din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。它统一包含固定 bay size、存储容量、allocation/activation 双向连接、累计 allocation、arrival conservation、库存平衡、handling rate、block/bay flow 等式、fixed inbound、L1 balance 和 block activation 约束。
 
 核心目标只含 open-bay-time、berth-to-block distance、L1 balance 和 outbound conflict。所有阶段共享同一组与解无关且严格为正的 scale。`evaluate_core_solution()` 从变量值重算 raw、normalized、weighted components 和 total；求解时强制检查其与 `ObjVal` 的误差不超过 `1e-5`。
 
@@ -45,4 +45,4 @@ pytest -q
 
 ## 已知限制
 
-旧 `solver_bbc.py` 仅作为历史实现留存，默认入口、公共 helper、core builder、ALNS、refinement 和 direct baseline 均不再导入它。默认 3new6old 在当前受控时间预算内尚未完成最优性证明；上述 UB/LB/gap 是真实 time-limit 结果，而不是最终最优值。属性 refinement 在本次默认实验中没有找到严格改善方案。Barcelona/BAPTBI adapter 规则和数据集未改动，更大规模多 seed 论文实验仍需按可用计算预算继续运行。
+默认 3new6old 在当前受控时间预算内尚未完成最优性证明；上述 UB/LB/gap 是真实 time-limit 结果，而不是最终最优值。属性 refinement 在本次默认实验中没有找到严格改善方案。Barcelona/BAPTBI adapter 规则和数据集未改动，更大规模多 seed 论文实验仍需按可用计算预算继续运行。
