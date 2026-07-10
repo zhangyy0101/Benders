@@ -1,48 +1,123 @@
-# Route A: Strengthened MIP–ALNS
+# Route A：Strengthened MIP–ALNS 后续正确性说明
 
-## 定位与量纲修正
+## 1. 统一单体模型
 
-默认算法现在是完整单体 MIP、adaptive LNS、证明导向 MIP 重启和 ε-constrained attribute refinement。分解算法不再作为默认入口或算法贡献。存储容量始终以 boxes 表示；处理能力改为 `Bay_Handling_Rate[bay, interval]`（boxes/hour）乘 interval hours。默认 50 boxes/hour 是模型校准参数，不来源于 BAPTBI 或 Barcelona 原始数据。
+`model_core.build_core_monolithic_model()` 是 Phase 1、ALNS repair、Phase 3、attribute refinement 和 direct Gurobi baseline 的唯一模型构造器。核心变量为 `alloc_boxes`、`x`、`block_use`、`din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。旧分解求解代码已删除。
 
-## 完整 core MIP
+核心目标只包含 open-bay-time、berth-to-block distance、L1 workload balance 和 outbound conflict。`evaluate_core_solution()` 从 solution 字典独立重算目标；求解器目标与重算值误差超过 `1e-5` 时立即报错。
 
-`model_core.build_core_monolithic_model()` 是主流程、repair、refinement 和 direct baseline 的唯一公开 builder；旧的分解求解文件已从默认项目结构删除，仍可通过 Git 历史回退。变量包括整数/连续 `alloc_boxes`、二元 `x`/`block_use`，以及连续 `din`、`inv`、`in_share`、`in_total`、`avg` 和 `g_bal`。它统一包含固定 bay size、存储容量、allocation/activation 双向连接、累计 allocation、arrival conservation、库存平衡、handling rate、block/bay flow 等式、fixed inbound、L1 balance 和 block activation 约束。
+## 2. Reserve conservation
 
-核心目标只含 open-bay-time、berth-to-block distance、L1 balance 和 outbound conflict。所有阶段共享同一组与解无关且严格为正的 scale。`evaluate_core_solution()` 从变量值重算 raw、normalized、weighted components 和 total；求解时强制检查其与 `ObjVal` 的误差不超过 `1e-5`。
+`alloc_boxes` 表示必要空间预留，不再允许无成本过度预留。令截至时段 `n` 的累计到达量为 `A[j,g,n]`：
 
-## 四阶段职责
+- integer domain：`required_reserve = ceil(Alpha × A - tolerance)`；
+- continuous domain：`required_reserve = Alpha × A`。
 
-1. Phase 1 使用 `MIPFocus=1, Presolve=2, Cuts=1, Heuristics=.20` 获取 incumbent 和合法全局 LB。
-2. ALNS 提供 random、active-biased、block/interval/ship/conflict/distance-focused operators。每个 repair 重建完整单体模型，固定未 destroy 的变量；释放一个 `(bay, ship)` activation 时释放其完整时间轴 allocation。repair bound 绝不作为全局 LB。
-3. Phase 3 注入 ALNS MIP start，以 `MIPFocus=3, Cuts=2, Presolve=2, Heuristics=.02, Symmetry=2` 改善证明。最终 LB 仅取 Phase 1/3 合法界的最大值，且断言 `LB <= UB + 1e-5`。
-4. refinement 在完整可行域上最小化 attribute score，并约束 `core_objective <= core_best_ub*(1+epsilon)`。仅当 core cap、完整可行性及属性严格改善同时成立时接受。
+模型强制：
 
-POD、weight 和 height 使用相同的 `final`（默认）或 `horizon` scope。core-best 与 refined solution 分别写入两个 JSON；core LB/gap 只属于 core-best，不能解释为 refined solution 的 gap。
-
-## Valid inequalities 与变量域
-
-没有 new-container outbound 时加入 `x` 和 `block_use` 时间单调性；`--no-valid-inequalities` 支持消融。branch priorities 为 block 30、x 20、allocation 5。`--alloc-domain integer|continuous` 控制 allocation；连续域 start/repair 从不 round。
-
-## 运行
-
-```bash
-python -u main.py --instance 3new6old --phase1-time 20 --lns-time 45 --phase3-time 20 --attribute-time 20 --attribute-epsilon .01
-python solve_direct_gurobi.py --instance 3new6old --time 60 --alloc-domain integer
-python run_experiments.py --instances 3new6old --seeds 0 1 2 --time 20 --suite full
-pytest -q
+```text
+sum_i alloc_boxes[i,j,g,n] = required_reserve[j,g,n]
 ```
 
-`--suite quick` 执行核心算法对比，`--suite full` 进一步执行 allocation domain、handling-rate、epsilon 和 POD/weight/height 消融。
+这减少了退化和对称性，也使不同 seed 下的 allocation 更稳定。
 
-主 summary 记录 allocation domain、handling-rate base/scale/source、valid inequalities、各阶段指标、core UB/LB/gap 和 refinement 的退化/改善。`run_experiments.py` 输出 CSV/JSON，可覆盖 domain、rate scale、epsilon 与 valid-inequality 消融。
+## 3. Inventory-based attribute refinement
 
-## 已运行验证与实验（2026-07-10）
+论文默认使用：
 
-- `python -m pytest -q`：33 passed。
-- tiny instance：Phase 1、Phase 3 和 plain baseline 均达到 OPTIMAL，UB=LB=16000，gap=0；目标重算误差在 `1e-5` 内。
-- tiny full suite：2 seeds × 21 configurations = 42 rows，保存在 `experiment_results/tiny_full/results.csv` 和 JSON。
-- 默认 3new6old（Phase 1/ALNS/Phase 3/refinement = 30/10/20/10 秒）：Phase 1 UB 18206.817915、LB 15720.767818；ALNS 将 UB 改善 418.098623 至 17788.719292；Phase 3 保持 LB 15720.767818，最终 gap 11.6251%。refinement 候选属性分数与起点同为 5977.777778，未满足严格改善条件，因此正确拒绝。
+```text
+--attribute-basis inventory
+```
 
-## 已知限制
+POD spread、weight spread 和 height mix 均由实际累计库存 `inv[j,g,i,n]` 定义，而不是 reservation。POD/weight helper 的 Big-M 为：
 
-默认 3new6old 在当前受控时间预算内尚未完成最优性证明；上述 UB/LB/gap 是真实 time-limit 结果，而不是最终最优值。属性 refinement 在本次默认实验中没有找到严格改善方案。Barcelona/BAPTBI adapter 规则和数据集未改动，更大规模多 seed 论文实验仍需按可用计算预算继续运行。
+```text
+min(cumulative actual demand,
+    sum remaining_capacity / Alpha)
+```
+
+bay-height helper 使用 `remaining_capacity / Alpha`。可选 `reservation` 模式仅用于消融；其 Big-M 使用 `Alpha × cumulative demand`，summary 会明确记录 basis。
+
+属性尺度由 `attribute_scales(data, scope)` 统一提供。`final` 的 period count 为 1，`horizon` 为 `len(N)`；模型目标、起点重算、候选重算和 CSV 使用完全相同的尺度。CLI 为：
+
+```text
+--attribute-scope final|horizon
+--attribute-basis inventory|reservation
+```
+
+没有显式 group 属性的 BAPTBI/Barcelona 实例返回 `attribute_refinement.status = NOT_APPLICABLE`，不会把 0 分解释为完美布局。当前代码没有为公开数据伪造 POD、weight 或 height。
+
+## 4. 旧箱动态库存与释放策略
+
+`simulate_old_inventory()` 独立模拟 initial inventory、fixed inbound 和 old outbound，并报告未满足 outbound 与容量违反。数据验证拒绝任何超容、未满足 outbound、grouped-arrival 不一致、缺字段或非连续 period id。
+
+block-level outbound 没有公开的 bay-level 释放位置，因此策略必须显式选择：
+
+- `proportional`（默认）：按同一 block、old ship 的 bay 库存比例释放；
+- `conservative`：验证 outbound 数量，但不提前把推断释放量作为新箱可用容量；
+- `legacy_sorted`：按 bay 名称顺序释放，仅用于复现旧结果。
+
+若实例提供 `Old_Outbound_By_Bay[(i,j,s,n)]`，则优先使用真实 bay-level 数据。公开 adapter 不声称原数据提供了该字段。
+
+## 5. 独立可行性检查
+
+`solution_validation.validate_core_solution()` 不依赖 Gurobi，检查 arrival、inventory balance/nonnegativity、inventory–allocation、storage、handling、bay mode、activation、block flow/use、in-total、average、L1 auxiliary、时间单调性、整数残差和 exact reserve equality。
+
+Phase 1、每个 ALNS repair、Phase 3、direct baseline 和 refinement candidate 只有在 `feasible=true` 后才可成为 UB。summary 和 CSV 保存 `max_solution_violation`。
+
+## 6. ALNS、证明阶段与诊断
+
+ALNS 保留七类 operator，并支持 repair time/gap、destroy 范围、stall threshold、minimum iterations、restart、temperature 和 cooling rate。无改善时逐步扩大 destroy fraction，改善后缩小；达到 stall threshold 时从 best solution restart。所有 operator 即使使用次数为 0 也出现在 summary。
+
+Phase 1 和 Phase 3 的完整模型 bound 才能作为全局 LB；repair/refinement bound 不参与 core gap。root callback 单独记录 `root_relaxation_bound`，最终 `ObjBound` 记录为 `final_global_bound`，两者不会混用。
+
+handling diagnostics 输出最大/平均 active utilization、binding handling constraints 和 active bay 数。默认 50 boxes/hour/bay 是 `model_calibration`，不是公开数据或现场测量值。实验 sensitivity 使用 0.25、0.5、1.0 和 1.5 scale。
+
+## 7. Symmetry breaking
+
+仅对 block、size mode、remaining-capacity profile 和 handling-rate profile 完全相同的 bays 分组。安全约束按所有新船的总 activation 排序：
+
+```text
+sum_j x[left,j,n] >= sum_j x[right,j,n]
+```
+
+可用 `--symmetry-breaking on|off` 消融；tiny 实例开关前后最优值一致。当前默认设为 `off`：在 3new6old 的短预算实测中，该排序会显著增加 presolve/root 时间，因此不能在没有实例级证据时默认宣称它改善性能。
+
+## 8. 公平实验预算
+
+`run_experiments.py` 使用：
+
+```text
+--total-core-time
+--refinement-time
+--threads
+--mip-gap
+```
+
+plain core MIP 与 Route A 使用相同总核心时间、threads、gap、seed、domain、handling scale 和 release policy。完整 Route A 默认分配 Phase 1/ALNS/Phase 3 = 25%/40%/35%；refinement 时间单独记录。base formulation 关闭 valid inequalities 和 symmetry breaking；strengthened formulation 开启强化约束，因而能区分 formulation strengthening 与 ALNS 的贡献。
+
+CSV 的 core 属性来自真正的 `core_best_solution`，candidate 属性来自 refinement candidate，final 属性来自实际选中的 final solution，不再固定读取 Phase 1。core degradation 同时输出 absolute 和 relative。
+
+## 9. 运行命令
+
+```bash
+python -m py_compile config.py data.py model_common.py model_core.py solution_validation.py solver_mip_alns.py solve_direct_gurobi.py main.py experiment_configs.py run_experiments.py
+python -m pytest -q
+
+python -u main.py --instance tiny --phase1-time 10 --lns-time 10 --phase3-time 10 --attribute-time 10 --attribute-scope final --attribute-basis inventory
+python solve_direct_gurobi.py --instance tiny --time 30 --formulation base
+python run_experiments.py --instances tiny --seeds 0 1 --total-core-time 20 --refinement-time 5 --threads 1 --suite full
+```
+
+## 10. 当前限制
+
+公开 benchmark 缺少真实 POD、weight 和 height，因此属性 refinement 对这些实例不适用。默认 3new6old 是项目内带显式属性的合成业务实例。大型实例能否在短预算内得到 incumbent 或关闭 gap 取决于计算预算；程序会如实输出 TIME_LIMIT、空 UB 或未接受 refinement，不会生成虚构结果。
+
+## 11. 本次审查的实测结果（2026-07-10）
+
+- static compile：通过；`python -m pytest -q`：69 passed。
+- tiny Route A 与 direct baseline：UB=LB=16000，gap=0；core objective consistency error=0，独立 checker max violation=0。
+- 3new6old，Phase 1/ALNS/Phase 3/refinement=30/30/30/20 秒：Phase 1 UB=16595.808342、LB=15721.019466；ALNS UB=16524.528065，改善 71.280277；Phase 3 UB=16504.459291、LB=15721.019466、gap=4.7468%。core-best 来源为 Phase 3，max violation=`3.68e-12`。
+- 3new6old handling：max utilization=0.127887，active average=0.013174，binding constraints=0，说明默认 rate 下 handling 不是主要瓶颈，必须结合 0.25/0.5/1.0/1.5 sensitivity 解读。
+- inventory/final refinement：8055.555556 → 8055.555556，未严格改善，正确拒绝；absolute degradation=`3.64e-12`，relative=`2.20e-16`，attribute objective consistency error=`9.09e-13`。
+- 公平 90 秒 plain base formulation：UB=16103.678364、LB=15649.387184、gap=2.8210%，root relaxation bound=15649.218380，nodes=1，max violation=`2.58e-11`。该次 plain baseline 优于短预算 Route A，结果如实保留，不将 ALNS 宣称为必然占优。
