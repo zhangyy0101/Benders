@@ -4,6 +4,7 @@ from dataclasses import dataclass
 class MasterWeights:
     """Weights for Master Problem objective terms."""
     x: float = 8.0          # normalized open-bay-time penalty
+    concentration: float = 10.0  # normalized joint ship-group block excess
 
 @dataclass(frozen=True)
 class SubWeights:
@@ -13,17 +14,7 @@ class SubWeights:
     conflict: float = 42.0   # normalized outbound-pressure conflict term
 
 @dataclass(frozen=True)
-class AttributeRefinementWeights:
-    """Weights for epsilon-constrained attribute refinement."""
-    pod_spread: float = 4.0
-    weight_spread: float = 3.0
-    height_mix: float = 10.0
-
-@dataclass(frozen=True)
 class Weights:
     master: MasterWeights = MasterWeights()
     sub: SubWeights = SubWeights()
     objective_scale: float = 1000.0
-    attribute: AttributeRefinementWeights = AttributeRefinementWeights()
-
-AttributePolishWeights = AttributeRefinementWeights

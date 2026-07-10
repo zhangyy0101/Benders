@@ -7,7 +7,7 @@ from model_master import build_master_model, extract_master_point
 from model_monolithic import build_monolithic_model, extract_solution, evaluate_solution
 from model_recourse import GlobalRecourseOracle
 from solution_validation import validate_solution
-from solver_alns import adaptive_lns, solve_attribute_refinement
+from solver_alns import adaptive_lns
 
 def tiny(): return prepare_instance(get_data_tiny_benders())
 
@@ -39,10 +39,6 @@ def test_adaptive_lns_uses_persistent_model_and_tracks_operators():
     d=tiny();m,v,_=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);r=adaptive_lns(d,Weights(),s,time_limit=.15,repair_time=.05,seed=3)
     assert r["persistent_repair_model"] and {"random","conflict","distance"}<=set(r["operator_stats"])
     assert all("weight" in x for x in r["operator_stats"].values())
-
-def test_attribute_refinement_without_attributes_is_not_applicable():
-    d=tiny();d["G"]=[];m,v,_=build_monolithic_model(tiny(),Weights());m.optimize();s=extract_solution(v);r=solve_attribute_refinement(d,Weights(),s,evaluate_solution(tiny(),Weights(),s)["core_cost"],time_limit=.1)
-    assert r["status"]=="NOT_APPLICABLE" and not r["accepted"]
 
 def test_all_public_adapters_pass_strict_inventory_validation():
     from solve_direct_gurobi import INSTANCES

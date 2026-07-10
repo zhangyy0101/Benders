@@ -23,6 +23,10 @@ def objective_scales(data):
 def scale_factor(weights):return max(float(weights.objective_scale),1e-9)
 def open_cost(data,weights,x):
     raw=sum(float(x.get((i,j,n),0))*float(data["Intervals"][n]["dur"]) for i in data["I_list"] for j in data["J_new"] for n in data["N"]);return scale_factor(weights)*weights.master.x*raw/objective_scales(data)["open"]
+def first_stage_cost(data,weights,x,alloc,*,alloc_domain="integer",concentration_enabled=True):
+    from model_concentration import evaluate_joint_group_concentration
+    concentration=evaluate_joint_group_concentration(data,{"alloc_boxes":alloc},alloc_domain=alloc_domain,enabled=concentration_enabled);cc=0.0 if not concentration["enabled"] else scale_factor(weights)*weights.master.concentration*concentration["normalized"]
+    oc=open_cost(data,weights,x);return {"open_cost":oc,"concentration_cost":cc,"total":oc+cc,"concentration":concentration}
 def required_reserve(data,j,g,n,alloc_domain):
     value=float(data["Alpha"])*sum(arrival(data,j,g,t) for t in data["N"] if t<=n);return float(math.ceil(value-1e-9)) if alloc_domain=="integer" else value
 def add_common_master_valid_inequalities(model,data,variables,*,enabled=True):

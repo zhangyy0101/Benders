@@ -439,6 +439,15 @@ def get_data_tiny_benders() -> dict:
     K=["A","B"];I_list=["A20","A40","B20","B40"];I={i:{"block":i[0],"cap":10.0,"fixed_size_ft":20 if i.endswith("20") else 40} for i in I_list};B={k:[i for i in I_list if i[0]==k] for k in K};J=["J1"];S=[20,40];G=["G20","G40"];N=[0,1];attrs={"G20":{"size":20,"pod":"P1","height":"STD","weight_class":"LIGHT"},"G40":{"size":40,"pod":"P2","height":"HIGH","weight_class":"HEAVY"}}
     return {"K":K,"I":I,"I_list":I_list,"Bays_in_Block":B,"J_new":J,"J_old":[],"J_all":J,"S":S,"G":G,"GroupAttrs":attrs,"GroupSize":{g:attrs[g]["size"] for g in G},"GroupPOD":{g:attrs[g]["pod"] for g in G},"GroupHeight":{g:attrs[g]["height"] for g in G},"GroupWeightClass":{g:attrs[g]["weight_class"] for g in G},"Alpha":1.0,"N":N,"Intervals":[{"id":0,"start":0,"end":1,"dur":1.0},{"id":1,"start":1,"end":2,"dur":1.0}],"Dist":{("J1","A"):100.0,("J1","B"):200.0},"Fixed_Bay_Mode":{i:I[i]["fixed_size_ft"] for i in I_list},"Fixed_Mode_Force":{(i,n):None for i in I_list for n in N},"initial_inventory_data":{},"Old_Box_Occupancy_Map":{},"Old_Ship_Size_Map":{},"Arrivals_interval":{("J1",s,n):2.0 for s in S for n in N},"Arrivals_group_interval":{("J1",g,n):2.0 for g in G for n in N},"Fixed_In_Flow":{},"Block_Outbound_Vol":{(k,n):0.0 for k in K for n in N},"Block_Outbound_Req":{},"ScenarioName":"tiny_true_benders","New_Outbound_Req":{}}
 
+def get_data_tiny_concentration() -> dict:
+    d=get_data_tiny_benders();d["ScenarioName"]="tiny_joint_concentration";d["K"].append("C");d["Bays_in_Block"]["C"]=[]
+    for size in d["S"]:
+        i=f"C{size}";d["I"][i]={"block":"C","cap":10.0,"fixed_size_ft":size};d["I_list"].append(i);d["Bays_in_Block"]["C"].append(i);d["Fixed_Bay_Mode"][i]=size
+        for n in d["N"]:d["Fixed_Mode_Force"][i,n]=None
+    d["Dist"]["J1","C"]=300.0
+    for n in d["N"]:d["Block_Outbound_Vol"]["C",n]=0.0
+    return d
+
 
 # ---------------------------------------------------------------------------
 # BAPTBI original-file adapters

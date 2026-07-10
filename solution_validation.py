@@ -1,6 +1,7 @@
 """Independent feasibility checker for Route-B exact UB solutions."""
 from model_common import arrival,fixed_in_block,group_size,groups,remaining_capacity,required_reserve
-def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalities=True,tolerance=1e-5):
+from model_concentration import evaluate_joint_group_concentration
+def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalities=True,concentration_enabled=True,tolerance=1e-5):
     I,J,G,N,K=data["I_list"],data["J_new"],groups(data),data["N"],data["K"];alpha=float(data["Alpha"]);rem=remaining_capacity(data);viol={}
     def rec(name,x):viol[name]=max(viol.get(name,0),max(0,float(x)))
     def val(name,k):return float(solution.get(name,{}).get(k,0))
@@ -23,4 +24,14 @@ def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalit
     for n in N:rec("average",abs(len(K)*val("avg",n)-sum(val("in_total",(k,n)) for k in K)))
     if alloc_domain=="integer":
      for value in solution["alloc_boxes"].values():rec("integrality",abs(value-round(value)))
+    concentration=evaluate_joint_group_concentration(data,solution,alloc_domain=alloc_domain,enabled=concentration_enabled,tolerance=tolerance)
+    if concentration["enabled"]:
+     final=concentration["final_period"]
+     for j,g in concentration["positive_ship_groups"]:
+      used=concentration["used_blocks"][j,g];rec("concentration_minimum_blocks",concentration["minimum_blocks"][j,g]-len(used));rec("concentration_cover",required_reserve(data,j,g,final,alloc_domain)-sum(concentration["big_m"][j,g,k] for k in used))
+      for k in used:
+       if "concentration_use" in solution:rec("concentration_support",1-float(solution["concentration_use"].get((j,g,k),0)))
+     if "concentration_use" in solution:
+      for (j,g,k),value in solution["concentration_use"].items():rec("concentration_support",abs(float(value)-float(k in concentration["used_blocks"].get((j,g),[]))))
+      modeled=sum(float(v) for v in solution["concentration_use"].values())-sum(concentration["minimum_blocks"].values());rec("concentration_raw",abs(modeled-concentration["raw_excess_blocks"]))
     maximum=max(viol.values(),default=0);return {"feasible":maximum<=tolerance,"max_violation":maximum,"violations_by_family":viol}

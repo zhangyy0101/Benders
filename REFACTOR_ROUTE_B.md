@@ -1,91 +1,97 @@
-# Route B：强化 True Branch-and-Benders-Cut + 自适应 ALNS
+# Route B：True BBC + ALNS + 联合属性集中度
 
-## 数学结构
+## 核心目标
 
-Master 仅保留 `x[i,j,n]`、`alloc_boxes[i,j,g,n]` 与 `eta`，目标为
-`open_cost(x) + eta`。默认不再创建冗余的 block binary。整数分配采用
-`ceil(Alpha * cumulative_arrival)`，连续分配采用精确实数等式；master 与
-monolithic 共用同一组必要 handling/capacity 有效不等式。
+当前核心目标同时优化 open-bay-time、joint group concentration、distance、L1
+workload balance 和 outbound conflict。旧的 ε-constrained attribute refinement、
+POD spread、weight spread 与 bay-level height mix 已全部删除。高度仍属于 group 的
+联合属性，但不再单独惩罚同一 bay 内不同高度。
 
-Global recourse LP 仍独立包含 `din/inv/in_share/in_total/avg/g_bal`，并完整承担
-distance、L1 workload balance 与 outbound conflict。因而这仍是真正的 Benders
-分解，不是把完整 recourse 搬回 master。
+一个 group 同时编码 size、POD、height、weight class。对最终时段定义
+`u[j,g,k]=1` 表示 ship–group 在 block 中有正预留量。binary 只在 master 与
+monolithic 中建立，不进入 global recourse，因此 recourse 仍是纯 LP，原有
+optimality/Farkas cuts 仍只包含 x、alloc 和 eta。
 
-## 解决弱下界
+## 集中度数学定义
 
-`model_aggregate_recourse_lb.py` 在 master 中加入合法的 size-level 投影松弛：
-
-```text
-sum_k z[j,k,s,n] = arrival[j,s,n]
-Alpha*z[j,k,s,n] <= aggregate same-period handling capacity
-Alpha*sum_{t<=n} z[j,k,s,t] <= aggregate cumulative allocated storage
-eta >= weighted_distance(z) + weighted_L1_balance(z) + weighted_conflict(z)
-```
-
-任何真实 SP 可行解均可投影为该松弛的可行解，所以其目标不会超过真实 recourse
-最优值。此外还有可单独消融的 distance、balance、conflict 解析下界。summary
-分别记录 root 的 open、eta、aggregate 及三个目标分量。
-
-tiny 的强化 root 为：
+对正需求 `(j,g)`：
 
 ```text
-open = 4,000
-eta = aggregate = 12,000
-LB = 16,000
+block_alloc[j,g,k] <= M[j,g,k] u[j,g,k]
+sum_k M[j,g,k] u[j,g,k] >= required_final[j,g]
+sum_k u[j,g,k] >= L[j,g]
 ```
 
-无需依赖多轮 cuts 即已达到真实最优值。3new6old 的短测 root 从旧版本约 843
-提高到 15,647.842，其中 open=842.133、eta=14,805.709；因此原 95% gap 的
-主因（`eta≈0`）已经消除。
+整数 allocation 还使用合法的 `block_alloc >= u`，保证保存的 binary 与 support
+完全一致。tight Big-M 为：
 
-## Cuts 与数值策略
+```text
+M[j,g,k] = min(required_final[j,g],
+               compatible remaining capacity in block k)
+```
 
-Optimality cut 使用全局 LP 对 master linking RHS 的对偶次梯度，并在生成点检查
-紧性。Farkas cut 固定采用 Gurobi certificate 的统一方向
-`constant + xcoef*x + alloccoef*alloc >= 0`，方向不再根据当前点临时翻转。
-`cut_validation.py` 可独立检查 cut。
+`L[j,g]` 是按 M 降序累加至 required demand 所需的最少 block 数。指标为：
 
-root prepass 根据相对 LB 改善、violation、stall、迭代数和时间自适应停止。
-主流程只运行一个正式 BBC；root、warm start、ALNS 和 main BBC 从同一个
-`total_core_time` 分配预算。节点分离支持 root-only、periodic、adaptive，并限制
-callback 时间占比。`stabilized` 策略在 node point 与 core point 的凸组合处求合法
-次梯度（不是 Magnanti-Wong cut）。
+```text
+C_raw   = sum_(j,g) (sum_k u[j,g,k] - L[j,g])
+C_scale = max(1, sum_(j,g) (B[j,g] - L[j,g]))
+C_norm  = C_raw / C_scale
+```
 
-## UB、ALNS 与属性优化
+因此 raw=0 表示每个 group 都达到容量条件下的最低 block 数，而不是错误地惩罚
+不可避免的分散。统一实现位于 `model_concentration.py`，master、monolithic、
+direct、ALNS、BBC exact UB 与 solution checker 均调用同一 evaluator。
 
-UB 只接受独立 `solution_validation.py` 检查通过且由 exact global recourse 评价的
-解。LB 只取 Benders master bound，gap 使用同一 core objective。
+## Benders 目标一致性
 
-ALNS 持久复用一个 repair model，真实执行 random/active/block/interval/ship/
-conflict/distance destroy，roulette 权重依据 accepted、improved、best-improved
-反馈更新，并支持 destroy fraction 调节与停滞重启。属性 refinement 按库存而非
-累计流量构造指标，使用剩余容量 Big-M；缺少属性字段时明确返回
-`NOT_APPLICABLE`，且 refinement 永不改变 core gap。
+```text
+Master objective = weighted_open + weighted_concentration + eta
+Recourse Q        = weighted_distance + weighted_balance + weighted_conflict
+Exact UB          = open + concentration + exact Q(x,alloc)
+LB                = master.ObjBound
+```
 
-公开适配数据的合成 outbound 会显式裁剪到可用初始库存，并记录
-`inferred_outbound_clipped_boxes`；用户提供与核心实例仍执行严格的容量和残余
-出库校验。release policy 可选 proportional、legacy_sorted、conservative。
+aggregate/analytic lower bound 仍只下界 Q，不包含 concentration。callback 从 alloc
+重建 concentration binaries，与 x、alloc、`eta=Q` 一起提交。summary 分别输出
+root open、concentration、eta 和 aggregate recourse。
 
-## 运行与公平实验
+## ALNS
+
+ALNS repair 使用完整 monolithic 核心目标，所有 start/candidate/best UB 均包含
+concentration。新增 concentration destroy：选取 excess spread 最大的 `(j,g)`，
+释放其已使用 blocks 上对应 ship 的 x 与 allocation 时间轴。该 operator 参与与
+其他 operators 相同的 roulette 权重更新。
+
+## 数据可用性
+
+只有显式完整提供 POD、height、weight class 联合 group 的实例启用集中度。
+BAPTBI/Barcelona 公开适配器返回 `NOT_APPLICABLE`；其 concentration raw 为 null、
+cost 为 0，不能解释为“完美集中”。`tiny_concentration` 是三 block 专项 fixture。
+
+## 运行
 
 ```bash
 python -m pytest -q
-python main.py --instance tiny --total-core-time 10 --mip-gap 0
-python main.py --instance 3new6old --total-core-time 60 --cut-strategy stabilized
-python solve_direct_gurobi.py --instance tiny --time 10 --mip-gap 0
-python run_experiments.py --instances tiny 3new6old --total-core-time 60 --suite full
+python main.py --instance tiny_concentration --total-core-time 20 --concentration --concentration-weight 10 --mip-gap 0
+python solve_direct_gurobi.py --instance tiny_concentration --time 20 --concentration --concentration-weight 10 --mip-gap 0
+python main.py --instance 3new6old --total-core-time 180 --concentration-weight 10
+python run_experiments.py --instances 3new6old --seeds 0 1 2 --total-core-time 60 --suite concentration
 ```
 
-实验脚本对 direct、weak、analytic、aggregate、aggregate+stabilized 使用完全相同
-的核心 wall-clock budget，并输出 UB/LB/gap、root 分解、各类 cut、SP 次数与耗时、
-callback 占比、ALNS 改善及 anytime trace。属性 refinement 时间独立记录，不混入
-核心算法公平预算。
+`--suite concentration` 运行权重 0、2、5、10、20。短预算结果不可用于声称
+单调 trade-off 或选择最终权重；论文应使用多 seed、足够预算，并依据 elbow、
+运营偏好与稳定性选择默认值。
 
-## 当前验证
+## 当前验证结果
 
-- 35 项测试通过，包括聚合下界有效性、tiny 最优值、精确 reserve、独立解检查、
-  Farkas/optimality cuts、ALNS 状态与全部公开数据适配器。
-- tiny：BBC 与 direct 均为 UB=LB=16,000。
-- 3new6old 20 秒诊断：强化 root LB=15,647.842；同预算 direct LB=15,665.028。
-  该极短预算尚未找到可行整数 incumbent，因此不能报告 gap；应使用 60 秒或更长
-  的统一预算完成论文表格，不能把“无 incumbent”伪装为收敛结果。
+- 44 项测试通过。
+- tiny_concentration：direct=BBC=16000，gap=0，raw excess=0，used/minimum=2/2。
+- 3new6old，weight=10，180 秒：UB=18357.506827，LB=15889.448680，
+  gap=13.4444%；open=1133.333333，concentration=2345.679012，
+  distance=6857.636474，balance=519.722327，conflict=7501.135681；
+  raw excess=38，used/minimum=56/18。
+- 该次 ALNS 将 18453.331701 改善至 18441.740792；concentration operator 被真实
+  使用并接受一次。60 秒 BBC 未找到 exact incumbent，说明加入 180 个 first-stage
+  concentration binaries 后需要更长预算。
+- 单 seed、30 秒权重敏感性保存在 `experiments_joint_sensitivity`；结果尚未收敛，
+  raw 并非单调，不能作为业务权重结论。

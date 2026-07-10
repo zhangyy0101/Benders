@@ -5,7 +5,7 @@ from solve_direct_gurobi import solve_direct_gurobi
 from solver_true_benders import root_lp_prepass,solve_bbc_phase,solve_true_benders_pipeline
 from model_recourse import BendersCutPool
 def test_no_distance_double_counting():
- d=prepare_instance(get_data_tiny_benders());m,v,_=build_master_model(d,Weights());assert set(v)=={'x','alloc_boxes','eta'}
+ d=prepare_instance(get_data_tiny_benders());m,v,_=build_master_model(d,Weights());assert set(v)=={'x','alloc_boxes','eta','concentration_use'}
 def test_benders_lb_not_above_direct_optimum():
  d=prepare_instance(get_data_tiny_benders());direct=solve_direct_gurobi(d,Weights(),time_limit=3,mip_gap=0);bbc=solve_bbc_phase(d,Weights(),time_limit=3,mip_gap=0);assert bbc['lb']<=direct['ub']+1e-5 and abs(bbc['ub']-direct['ub'])<1e-5
 def test_evaluated_ub_is_recourse_feasible():
