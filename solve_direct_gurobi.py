@@ -1,10 +1,4 @@
-"""
-Direct monolithic Gurobi solve for the current Benders-changed model.
-
-This runner uses the same data builders and weights as main.py, but changes the
-solve method: all per-ship feasibility constraints that BBC checks through SPs
-are embedded in one Gurobi model and optimized directly.
-"""
+"""Plain monolithic Gurobi baseline using the Route-A core builder."""
 
 from __future__ import annotations
 
@@ -18,7 +12,9 @@ import gurobipy as gp
 from gurobipy import GRB
 
 from config import Weights
+from model_core import build_core_monolithic_model, evaluate_core_solution, extract_solution
 from data import (
+    prepare_instance,
     get_data_baptbi_10n_4b_4p,
     get_data_baptbi_15n_4b_5p,
     get_data_baptbi_25n_6b_5p,
@@ -185,14 +181,11 @@ def set_direct_objective(
 def build_direct_model(
     data: dict,
     weights: Weights,
+    *, alloc_domain="integer", add_valid_inequalities=True,
 ) -> tuple[gp.Model, dict]:
-    """Build the direct monolithic Gurobi model."""
-    model, mp_vars = build_master_v2(data, weights)
-    direct_vars = add_per_ship_feasibility_to_master(model, data, mp_vars)
-    set_direct_objective(model, data, weights, mp_vars)
-    model.ModelName = "direct_monolithic_current_model"
-    model.update()
-    return model, {**mp_vars, **direct_vars}
+    model, variables, expressions = build_core_monolithic_model(data, weights, alloc_domain=alloc_domain, add_valid_inequalities=add_valid_inequalities)
+    model.ModelName = "plain_monolithic_gurobi_baseline"
+    return model, variables
 
 
 def evaluate_solution(data: dict, weights: Weights, model: gp.Model, vars_: dict) -> dict:
@@ -272,8 +265,15 @@ def solve_direct_gurobi(
     cuts: int | None = None,
     presolve: int | None = None,
     verbose: bool = True,
+    alloc_domain: str = "integer",
+    add_valid_inequalities: bool = True,
+    start_solution: dict | None = None,
 ) -> dict:
-    model, vars_ = build_direct_model(data, weights)
+    model, vars_ = build_direct_model(data, weights, alloc_domain=alloc_domain, add_valid_inequalities=add_valid_inequalities)
+    if start_solution:
+        for name, values in start_solution.items():
+            for key, value in values.items():
+                if key in vars_.get(name, {}): vars_[name][key].Start = value
     model.Params.OutputFlag = 1 if verbose else 0
     model.Params.MIPGap = float(mip_gap)
     if time_limit_s is not None:
@@ -299,7 +299,9 @@ def solve_direct_gurobi(
     wall = time.perf_counter() - t0
 
     has_sol = model.SolCount > 0
-    components = evaluate_solution(data, weights, model, vars_) if has_sol else None
+    solution = extract_solution(data, vars_) if has_sol else None
+    core_eval = evaluate_core_solution(data, weights, solution) if has_sol else None
+    components = None if core_eval is None else {"true_obj":core_eval["total_core_cost"], **core_eval["weighted"]}
     obj_val = float(model.ObjVal) if has_sol else None
     obj_bound = None
     if model.Status in (GRB.OPTIMAL, GRB.TIME_LIMIT, GRB.INTERRUPTED, GRB.SUBOPTIMAL):
@@ -308,7 +310,7 @@ def solve_direct_gurobi(
         except Exception:
             obj_bound = None
 
-    true_ub = components["true_obj"] if components else None
+    true_ub = core_eval["total_core_cost"] if core_eval else None
     true_lb = obj_bound
     true_gap = _gap(true_ub, true_lb)
 
@@ -370,10 +372,14 @@ def main() -> int:
     parser.add_argument("--presolve", type=int, default=None,
                         help="Gurobi Presolve parameter")
     parser.add_argument("--output-root", default="outputs")
+    parser.add_argument("--alloc-domain", choices=("integer", "continuous"), default="integer")
+    parser.add_argument("--handling-rate-scale", type=float, default=1.0)
+    parser.add_argument("--no-valid-inequalities", action="store_true")
+    parser.add_argument("--start-solution", help="JSON solution file (reserved for tuple-key compatible exports)")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
-    data = INSTANCES[args.instance]()
+    data = prepare_instance(INSTANCES[args.instance](), args.handling_rate_scale)
     weights = Weights()
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -399,6 +405,8 @@ def main() -> int:
         cuts=args.cuts,
         presolve=args.presolve,
         verbose=not args.quiet,
+        alloc_domain=args.alloc_domain,
+        add_valid_inequalities=not args.no_valid_inequalities,
     )
     result["instance"] = args.instance
 
@@ -417,10 +425,8 @@ def main() -> int:
         if result["model_gap"] is not None:
             print(f"    gap={100.0 * result['model_gap']:.2f}%")
         c = result["components"]
-        print(f"  Components:      x={c['weighted_x']:.2f}, "
-              f"dist={c['weighted_distance']:.2f}, "
-              f"balance={c['weighted_balance']:.2f}, "
-              f"conflict={c['weighted_conflict']:.2f}")
+        print(f"  Components:      open={c['open']:.2f}, dist={c['distance']:.2f}, "
+              f"balance={c['balance']:.2f}, conflict={c['conflict']:.2f}")
     print(f"  Wall time:       {result['wall_time_s']:.2f}s")
     print(f"  Summary saved:   {summary_path}")
     print("=" * 70)
