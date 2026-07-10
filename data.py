@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import random
 import re
@@ -14,7 +15,38 @@ _FIXED_3N6O_CACHE = None
 TOS_NUM_YARD_BLOCKS = 10
 TOS_YARD_BAYS = 10
 TOS_BAY_CAPACITY_BOXES = 50.0
+TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
+
+def prepare_instance(data: dict, handling_rate_scale: float = 1.0) -> dict:
+    result=copy.deepcopy(data);scale=float(handling_rate_scale)
+    if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
+    result["Bay_Handling_Rate"]={(i,n):TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR;result["handling_rate_scale"]=scale;result["handling_rate_source"]="model_calibration";validate_instance_units(result);return result
+
+def validate_instance_units(data: dict) -> None:
+    required=("K","I","I_list","Bays_in_Block","J_new","J_old","S","N","Intervals","Dist","Alpha","Arrivals_interval","initial_inventory_data","Fixed_In_Flow","Block_Outbound_Vol","Block_Outbound_Req","Fixed_Bay_Mode","Fixed_Mode_Force","Bay_Handling_Rate")
+    missing=[k for k in required if k not in data]
+    if missing:raise ValueError(f"missing model keys: {missing}")
+    def finite(v,label):
+        x=float(v)
+        if not math.isfinite(x):raise ValueError(f"non-finite {label}")
+        return x
+    if sorted(data["N"])!=list(range(len(data["N"]))):raise ValueError("period ids must be contiguous")
+    for n in data["N"]:
+        if int(data["Intervals"][n]["id"])!=n or finite(data["Intervals"][n]["dur"],"duration")<=0:raise ValueError("invalid interval")
+    modes={int(s) for s in data["S"]}
+    for i in data["I_list"]:
+        cap=finite(data["I"][i]["cap"],"capacity")
+        if cap<0 or int(data["Fixed_Bay_Mode"][i]) not in modes:raise ValueError(f"invalid bay {i}")
+        initial=sum(float(v) for (bay,_j,_s),v in data["initial_inventory_data"].items() if bay==i)
+        if initial>cap+1e-6:raise ValueError(f"initial occupancy exceeds {i}")
+        for n in data["N"]:
+            if finite(data["Bay_Handling_Rate"][i,n],"handling rate")<0:raise ValueError("negative handling rate")
+    for j in data["J_new"]:
+        for k in data["K"]:finite(data["Dist"][j,k],"distance")
+        for s in data["S"]:
+            for n in data["N"]:
+                if finite(data["Arrivals_interval"][j,s,n],"arrival")<0:raise ValueError("negative arrival")
 
 
 def _build_yard(num_blocks: int = TOS_NUM_YARD_BLOCKS, bays_per_block: int = TOS_YARD_BAYS):
@@ -356,6 +388,11 @@ def get_data_3new6old_fixed() -> dict:
     if _FIXED_3N6O_CACHE is None:
         _FIXED_3N6O_CACHE = get_data_3new6old()
     return copy.deepcopy(_FIXED_3N6O_CACHE)
+
+def get_data_tiny_benders() -> dict:
+    """Two-block fixture with positive recourse and deliberately infeasible master points."""
+    K=["A","B"];I_list=["A20","A40","B20","B40"];I={i:{"block":i[0],"cap":10.0,"fixed_size_ft":20 if i.endswith("20") else 40} for i in I_list};B={k:[i for i in I_list if i[0]==k] for k in K};J=["J1"];S=[20,40];G=["G20","G40"];N=[0,1];attrs={"G20":{"size":20,"pod":"P1","height":"STD","weight_class":"LIGHT"},"G40":{"size":40,"pod":"P2","height":"HIGH","weight_class":"HEAVY"}}
+    return {"K":K,"I":I,"I_list":I_list,"Bays_in_Block":B,"J_new":J,"J_old":[],"J_all":J,"S":S,"G":G,"GroupAttrs":attrs,"GroupSize":{g:attrs[g]["size"] for g in G},"GroupPOD":{g:attrs[g]["pod"] for g in G},"GroupHeight":{g:attrs[g]["height"] for g in G},"GroupWeightClass":{g:attrs[g]["weight_class"] for g in G},"Alpha":1.0,"N":N,"Intervals":[{"id":0,"start":0,"end":1,"dur":1.0},{"id":1,"start":1,"end":2,"dur":1.0}],"Dist":{("J1","A"):100.0,("J1","B"):200.0},"Fixed_Bay_Mode":{i:I[i]["fixed_size_ft"] for i in I_list},"Fixed_Mode_Force":{(i,n):None for i in I_list for n in N},"initial_inventory_data":{},"Old_Box_Occupancy_Map":{},"Old_Ship_Size_Map":{},"Arrivals_interval":{("J1",s,n):2.0 for s in S for n in N},"Arrivals_group_interval":{("J1",g,n):2.0 for g in G for n in N},"Fixed_In_Flow":{},"Block_Outbound_Vol":{(k,n):0.0 for k in K for n in N},"Block_Outbound_Req":{},"ScenarioName":"tiny_true_benders","New_Outbound_Req":{}}
 
 
 # ---------------------------------------------------------------------------

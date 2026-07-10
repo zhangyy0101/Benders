@@ -13,8 +13,8 @@ class SubWeights:
     conflict: float = 42.0   # normalized outbound-pressure conflict term
 
 @dataclass(frozen=True)
-class AttributePolishWeights:
-    """Weights for the post-solve attribute layout polish."""
+class AttributeRefinementWeights:
+    """Weights for epsilon-constrained attribute refinement."""
     pod_spread: float = 4.0
     weight_spread: float = 3.0
     height_mix: float = 10.0
@@ -24,4 +24,6 @@ class Weights:
     master: MasterWeights = MasterWeights()
     sub: SubWeights = SubWeights()
     objective_scale: float = 1000.0
-    attribute: AttributePolishWeights = AttributePolishWeights()
+    attribute: AttributeRefinementWeights = AttributeRefinementWeights()
+
+AttributePolishWeights = AttributeRefinementWeights
