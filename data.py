@@ -18,10 +18,45 @@ TOS_BAY_CAPACITY_BOXES = 50.0
 TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
 
-def prepare_instance(data: dict, handling_rate_scale: float = 1.0) -> dict:
+def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_release_policy: str = "proportional") -> dict:
     result=copy.deepcopy(data);scale=float(handling_rate_scale)
     if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
-    result["Bay_Handling_Rate"]={(i,n):TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR;result["handling_rate_scale"]=scale;result["handling_rate_source"]="model_calibration";validate_instance_units(result);return result
+    if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative"}:raise ValueError("invalid old outbound release policy")
+    # The public adapters synthesize outbound calls independently of their
+    # synthetic initial yard.  Clip only those inferred requests to physical
+    # stock; user supplied/core instances remain strict and fail validation.
+    if "adapted" in result.get("ScenarioName","") or "synthetic_yard" in result.get("ScenarioName",""):
+        _cap_inferred_outbound_to_inventory(result)
+    result["Bay_Handling_Rate"]={(i,n):TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR;result["handling_rate_scale"]=scale;result["handling_rate_source"]="model_calibration";result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
+
+def _cap_inferred_outbound_to_inventory(data):
+    available={(k,j):sum(float(data["initial_inventory_data"].get((i,j,s),0)) for i in data["Bays_in_Block"][k] for s in data["S"]) for k in data["K"] for j in data["J_old"]}
+    clipped=0.0
+    for n in data["N"]:
+        for k in data["K"]:
+            for j in data["J_old"]:
+                available[k,j]+=sum(float(data["Fixed_In_Flow"].get((j,s,i,n),0)) for i in data["Bays_in_Block"][k] for s in data["S"])
+                key=(k,j,n);requested=max(0.0,float(data["Block_Outbound_Req"].get(key,0)));served=min(requested,available[k,j]);data["Block_Outbound_Req"][key]=served;available[k,j]-=served;clipped+=requested-served
+        for k in data["K"]:data["Block_Outbound_Vol"][k,n]=sum(float(data["Block_Outbound_Req"].get((k,j,n),0)) for j in data["J_old"])
+    data["inferred_outbound_clipped_boxes"]=clipped
+def simulate_old_inventory(data,policy=None):
+    policy=policy or data.get("old_outbound_release_policy","proportional");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
+    for n in N:
+      for i in I:
+       for j in J:
+        for s in S:q=float(data["Fixed_In_Flow"].get((j,s,i,n),0));logical[i,j,s]+=q;capacity[i,j,s]+=q
+      for k,bays in data["Bays_in_Block"].items():
+       for j in J:
+        req=float(data["Block_Outbound_Req"].get((k,j,n),0));available=sum(logical[i,j,s] for i in bays for s in S);unserved[k,j,n]=max(0,req-available);take_total=min(req,available)
+        if policy=="proportional" and available>1e-9:
+         snapshot={(i,s):logical[i,j,s] for i in bays for s in S}
+         for (i,s),q in snapshot.items():take=take_total*q/available;logical[i,j,s]-=take;capacity[i,j,s]-=take
+        else:
+         left=take_total
+         for i in sorted(bays):
+          for s in S:take=min(left,logical[i,j,s]);logical[i,j,s]-=take;capacity[i,j,s]-=take if policy=="legacy_sorted" else 0;left-=take
+      for i in I:occ[i,n]=sum(capacity[i,j,s] for j in J for s in S);max_violation=max(max_violation,occ[i,n]-float(data["I"][i]["cap"]))
+    return {"occupancy":occ,"unserved_outbound":unserved,"max_capacity_violation":max(0,max_violation)}
 
 def validate_instance_units(data: dict) -> None:
     required=("K","I","I_list","Bays_in_Block","J_new","J_old","S","N","Intervals","Dist","Alpha","Arrivals_interval","initial_inventory_data","Fixed_In_Flow","Block_Outbound_Vol","Block_Outbound_Req","Fixed_Bay_Mode","Fixed_Mode_Force","Bay_Handling_Rate")
@@ -47,6 +82,16 @@ def validate_instance_units(data: dict) -> None:
         for s in data["S"]:
             for n in data["N"]:
                 if finite(data["Arrivals_interval"][j,s,n],"arrival")<0:raise ValueError("negative arrival")
+    if data.get("G"):
+      for j in data["J_new"]:
+       for s in data["S"]:
+        gs=[g for g in data["G"] if int(data["GroupSize"][g])==int(s)]
+        for n in data["N"]:
+         if any((j,g,n) not in data["Arrivals_group_interval"] for g in gs):raise ValueError("missing grouped arrival")
+         if abs(sum(float(data["Arrivals_group_interval"][j,g,n]) for g in gs)-float(data["Arrivals_interval"][j,s,n]))>1e-6:raise ValueError("grouped arrival mismatch")
+    simulation=simulate_old_inventory(data)
+    if simulation["max_capacity_violation"]>1e-6:raise ValueError("old occupancy exceeds capacity")
+    if max(simulation["unserved_outbound"].values(),default=0)>1e-6:raise ValueError("old outbound residual")
 
 
 def _build_yard(num_blocks: int = TOS_NUM_YARD_BLOCKS, bays_per_block: int = TOS_YARD_BAYS):

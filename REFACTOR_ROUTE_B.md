@@ -1,104 +1,91 @@
-# Route B：True Branch-and-Benders-Cut + ALNS
+# Route B：强化 True Branch-and-Benders-Cut + 自适应 ALNS
 
-## 为什么旧版本不能称为 True BBC
+## 数学结构
 
-旧 master 已包含 `in_share/in_total/g_bal` 以及 distance、balance、conflict，同时 per-ship SP 又重复部分动态流约束；它没有 `eta` 和真实 recourse optimality cut，并在 Farkas 构造失败时退回 x-only no-good。这样的结构无法证明 master bound 是完整 core objective 的 LB，也不能处理跨船 L1 average 耦合。
+Master 仅保留 `x[i,j,n]`、`alloc_boxes[i,j,g,n]` 与 `eta`，目标为
+`open_cost(x) + eta`。默认不再创建冗余的 block binary。整数分配采用
+`ceil(Alpha * cumulative_arrival)`，连续分配采用精确实数等式；master 与
+monolithic 共用同一组必要 handling/capacity 有效不等式。
 
-## 新 Master
+Global recourse LP 仍独立包含 `din/inv/in_share/in_total/avg/g_bal`，并完整承担
+distance、L1 workload balance 与 outbound conflict。因而这仍是真正的 Benders
+分解，不是把完整 recourse 搬回 master。
 
-`model_master.py` 只包含：
+## 解决弱下界
 
-```text
-x[i,j,n]                 binary
-alloc_boxes[i,j,g,n]     integer/continuous
-block_use[j,k,n]         binary
-eta                      continuous, eta >= 0
-```
-
-目标严格为：
+`model_aggregate_recourse_lb.py` 在 master 中加入合法的 size-level 投影松弛：
 
 ```text
-min open_bay_cost(x) + eta
+sum_k z[j,k,s,n] = arrival[j,s,n]
+Alpha*z[j,k,s,n] <= aggregate same-period handling capacity
+Alpha*sum_{t<=n} z[j,k,s,t] <= aggregate cumulative allocated storage
+eta >= weighted_distance(z) + weighted_L1_balance(z) + weighted_conflict(z)
 ```
 
-master 保留 fixed mode、bay reserve capacity、alloc/x 双向连接、allocation 与 activation 时间单调性、block-use links、累计全 yard reserve 下界以及 per-size necessary handling inequalities。master 不含 `din/inv/in_share/in_total/avg/g_bal`，也不含 distance/balance/conflict。
+任何真实 SP 可行解均可投影为该松弛的可行解，所以其目标不会超过真实 recourse
+最优值。此外还有可单独消融的 distance、balance、conflict 解析下界。summary
+分别记录 root 的 open、eta、aggregate 及三个目标分量。
 
-## Global Recourse LP
-
-`GlobalRecourseOracle` 是单一全局 LP，不按 ship 拆分。变量为 `din/inv/in_share/in_total/avg/g_bal`；它包含 arrival conservation、inventory balance、storage/handling coupling、block aggregation、fixed inbound、global average 和 L1 linearization。
-
-recourse 唯一承担：
+tiny 的强化 root 为：
 
 ```text
-distance + L1 workload balance + outbound conflict
+open = 4,000
+eta = aggregate = 12,000
+LB = 16,000
 ```
 
-handling RHS 为 `Bay_Handling_Rate × duration × x_hat`，单位 boxes；storage coupling 为 `Alpha × inv <= alloc_hat`。50 boxes/hour 是 `model_calibration`，不是公开数据。
+无需依赖多轮 cuts 即已达到真实最优值。3new6old 的短测 root 从旧版本约 843
+提高到 15,647.842，其中 open=842.133、eta=14,805.709；因此原 95% gap 的
+主因（`eta≈0`）已经消除。
 
-oracle 只构造一次，callback 中只更新 linking RHS，使用 dual simplex (`Method=1`) 保留 basis。统计 solve/optimal/infeasible 次数和总/平均/最大时间。
+## Cuts 与数值策略
 
-## Optimality cut 与 dual 符号
+Optimality cut 使用全局 LP 对 master linking RHS 的对偶次梯度，并在生成点检查
+紧性。Farkas cut 固定采用 Gurobi certificate 的统一方向
+`constant + xcoef*x + alloccoef*alloc >= 0`，方向不再根据当前点临时翻转。
+`cut_validation.py` 可独立检查 cut。
 
-对所有 RHS linking constraints，Gurobi 最小化 LP 的 `<=` 行 dual 满足 `Pi <= 0`。令 `a(y)` 为由 master point 决定的 RHS，则：
+root prepass 根据相对 LB 改善、violation、stall、迭代数和时间自适应停止。
+主流程只运行一个正式 BBC；root、warm start、ALNS 和 main BBC 从同一个
+`total_core_time` 分配预算。节点分离支持 root-only、periodic、adaptive，并限制
+callback 时间占比。`stabilized` 策略在 node point 与 core point 的凸组合处求合法
+次梯度（不是 Magnanti-Wong cut）。
 
-```text
-eta >= Q(y_hat) + sum_r Pi_r [a_r(y) - a_r(y_hat)]
-```
+## UB、ALNS 与属性优化
 
-代码在每次生成时检查 cut 在 `y_hat`、`eta=Q(y_hat)` 处误差不超过 `1e-5`。测试还在另一可行点验证 cut RHS 不超过真实 `Q`。distance/balance/conflict 只出现于 SP，因此不存在 double counting。
+UB 只接受独立 `solution_validation.py` 检查通过且由 exact global recourse 评价的
+解。LB 只取 Benders master bound，gap 使用同一 core objective。
 
-## Farkas feasibility cut
+ALNS 持久复用一个 repair model，真实执行 random/active/block/interval/ship/
+conflict/distance destroy，roulette 权重依据 accepted、improved、best-improved
+反馈更新，并支持 destroy fraction 调节与停滞重启。属性 refinement 按库存而非
+累计流量构造指标，使用剩余容量 Big-M；缺少属性字段时明确返回
+`NOT_APPLICABLE`，且 refinement 永不改变 core gap。
 
-SP infeasible 时，对所有行（包括 arrival、initial inventory、fixed inbound 等 constant RHS）读取 `FarkasDual`，构造完整 affine certificate。生成点必须严格违反，已知可行点必须被保留。cut 同时允许包含 x 与 alloc 系数；代码没有 x-only no-good fallback。certificate 构造失败会写出 LP、终止 master 并抛出日志化异常。
+公开适配数据的合成 outbound 会显式裁剪到可用初始库存，并记录
+`inferred_outbound_clipped_boxes`；用户提供与核心实例仍执行严格的容量和残余
+出库校验。release policy 可选 proportional、legacy_sorted、conservative。
 
-## Root prepass、callback 与 cut pool
-
-Phase 0 反复求 master LP、调用 global oracle、添加 optimality/Farkas cut，直到 violation 收敛、迭代上限或时间上限。Phase 1 在 MIPSOL 添加 lazy cuts，在 optimal MIPNODE 添加 user cuts。node cut budget 只限制 MIPNODE，不影响 MIPSOL correctness。
-
-`BendersCutRecord` 保存 constant、eta/x/alloc coefficients、origin、violation 和 coefficient signature；`BendersCutPool` 去重。Phase 3 重建 master 后加载 Phase 1 全部 unique cuts，并注入 ALNS solution 作为 MIP start。
-
-## UB、LB 和 gap
-
-UB 只来自 SP-optimal incumbent：
-
-```text
-exact UB = exact open cost + exact global SP objective
-```
-
-master incumbent `open+eta` 不被当作 exact UB。LB 为包含全部有效 cuts 的 `master.ObjBound`。ALNS 和 refinement bound 均不进入 LB：
-
-```text
-gap = (best_exact_ub - best_master_lb) / abs(best_exact_ub)
-```
-
-## ALNS 与 refinement
-
-BBC 负责 global LB 和 exact search；ALNS 使用完整 `model_monolithic.py` repair，只改善 primal UB。Phase 3 继承 cut pool。属性目标后置为完整 monolithic ε-constraint refinement，core-best 与 refined solution 分开保存，refinement 不修改 BBC gap。
-
-## Direct baseline
-
-`solve_direct_gurobi.py`、ALNS repair 与 refinement 共享 `model_monolithic.py`。direct 与 BBC 使用同一 data、scales、handling rate、allocation domain 和 core objective。tiny 的 direct optimum 用于验证 cut、UB/LB 和 BBC optimum。
-
-## 运行
+## 运行与公平实验
 
 ```bash
 python -m pytest -q
-python -u main.py --instance tiny --phase1-time 10 --lns-time 5 --phase3-time 10 --root-cut-time 5 --attribute-time 5
+python main.py --instance tiny --total-core-time 10 --mip-gap 0
+python main.py --instance 3new6old --total-core-time 60 --cut-strategy stabilized
 python solve_direct_gurobi.py --instance tiny --time 10 --mip-gap 0
-python run_experiments.py --instances tiny --seeds 0 1 --time 3 --suite full
+python run_experiments.py --instances tiny 3new6old --total-core-time 60 --suite full
 ```
 
-## 已验证结果
+实验脚本对 direct、weak、analytic、aggregate、aggregate+stabilized 使用完全相同
+的核心 wall-clock budget，并输出 UB/LB/gap、root 分解、各类 cut、SP 次数与耗时、
+callback 占比、ALNS 改善及 anytime trace。属性 refinement 时间独立记录，不混入
+核心算法公平预算。
 
-- tiny direct：UB=LB=16000。
-- tiny BBC：UB=LB=16000；正 recourse=12000。
-- tiny root prepass：bound 4000 → 16000，4 条 root cuts。
-- 无 root prepass：1 条 initial optimality cut、2 条 incumbent optimality cuts。
-- Phase 3 在 tiny 中继承 5 条 unique cuts。
-- zero-capacity SP 的 Farkas cut 在生成点违反 8，在已知可行点裕量 192，且包含 alloc coefficients。
+## 当前验证
 
-3new6old 的 10/5/10 秒 smoke test：Phase 1 UB=21571.029743、LB=842.133333；ALNS 将 UB 改善 2314.133065 到 19256.896678；Phase 3 LB=843.155556，最终 gap=95.6215%。Phase 3 继承 16 条 cuts、新增 11 条，总 unique cuts=27。短预算 gap 较大，不能解释为算法最终质量。
-
-## 已知限制
-
-大实例 callback 会频繁调用全局 LP，短预算主要验证数学正确性而非收敛性能。当前默认不缓存 fractional points，避免粗 rounding 导致无效 dual cut。公开 benchmark 的属性字段有限，属性实验需要明确的数据来源。任何 Farkas failure 都会终止并留下诊断文件，不会静默添加未经证明的 cut。
+- 35 项测试通过，包括聚合下界有效性、tiny 最优值、精确 reserve、独立解检查、
+  Farkas/optimality cuts、ALNS 状态与全部公开数据适配器。
+- tiny：BBC 与 direct 均为 UB=LB=16,000。
+- 3new6old 20 秒诊断：强化 root LB=15,647.842；同预算 direct LB=15,665.028。
+  该极短预算尚未找到可行整数 incumbent，因此不能报告 gap；应使用 60 秒或更长
+  的统一预算完成论文表格，不能把“无 incumbent”伪装为收敛结果。

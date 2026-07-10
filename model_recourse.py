@@ -14,6 +14,8 @@ class BendersCutRecord:
             payload=(self.cut_type,round(self.constant,12),round(self.eta_coeff,12),sorted((str(k),round(v,12)) for k,v in self.x_coefficients.items() if abs(v)>1e-12),sorted((str(k),round(v,12)) for k,v in self.alloc_coefficients.items() if abs(v)>1e-12));self.signature=hashlib.sha256(repr(payload).encode()).hexdigest()
     def value_at(self,point):return self.constant+self.eta_coeff*float(point.get("eta",0))+sum(v*point["x"].get(k,0) for k,v in self.x_coefficients.items())+sum(v*point["alloc_boxes"].get(k,0) for k,v in self.alloc_coefficients.items())
     def as_expression(self,master_vars):return self.constant+self.eta_coeff*master_vars["eta"]+gp.quicksum(v*master_vars["x"][k] for k,v in self.x_coefficients.items())+gp.quicksum(v*master_vars["alloc_boxes"][k] for k,v in self.alloc_coefficients.items())
+    def coefficient_metrics(self):
+        values=[abs(v) for v in [self.eta_coeff,*self.x_coefficients.values(),*self.alloc_coefficients.values()] if abs(v)>1e-12];return {"min_nonzero_coefficient":min(values,default=0),"max_nonzero_coefficient":max(values,default=0),"coefficient_ratio":max(values)/min(values) if values else 0,"cut_density":len(values)/(1+len(self.x_coefficients)+len(self.alloc_coefficients))}
 @dataclass
 class BendersCutPool:
     records:list=field(default_factory=list);signatures:set=field(default_factory=set);duplicate_skips:int=0
@@ -74,7 +76,7 @@ class GlobalRecourseOracle:
             fd=float(c.FarkasDual);constant+=fd*a["constant"]
             for k,v in a["x"].items():xcoef[k]=xcoef.get(k,0)+fd*v
             for k,v in a["alloc"].items():acoef[k]=acoef.get(k,0)+fd*v
-        raw=constant+sum(v*point["x"].get(k,0) for k,v in xcoef.items())+sum(v*point["alloc_boxes"].get(k,0) for k,v in acoef.items());orientation=1.0 if raw<0 else -1.0;record=BendersCutRecord("feasibility",orientation*constant,0,{k:orientation*v for k,v in xcoef.items()},{k:orientation*v for k,v in acoef.items()},origin,abs(raw))
+        raw=constant+sum(v*point["x"].get(k,0) for k,v in xcoef.items())+sum(v*point["alloc_boxes"].get(k,0) for k,v in acoef.items());record=BendersCutRecord("feasibility",constant,0,xcoef,acoef,origin,abs(raw))
         if record.value_at(point)>=-1e-7:raise RuntimeError(f"Farkas cut does not violate point: {record.value_at(point)}")
         return record
     def statistics(self):return {"sp_solve_count":self.solve_count,"sp_optimal_count":self.optimal_count,"sp_infeasible_count":self.infeasible_count,"sp_total_time":self.total_time,"sp_average_time":self.total_time/max(1,self.solve_count),"sp_max_time":self.max_time}
