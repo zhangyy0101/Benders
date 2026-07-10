@@ -117,13 +117,9 @@ def add_per_ship_feasibility_to_master(model: gp.Model, data: dict, mp_vars: dic
         for i in I_list:
             for n in N:
                 dur = float(Intervals[n]["dur"])
-                rem_cap = max(
-                    0.0,
-                    float(I[i]["cap"]) - float(old_occupancy.get((i, n), 0.0)),
-                )
                 model.addConstr(
                     Alpha * gp.quicksum(din[j, s, i, n] for s in G)
-                    <= rem_cap * dur * x[i, j, n],
+                    <= float(data["Bay_Handling_Rate"][(i, n)]) * dur * x[i, j, n],
                     name=f"direct_link_work_{i}_{j}_{n}",
                 )
 

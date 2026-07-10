@@ -844,6 +844,7 @@ def build_master_v2(
     data: dict,
     weights: Weights,
     include_attribute_helpers: bool = False,
+    alloc_domain: str = "integer",
 ):
     """
     Master with the cross-ship coupling lifted into auxiliary continuous
@@ -886,7 +887,10 @@ def build_master_v2(
     m.Params.LazyConstraints = 1
 
     # Original first-stage variables
-    alloc_boxes = m.addVars(I_list, J_new, G, N, vtype=GRB.INTEGER, lb=0, name="alloc_boxes")
+    if alloc_domain not in {"integer", "continuous"}:
+        raise ValueError("alloc_domain must be 'integer' or 'continuous'")
+    alloc_type = GRB.INTEGER if alloc_domain == "integer" else GRB.CONTINUOUS
+    alloc_boxes = m.addVars(I_list, J_new, G, N, vtype=alloc_type, lb=0, name="alloc_boxes")
     x = m.addVars(I_list, J_new, N, vtype=GRB.BINARY, name="x")
     block_use_new = m.addVars(K, J_new, N, vtype=GRB.BINARY, name="block_use_new")
 
@@ -967,12 +971,12 @@ def build_master_v2(
                     continue
                 size_bays = bays_by_size.get(s_int, [])
                 m.addConstr(
-                    gp.quicksum(remaining_cap[(i, n)] * dur * x[i, j, n] for i in size_bays)
+                    gp.quicksum(float(data['Bay_Handling_Rate'][(i, n)]) * dur * x[i, j, n] for i in size_bays)
                     >= Alpha * rhs_arr_size,
                     name=f"nec_workcap_size_{j}_{s_int}_{n}",
                 )
                 max_work = max(
-                    (remaining_cap[(i, n)] * dur for i in size_bays),
+                    (float(data['Bay_Handling_Rate'][(i, n)]) * dur for i in size_bays),
                     default=0.0,
                 )
                 min_work_bays = int(math.ceil((Alpha * rhs_arr_size - 1e-9) / max_work)) if max_work > 1e-9 else 0
@@ -986,11 +990,11 @@ def build_master_v2(
                 if rhs_arr > 1e-9:
                     size = _group_size(data, g)
                     m.addConstr(
-                        gp.quicksum(remaining_cap[(i, n)] * dur * x[i, j, n] for i in bays_by_size[int(size)]) >= Alpha * rhs_arr,
+                        gp.quicksum(float(data['Bay_Handling_Rate'][(i, n)]) * dur * x[i, j, n] for i in bays_by_size[int(size)]) >= Alpha * rhs_arr,
                         name=f"nec_workcap_{j}_{g}_{n}"
                     )
                     max_work = max(
-                        (remaining_cap[(i, n)] * dur for i in bays_by_size[int(size)]),
+                        (float(data['Bay_Handling_Rate'][(i, n)]) * dur for i in bays_by_size[int(size)]),
                         default=0.0,
                     )
                     min_work_bays = int(math.ceil((Alpha * rhs_arr - 1e-9) / max_work)) if max_work > 1e-9 else 0
@@ -1085,7 +1089,7 @@ def build_master_v2(
                         m.addConstr(
                             Alpha * gp.quicksum(in_share[j, k, g, n] for g in size_groups)
                             <= gp.quicksum(
-                                remaining_cap[(i, n)] * dur * x[i, j, n]
+                                float(data['Bay_Handling_Rate'][(i, n)]) * dur * x[i, j, n]
                                 for i in bays_in_block_of_size
                             ),
                             name=f"per_size_work_cap_agg_{j}_{k}_{s_int}_{n}",
@@ -1106,7 +1110,7 @@ def build_master_v2(
                     if bays_in_block_of_size:
                         m.addConstr(
                             Alpha * in_share[j, k, g, n]
-                            <= gp.quicksum(remaining_cap[(i, n)] * dur * x[i, j, n]
+                            <= gp.quicksum(float(data['Bay_Handling_Rate'][(i, n)]) * dur * x[i, j, n]
                                           for i in bays_in_block_of_size),
                             name=f"per_size_work_cap_{j}_{k}_{g}_{n}"
                         )

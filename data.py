@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import random
 import re
@@ -14,7 +15,58 @@ _FIXED_3N6O_CACHE = None
 TOS_NUM_YARD_BLOCKS = 10
 TOS_YARD_BAYS = 10
 TOS_BAY_CAPACITY_BOXES = 50.0
+TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
+
+
+def prepare_instance(data: dict, handling_rate_scale: float = 1.0) -> dict:
+    """Attach calibrated boxes/hour rates and validate a fresh instance."""
+    scale = float(handling_rate_scale)
+    if not math.isfinite(scale) or scale < 0:
+        raise ValueError("handling_rate_scale must be finite and nonnegative")
+    result = copy.deepcopy(data)
+    result["Bay_Handling_Rate"] = {
+        (i, n): TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR * scale
+        for i in result["I_list"] for n in result["N"]
+    }
+    result["handling_rate_base"] = TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR
+    result["handling_rate_scale"] = scale
+    result["handling_rate_source"] = "model calibration"
+    validate_instance_units(result)
+    return result
+
+
+def validate_instance_units(data: dict) -> None:
+    """Reject incomplete, dimensionally invalid, or non-finite model data."""
+    required = ("K", "I", "I_list", "Bays_in_Block", "J_new", "J_old", "S", "N",
+                "Intervals", "Dist", "Arrivals_interval", "Fixed_Bay_Mode",
+                "Old_Box_Occupancy_Map", "Bay_Handling_Rate")
+    missing = [key for key in required if key not in data]
+    if missing:
+        raise ValueError(f"missing instance keys: {missing}")
+    def number(value, label):
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError(f"{label} contains NaN/inf")
+        return value
+    valid_modes = {int(s) for s in data["S"]}
+    for i in data["I_list"]:
+        cap = number(data["I"][i]["cap"], f"capacity[{i}]")
+        if cap < 0: raise ValueError(f"negative capacity for {i}")
+        if int(data["Fixed_Bay_Mode"][i]) not in valid_modes:
+            raise ValueError(f"invalid Fixed_Bay_Mode for {i}")
+        initial = sum(number(v, "initial occupancy") for (bay, _j, _s), v in data.get("initial_inventory_data", {}).items() if bay == i)
+        if initial > cap + 1e-9: raise ValueError(f"old occupancy exceeds capacity for {i}")
+        for n in data["N"]:
+            if number(data["Bay_Handling_Rate"][(i, n)], "handling rate") < 0:
+                raise ValueError(f"negative handling rate for {(i, n)}")
+    for n in data["N"]:
+        if number(data["Intervals"][n]["dur"], "duration") <= 0: raise ValueError("interval duration must be positive")
+    for key, value in data["Arrivals_interval"].items():
+        if number(value, f"arrival[{key}]") < 0: raise ValueError(f"negative arrival at {key}")
+    for j in data["J_new"]:
+        for k in data["K"]:
+            number(data["Dist"][(j, k)], f"Dist[{j},{k}]")
 
 
 def _build_yard(num_blocks: int = TOS_NUM_YARD_BLOCKS, bays_per_block: int = TOS_YARD_BAYS):
