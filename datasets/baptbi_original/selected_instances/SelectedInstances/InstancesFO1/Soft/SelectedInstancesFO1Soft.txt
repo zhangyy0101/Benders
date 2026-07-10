@@ -1,0 +1,12 @@
+instancia.15N.5B.4P.100D, 72.07 secs, FO value: 439.00
+instancia.15N.4B.4P.100D, 44.92 secs, FO value: 370.00
+instancia.15N.6B.4P.100D, 18.57 secs, FO value: 315.00
+instancia.10N.4B.6P.100D, 7.80 secs, FO value: 229.00
+instancia.10N.4B.5P.100D, 6.24 secs, FO value: 183.00
+instancia.10N.5B.6P.100D, 3.82 secs, FO value: 219.00
+instancia.10N.5B.5P.100D, 3.52 secs, FO value: 200.00
+instancia.10N.5B.4P.100D, 2.81 secs, FO value: 175.00
+instancia.10N.4B.4P.100D, 2.73 secs, FO value: 157.00
+instancia.10N.6B.6P.100D, 2.47 secs, FO value: 214.00
+instancia.10N.6B.5P.100D, 2.20 secs, FO value: 193.00
+instancia.10N.6B.4P.100D, 1.60 secs, FO value: 151.00

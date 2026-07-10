@@ -1,0 +1,66 @@
+data;
+set N := 1 2 3 4 5 6 7 8 9 10;
+set K := Material1 Material2 Material3 Material4 Material5 Material6;
+set L := 1 2 3 4 5;
+param Mares := 45;
+param v :=
+1 20
+2 20
+3 30
+4 30
+5 10;
+param d :=
+1 4000
+2 3000
+3 3000
+4 1000
+5 6000
+6 3000
+7 1000
+8 6000
+9 5000
+10 2000;
+param a :=
+1 2
+2 17
+3 16
+4 14
+5 19
+6 21
+7 6
+8 2
+9 20
+10 1;
+param e :=
+Material1 80.00
+Material2 80.00
+Material3 80.00
+Material4 60.00
+Material5 70.00
+Material6 60.00;
+param ck :=
+Material1 2.00
+Material2 1.00
+Material3 3.00
+Material4 4.00
+Material5 2.00
+Material6 1.00;
+param spin :=
+Material1 -1
+Material2 -1
+Material3 -1
+Material4 -1
+Material5 -1
+Material6 -1;
+param q : Material1 Material2 Material3 Material4 Material5 Material6 :=
+1 82.00 79.00 77.00 64.00 70.00 60.00
+2 82.00 79.00 77.00 60.00 72.00 60.00
+3 78.00 81.00 80.00 60.00 70.00 60.00
+4 78.00 79.00 83.00 60.00 72.00 59.00
+5 78.00 81.00 80.00 60.00 68.00 60.00
+6 82.00 81.00 83.00 64.00 68.00 59.00
+7 78.00 79.00 80.00 60.00 68.00 61.00
+8 82.00 81.00 83.00 64.00 70.00 59.00
+9 82.00 80.00 83.00 64.00 72.00 60.00
+10 80.00 80.00 80.00 64.00 68.00 59.00;
+end;

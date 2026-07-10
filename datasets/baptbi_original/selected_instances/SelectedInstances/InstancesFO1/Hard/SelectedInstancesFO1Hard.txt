@@ -1,0 +1,12 @@
+instancia.40N.5B.6P.100D, 4803.21 secs, FO value: 2608.00,gap: 18.596626
+instancia.15N.4B.6P.100D, 4801.43 secs, FO value: 467.00,gap: 34.047109
+instancia.20N.4B.6P.100D, 4800.22 secs, FO value: 596.00,gap: 40.268456
+instancia.25N.4B.5P.100D, 4800.57 secs, FO value: 698.00,gap: 48.280802
+instancia.30N.5B.5P.100D, 4802.14 secs, FO value: 935.00,gap: 56.149733
+instancia.35N.4B.4P.100D, 4800.30 secs, FO value: 916.00,gap: 56.222707
+instancia.45N.4B.6P.100D, 6320.71 secs, FO value: 2291.00,gap: 58.882584
+instancia.50N.5B.5P.100D, 4801.06 secs, FO value: 2848.00 ,gap: 68.960674 / 2846
+instancia.15N.4B.5P.100D, 4800.42 secs, FO value: 473.00,gap: 40.803383
+instancia.20N.4B.5P.100D, 4800.10 secs, FO value: 550.00,gap: 41.636364
+instancia.15N.6B.6P.100D, 4800.37 secs, FO value: 478.00,gap: 44.769874
+instancia.15N.5B.5P.100D, 4800.44 secs, FO value: 574.00,gap: 44.773519
