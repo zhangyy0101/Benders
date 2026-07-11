@@ -67,3 +67,9 @@ hash itself is derived metadata and is not included in its own input payload.
 Development configurations use `algorithm-candidate-*`. After calibration and
 ablation, a separately reviewed immutable record may be named `algorithm-final-v1`.
 No current configuration has that status.
+
+`classical_benders` is a separate stable **baseline** family: integer master plus
+LP recourse, sequential single-cut outer loop, with no callback, warm start, ALNS,
+root prepass, aggregate/analytic lower bound, valid inequalities, node cuts, or
+stabilization. It is not a candidate configuration and is not claimed as a strict
+replication of a named paper.

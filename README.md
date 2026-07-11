@@ -13,6 +13,7 @@ The repository is organized by responsibility rather than by experiment stage.
 
 - `model_*.py` — canonical master, monolithic, recourse, concentration, and lower-bound formulations.
 - `solver_true_benders.py` — strengthened true Branch-and-Benders-Cut pipeline.
+- `solver_classical_benders.py` — sequential single-cut Classical Benders baseline.
 - `solver_alns.py` — adaptive large-neighborhood search.
 - `solution_validation.py` / `solution_evaluation.py` — independent feasibility and common KPI evaluation.
 - `cut_validation.py` — independent cut checks.
