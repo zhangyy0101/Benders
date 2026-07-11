@@ -2,9 +2,9 @@
 
 This is a development pilot, not a final paper result. The first screen uses S01/M01/L01 only, with 15/30/45 second budgets. S01 stochastic configurations use seeds 0/1/2; Medium and Large currently use seed 0 only.
 
-- **Small**: feasible rate 100.0%, optimal-status rate 89.5%, median gap 0.019615708431303624, median runtime 3.96s.
-- **Medium**: feasible rate 100.0%, optimal-status rate 54.5%, median gap 0.029983225355215033, median runtime 21.68s.
-- **Large**: feasible rate 81.8%, optimal-status rate 0.0%, median gap 0.9777648397870284, median runtime 45.77s.
+- **Small**: feasible rate 100.0%, optimal-status rate 85.7%, median gap 0.019615708431303624, median runtime 3.96s.
+- **Medium**: feasible rate 100.0%, optimal-status rate 53.8%, median gap 0.029983225355215033, median runtime 21.68s.
+- **Large**: feasible rate 84.6%, optimal-status rate 0.0%, median gap 0.3164069608243745, median runtime 45.77s.
 
 KPI signals with zero observed range: none.
 

@@ -8,7 +8,7 @@ from algorithm_configurations import get_algorithm_configuration
 from benchmark_io import instance_digest,load_instance
 from experiment_runner import run_jobs
 
-BBC_CONFIGS=("bbc_core","bbc_valid","bbc_root","bbc_warm","bbc_alns","bbc_root_warm","bbc_root_alns","bbc_full_current")
+BBC_CONFIGS=("bbc_core","bbc_valid","bbc_analytic_lb","bbc_aggregate_lb","bbc_root","bbc_warm","bbc_alns","bbc_root_warm","bbc_root_alns","bbc_full_current")
 def simple(method):
     c={"algorithm_family":method,"configuration_name":f"{method}_baseline","configuration_version":"1","status":"baseline"};c["configuration_hash"]=configuration_hash(c);return c
 def main():
@@ -22,5 +22,5 @@ def main():
         for name in BBC_CONFIGS:
             config=get_algorithm_configuration(name);stochastic=config["alns"] and row["size_class"]=="small";seeds=(0,1,2) if stochastic else (0,)
             for seed in seeds:jobs.append({**base,"method":"bbc_candidate","configuration":config,"seed":seed})
-    rows=run_jobs(jobs,a.output,resume=a.resume,save_solutions=False,source_filename="raw_results.jsonl",command=" ".join(sys.argv));print(f"pilot calibration rows={len(rows)} requested={len(jobs)}");return 0
+    rows=run_jobs(jobs,a.output,resume=a.resume,save_solutions=False,source_filename="raw_results.jsonl",export_derived=False,command=" ".join(sys.argv));print(f"pilot calibration rows={len(rows)} requested={len(jobs)}");return 0
 if __name__=="__main__":raise SystemExit(main())

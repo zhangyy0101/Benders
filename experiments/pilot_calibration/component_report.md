@@ -3,6 +3,8 @@
 No component is frozen or deleted in this stage.
 
 - **bbc_valid**: Needs more evidence; median gap change vs core = 0.00033001522871312083.
+- **bbc_analytic_lb**: Keep for next round; median gap change vs core = 0.6530728880023172.
+- **bbc_aggregate_lb**: Keep for next round; median gap change vs core = 0.9395696090924224.
 - **bbc_root**: Keep for next round; median gap change vs core = 0.9402750251475055.
 - **bbc_warm**: Needs more evidence; median gap change vs core = 0.003104226124211462.
 - **bbc_alns**: Keep for next round; median gap change vs core = 0.939496745850532.
@@ -14,6 +16,8 @@ No component is frozen or deleted in this stage.
 
 - **bbc_core**: root improvement median=None, root time median=0.0s, warm initial UB median=None, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=19.0.
 - **bbc_valid**: root improvement median=None, root time median=0.0s, warm initial UB median=None, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=1.0.
+- **bbc_analytic_lb**: root improvement median=None, root time median=0.0s, warm initial UB median=None, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=63.0.
+- **bbc_aggregate_lb**: root improvement median=None, root time median=0.0s, warm initial UB median=None, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=1.0.
 - **bbc_root**: root improvement median=None, root time median=1.1088543999940157s, warm initial UB median=None, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=1.0.
 - **bbc_warm**: root improvement median=None, root time median=0.0s, warm initial UB median=44239.20227200602, ALNS improvement median=0.0, ALNS time median=0.0s, nodes median=1.0.
 - **bbc_alns**: root improvement median=None, root time median=0.0s, warm initial UB median=47446.86961279705, ALNS improvement median=0.0, ALNS time median=3.755182799999602s, nodes median=643.0.
@@ -23,7 +27,7 @@ No component is frozen or deleted in this stage.
 
 Successful ALNS operator counts remain available per run in `method_diagnostics.alns.successful_operators` within `raw_results.jsonl`.
 
-Aggregate/analytic LB are jointly present in root/full configurations in this first progressive screen; separating their individual effects requires next-round ablation.
+Analytic-only and aggregate-only configurations are included explicitly; root/full configurations use both.
 
 Stabilized and node-cut configurations were not run because no prior evidence yet justified their callback cost.
 

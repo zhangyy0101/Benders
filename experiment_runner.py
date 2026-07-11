@@ -64,12 +64,14 @@ def export_results(output,rows):
     for row in rows:flat.append({"run_id":row["run_id"],"instance_id":row["identity"]["instance_id"],"method":row["identity"]["method_family"],"configuration":row["identity"]["configuration_name"],"seed":row["identity"]["seed"],"ok":row["status"]["ok"],"status":row["status"]["status"],"wall_clock":row["timing"]["wall_clock"],"ub":row["optimization"]["ub"],"lb":row["optimization"]["lb"],"gap":row["optimization"]["gap"],"evaluation_json":json.dumps(row["evaluation"],separators=(",",":")) if row["evaluation"] else None})
     if flat:
         import io;stream=io.StringIO();writer=csv.DictWriter(stream,fieldnames=list(flat[0]));writer.writeheader();writer.writerows(flat);_atomic_write(root/"results.csv",stream.getvalue())
-def run_jobs(jobs,output,*,resume=False,rerun_failed=False,save_solutions=False,method_runner=run_method,command=None,source_filename="results.jsonl"):
+def run_jobs(jobs,output,*,resume=False,rerun_failed=False,save_solutions=False,method_runner=run_method,command=None,source_filename="results.jsonl",export_derived=True):
     root=Path(output);source=root/source_filename;existing=read_jsonl(source);by_id={row["run_id"]:row for row in existing}
     for job in jobs:
         probe_identity=identity_payload(protocol="paper-exp-v1",instance_digest_value=job["expected_digest"],method=job["method"],configuration_hash_value=job["configuration"]["configuration_hash"],seed=job["seed"],budget=job["budget"],threads=job["threads"],mip_gap=job["mip_gap"],alloc_domain=job["alloc_domain"],weights=Weights(),handling_rate_scale=job["handling_rate_scale"],outbound_policy=job["outbound_policy"]);rid=stable_run_id(probe_identity);old=by_id.get(rid)
         if resume and old and (old["status"]["ok"] or not rerun_failed):continue
         result=execute_run(**job,output=output,save_solutions=save_solutions,method_runner=method_runner,command=command)
         if old:existing=[row for row in existing if row["run_id"]!=rid];_atomic_write(source,"".join(json.dumps(row,separators=(",",":"),ensure_ascii=False)+"\n" for row in existing))
-        atomic_append_jsonl(source,result);existing.append(result);by_id[rid]=result;export_results(output,existing)
-    export_results(output,existing);return existing
+        atomic_append_jsonl(source,result);existing.append(result);by_id[rid]=result
+        if export_derived:export_results(output,existing)
+    if export_derived:export_results(output,existing)
+    return existing

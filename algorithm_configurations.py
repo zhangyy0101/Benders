@@ -12,6 +12,8 @@ def _shares(root=0,warm=0,alns=0):return {"root":root,"warm":warm,"alns":alns,"m
 CONFIGURATIONS={
  "bbc_core":_cfg("bbc_core"),
  "bbc_valid":_cfg("bbc_valid",valid_inequalities=True),
+ "bbc_analytic_lb":_cfg("bbc_analytic_lb",analytic_recourse_lb=True),
+ "bbc_aggregate_lb":_cfg("bbc_aggregate_lb",aggregate_recourse_lb=True),
  "bbc_root":_cfg("bbc_root",root_prepass=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,phase_shares=_shares(root=.05)),
  "bbc_warm":_cfg("bbc_warm",warm_start=True,phase_shares=_shares(warm=.15)),
  "bbc_alns":_cfg("bbc_alns",warm_start=True,alns=True,phase_shares=_shares(warm=.15,alns=.25)),

@@ -16,6 +16,20 @@
       "note": "Pilot evidence only; confirm with more instances and seeds."
     },
     {
+      "configuration": "bbc_analytic_lb",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.6530728880023172,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_aggregate_lb",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.9395696090924224,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
       "configuration": "bbc_root",
       "category": "Keep for next round",
       "median_gap_improvement_vs_core": 0.9402750251475055,
@@ -62,46 +76,46 @@
   "benchmark_note": "Observed feasibility and KPI variation are assessed in difficulty_report.md; retain pilot1 pending broader calibration.",
   "kpi_signal_stats": {
     "open_hours": {
-      "mean": 1289.6923076923076,
-      "median": 666.0,
-      "min": 96.0,
+      "mean": 1352.6666666666667,
+      "median": 690.0,
+      "min": 95.99999999999999,
       "max": 4632.0,
-      "stddev": 1718.1460215823595
+      "stddev": 1752.6147576945964
     },
     "concentration": {
-      "mean": 55.8974358974359,
-      "median": 21.0,
+      "mean": 57.86666666666667,
+      "median": 27.0,
       "min": 8.0,
       "max": 199.0,
-      "stddev": 68.87513595195102
+      "stddev": 69.48016503530582
     },
     "distance_per_box": {
-      "mean": 165.4444823745544,
+      "mean": 168.05247897145435,
       "median": 133.9707105486337,
       "min": 103.37107556537313,
       "max": 349.2067079000661,
-      "stddev": 79.58509620404615
+      "stddev": 80.01058602454924
     },
     "workload_cv": {
-      "mean": 0.6237530477542985,
+      "mean": 0.621696831395803,
       "median": 0.614802632165027,
-      "min": 0.3332663260342989,
+      "min": 0.2963840501591113,
       "max": 0.8416508914254618,
-      "stddev": 0.10240059268144466
+      "stddev": 0.11217737969075117
     },
     "conflict_per_box": {
-      "mean": 4.981512602481895,
-      "median": 4.919302734548523,
+      "mean": 5.009301068909159,
+      "median": 4.930616821318903,
       "min": 4.4282700788585805,
       "max": 6.0966257689748256,
-      "stddev": 0.600470075975133
+      "stddev": 0.6057455540469927
     },
     "reserved_utilization": {
-      "mean": 0.5283019015619013,
+      "mean": 0.5327645574657693,
       "median": 0.5573877497777369,
       "min": 0.43211594986540586,
       "max": 0.6958117628795927,
-      "stddev": 0.10592992891412134
+      "stddev": 0.10677527911675906
     }
   }
 }
