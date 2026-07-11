@@ -4,9 +4,9 @@ import argparse,json,os,time
 from datetime import datetime
 from gurobipy import GRB
 from config import MasterWeights,Weights
-from data import prepare_instance,get_data_tiny_benders,get_data_tiny_concentration,get_data_3new6old_fixed,get_data_baptbi_5n_4b_4p,get_data_baptbi_8n_4b_4p,get_data_baptbi_10n_4b_4p,get_data_baptbi_15n_4b_5p,get_data_baptbi_25n_6b_5p,get_data_barcelona_bcn36a_5n,get_data_barcelona_bcn36a_8n,get_data_barcelona_bcn36a_10n,get_data_barcelona_bcn36a_20n
+from data import prepare_instance,get_data_tiny_benders,get_data_tiny_concentration,get_data_3new6old_fixed
 from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
-INSTANCES={"tiny":get_data_tiny_benders,"tiny_concentration":get_data_tiny_concentration,"3new6old":get_data_3new6old_fixed,"baptbi_5n_4b_4p":get_data_baptbi_5n_4b_4p,"baptbi_8n_4b_4p":get_data_baptbi_8n_4b_4p,"baptbi_10n_4b_4p":get_data_baptbi_10n_4b_4p,"baptbi_15n_4b_5p":get_data_baptbi_15n_4b_5p,"baptbi_25n_6b_5p":get_data_baptbi_25n_6b_5p,"barcelona_bcn36a_5n":get_data_barcelona_bcn36a_5n,"barcelona_bcn36a_8n":get_data_barcelona_bcn36a_8n,"barcelona_bcn36a_10n":get_data_barcelona_bcn36a_10n,"barcelona_bcn36a_20n":get_data_barcelona_bcn36a_20n}
+INSTANCES={"tiny":get_data_tiny_benders,"tiny_concentration":get_data_tiny_concentration,"3new6old":get_data_3new6old_fixed}
 def status_name(s):return {GRB.OPTIMAL:"OPTIMAL",GRB.TIME_LIMIT:"TIME_LIMIT",GRB.INFEASIBLE:"INFEASIBLE",GRB.SUBOPTIMAL:"SUBOPTIMAL"}.get(s,str(s))
 def serial(v):
     if isinstance(v,dict):return {("|".join(map(str,k)) if isinstance(k,tuple) else str(k)):serial(x) for k,x in v.items()}

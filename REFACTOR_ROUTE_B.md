@@ -60,8 +60,8 @@ operator 参与 adaptive roulette 统计，不是 random fallback。
 
 ## 可用性与规模
 
-只有显式完整提供 POD、height、weight class 的联合 group 才启用。BAPTBI 和
-Barcelona 公开适配器返回 `NOT_APPLICABLE`，raw 为 null、cost 为 0。
+只有显式完整提供 POD、height、weight class 的联合 group 才启用；否则返回
+`NOT_APPLICABLE`，raw 为 null、cost 为 0。
 
 `tiny_concentration` 有 2 个 group、3 个兼容贝位/组，共 6 个 u。3new6old 在典型
 50/50 箱型模式下约创建 900 个 u，而原箱区级模型为 180 个，因此求解时间可能

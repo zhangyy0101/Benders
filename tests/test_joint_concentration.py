@@ -1,6 +1,6 @@
 import inspect
 from config import MasterWeights,Weights
-from data import get_data_baptbi_5n_4b_4p,get_data_tiny_concentration,prepare_instance
+from data import get_data_tiny_concentration,prepare_instance
 from model_concentration import concentration_metadata,evaluate_joint_group_concentration,has_joint_attribute_groups
 from model_master import build_master_model
 from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
@@ -30,7 +30,7 @@ def test_master_objective_and_eta_separate_concentration():
 def test_tiny_direct_matches_bbc_with_concentration():
     d=fixture();direct=solve_direct_gurobi(d,Weights(),time_limit=4,mip_gap=0);bbc=solve_bbc_phase(d,Weights(),time_limit=4,mip_gap=0);assert abs(direct["ub"]-bbc["ub"])<1e-5 and bbc["lb"]<=bbc["ub"]+1e-6 and bbc["cut_statistics"]["exact_incumbents_submitted"]>0
 def test_no_attribute_instance_disables_concentration():
-    d=prepare_instance(get_data_baptbi_5n_4b_4p());assert not has_joint_attribute_groups(d);c=evaluate_joint_group_concentration(d,{"alloc_boxes":{}});assert c["status"]=="NOT_APPLICABLE" and c["raw_used_bays"] is None
+    raw=get_data_tiny_concentration();raw["GroupAttrs"]={g:{"size":attrs["size"]} for g,attrs in raw["GroupAttrs"].items()};d=prepare_instance(raw);assert not has_joint_attribute_groups(d);c=evaluate_joint_group_concentration(d,{"alloc_boxes":{}});assert c["status"]=="NOT_APPLICABLE" and c["raw_used_bays"] is None
 def test_concentration_destroy_is_bay_structured():
     d=fixture();m,v,_=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);keys=list(s["x"]);pool=concentration_destroy_pool(d,s);assert "concentration" in OPERATORS and pool and len(pool)<len(keys)
 def test_pipeline_has_no_refinement_stage_or_arguments():

@@ -6,7 +6,6 @@ from model_common import group_size,groups,remaining_capacity,required_reserve
 
 TOL=1e-9
 def has_joint_attribute_groups(data):
-    if "adapted" in data.get("ScenarioName","") or "synthetic_yard" in data.get("ScenarioName",""):return False
     G=list(data.get("G") or []);attrs=data.get("GroupAttrs",{});arr=data.get("Arrivals_group_interval",{})
     if not G or any(g not in attrs or g not in data.get("GroupSize",{}) for g in G):return False
     if any(any(str(attrs[g].get(a,"ALL")).upper() in {"","ALL","NONE"} for a in ("pod","height","weight_class")) for g in G):return False
