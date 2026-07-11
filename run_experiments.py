@@ -1,31 +1,30 @@
-"""Equal-budget operational/concentration experiments for Route B."""
+"""CLI for configuration-aware, recoverable paper experiment runs."""
 from __future__ import annotations
-import argparse,csv,json,os,time
-from config import MasterWeights,Weights
-from data import prepare_instance
-from instance_registry import list_builtin_instances,resolve_instance
-from solve_direct_gurobi import solve_direct_alns_pipeline,solve_direct_gurobi
-from solver_true_benders import solve_true_benders_pipeline
+import argparse,json,sys
+from pathlib import Path
+from algorithm_configuration import configuration_hash
+from algorithm_configurations import get_algorithm_configuration,list_algorithm_configurations
+from benchmark_io import instance_digest,load_instance
+from experiment_methods import METHODS
+from experiment_runner import run_jobs
 
-FIELDS="instance seed algorithm budget runtime wall_clock_runtime solver_reported_runtime model_build_runtime optimization_runtime status ub lb gap open_cost concentration_cost distance_cost balance_cost conflict_cost concentration_available concentration_enabled concentration_weight concentration_raw_used_bays concentration_normalized concentration_scale used_bays_total root_open_bound root_concentration_bound root_eta_bound aggregate_recourse_bound root_last_solved_bound root_bound_resolved_after_last_cut initialization_enabled initialization_status initialization_ub initialization_runtime alns_enabled alns_iterations alns_candidate_found alns_improved alns_best_improved alns_improvement main_bbc_runtime cache_seeded_entries cache_hits cache_misses cache_hit_rate exact_solutions_queued solution_source cuts sp_solves callback_time nodes alloc_domain".split()
-def configs(suite):
-    if suite=="concentration":return [{"algorithm":f"concentration_weight_{w}","weight":w,"enabled":w>0} for w in (0,2,5,10,20)]
-    return [{"algorithm":"model_o_without_concentration","weight":0,"enabled":False},{"algorithm":"model_c_joint_concentration","weight":10,"enabled":True},{"algorithm":"direct_joint_concentration","weight":10,"enabled":True,"direct":True},{"algorithm":"direct_warm_alns_joint_concentration","weight":10,"enabled":True,"direct_alns":True}]
-def run_one(instance,seed,cfg,budget,threads,domain,handling_rate_scale=1.0,old_outbound_release_policy="proportional",mip_gap=.03,instance_file=None):
-    raw=resolve_instance(builtin_name=None if instance_file else instance,instance_file=instance_file);data=prepare_instance(raw,handling_rate_scale=handling_rate_scale,old_outbound_release_policy=old_outbound_release_policy);weights=Weights(master=MasterWeights(concentration=cfg["weight"]));started=time.perf_counter()
-    if cfg.get("direct_alns"):
-        r=solve_direct_alns_pipeline(data,weights,total_time=budget,mip_gap=mip_gap,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("components") or {};con=components.get("concentration",{});root={};cuts=sp=callback=None;alns=r.get("alns",{}).get("improvement");nodes=r.get("nodes")
-    elif cfg.get("direct"):
-        r=solve_direct_gurobi(data,weights,time_limit=budget,mip_gap=mip_gap,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("components") or {};con=components.get("concentration",{});root={};cuts=sp=callback=alns=None;nodes=r.get("nodes")
-    else:
-        r=solve_true_benders_pipeline(data,weights,total_core_time=budget,mip_gap=mip_gap,threads=threads,seed=seed,alloc_domain=domain,concentration_enabled=cfg["enabled"]);components=r.get("core_best",{}).get("components",{});con=r.get("concentration",{});root=r.get("phase0_root_prepass",{});main=r.get("phase3_bbc",{});cuts=r.get("total_unique_cuts");sp=main.get("sp_statistics",{}).get("sp_solve_count");callback=main.get("cut_statistics",{}).get("callback_time");alns=r.get("phase2_alns",{}).get("improvement");nodes=main.get("nodes");r={**r,**r.get("core_best",{}),"status_name":main.get("status_name")}
-    wall=time.perf_counter()-started;init=r.get("phase1_initialization",r.get("warm_start",{}));alns_stage=r.get("phase2_alns",r.get("alns",{}));main_stage=r.get("phase3_bbc",r.get("main_solve",{}));cs=main_stage.get("cut_statistics",{});diag={"wall_clock_runtime":wall,"solver_reported_runtime":r.get("runtime"),"model_build_runtime":r.get("model_build_runtime",main_stage.get("model_build_runtime")),"optimization_runtime":r.get("optimization_runtime",main_stage.get("optimization_runtime")),"initialization_enabled":init.get("enabled",init.get("ok")),"initialization_status":init.get("mode",init.get("status_name")),"initialization_ub":init.get("ub"),"initialization_runtime":init.get("runtime"),"alns_enabled":not alns_stage.get("disabled",False),"alns_iterations":len(alns_stage.get("iterations",[])),"alns_candidate_found":sum(v.get("candidate_found",0) for v in alns_stage.get("operator_stats",{}).values()),"alns_improved":sum(v.get("improved",0) for v in alns_stage.get("operator_stats",{}).values()),"alns_best_improved":sum(v.get("best_improved",0) for v in alns_stage.get("operator_stats",{}).values()),"main_bbc_runtime":main_stage.get("runtime"),"root_last_solved_bound":root.get("root_last_solved_bound"),"root_bound_resolved_after_last_cut":root.get("root_bound_resolved_after_last_cut"),"cache_seeded_entries":cs.get("cache_seeded_entries"),"cache_hits":cs.get("cache_hits"),"cache_misses":cs.get("cache_misses"),"cache_hit_rate":cs.get("cache_hit_rate"),"exact_solutions_queued":cs.get("exact_solutions_queued"),"solution_source":r.get("solution_source")}
-    return {"instance":instance,"seed":seed,"algorithm":cfg["algorithm"],"budget":budget,"runtime":wall,"status":r.get("status_name"),"ub":r.get("ub"),"lb":r.get("lb"),"gap":r.get("gap"),"open_cost":components.get("open_cost"),"concentration_cost":components.get("concentration_cost"),"distance_cost":components.get("distance_cost"),"balance_cost":components.get("balance_cost"),"conflict_cost":components.get("conflict_cost"),"concentration_available":con.get("available"),"concentration_enabled":con.get("enabled"),"concentration_weight":cfg["weight"],"concentration_raw_used_bays":con.get("raw_used_bays"),"concentration_normalized":con.get("normalized"),"concentration_scale":con.get("scale"),"used_bays_total":con.get("used_bays_total"),"root_open_bound":root.get("master_open_bound"),"root_concentration_bound":root.get("master_concentration_bound"),"root_eta_bound":root.get("master_eta_bound"),"aggregate_recourse_bound":root.get("aggregate_recourse_bound"),"cuts":cuts,"sp_solves":sp,"callback_time":callback,"alns_improvement":alns,"nodes":nodes,"alloc_domain":domain,**diag}
 def parser():
-    p=argparse.ArgumentParser();source=p.add_mutually_exclusive_group();source.add_argument("--instances",nargs="+",choices=list_builtin_instances());source.add_argument("--instance-file");p.add_argument("--seeds",nargs="+",type=int,default=[0]);p.add_argument("--total-core-time",type=float,default=20);p.add_argument("--threads",type=int,default=1);p.add_argument("--mip-gap",type=float,default=.03);p.add_argument("--alloc-domain",choices=("integer","continuous"),default="integer");p.add_argument("--handling-rate-scale",type=float,default=1.0);p.add_argument("--old-outbound-release-policy",choices=("proportional","legacy_sorted","conservative"),default="proportional");p.add_argument("--suite",choices=("quick","concentration"),default="quick");p.add_argument("--output",default="experiments");return p
+    p=argparse.ArgumentParser();p.add_argument("--suite-dir",default="benchmarks/paper_exp_v1_pilot");p.add_argument("--instances",nargs="+");p.add_argument("--methods",nargs="+",choices=METHODS,default=["direct","bbc_candidate"]);p.add_argument("--algorithm-configs",nargs="+",choices=list_algorithm_configurations(),default=["bbc_full_current"]);p.add_argument("--seeds",nargs="+",type=int,default=[0]);p.add_argument("--budget",type=float,default=300);p.add_argument("--threads",type=int,default=1);p.add_argument("--mip-gap",type=float,default=.03);p.add_argument("--alloc-domain",choices=("integer","continuous"),default="integer");p.add_argument("--handling-rate-scale",type=float,default=1.0);p.add_argument("--old-outbound-release-policy",choices=("proportional","legacy_sorted","conservative"),default="proportional");p.add_argument("--output",default="experiments/pilot");p.add_argument("--resume",action="store_true");p.add_argument("--rerun-failed",action="store_true");p.add_argument("--save-solutions",action="store_true");return p
+def _simple_configuration(method):
+    value={"algorithm_family":method,"configuration_name":f"{method}_baseline","configuration_version":"1","status":"baseline"};value["configuration_hash"]=configuration_hash(value);return value
+def build_jobs(args):
+    root=Path(args.suite_dir);manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"));wanted=set(args.instances or [row["instance_id"] for row in manifest["instances"]]);entries=[row for row in manifest["instances"] if row["instance_id"] in wanted]
+    missing=wanted-{row["instance_id"] for row in entries}
+    if missing:raise ValueError(f"unknown suite instances: {sorted(missing)}")
+    jobs=[]
+    for row in entries:
+        path=root/row["relative_path"];actual=instance_digest(load_instance(path))
+        if actual!=row["digest"]:raise ValueError(f"fatal digest mismatch for {row['instance_id']}")
+        for method in args.methods:
+            configs=[get_algorithm_configuration(name) for name in args.algorithm_configs] if method=="bbc_candidate" else [get_algorithm_configuration("bbc_core") if method=="bbc_core_verification" else _simple_configuration(method)]
+            for config in configs:
+                for seed in args.seeds:jobs.append({"instance_id":row["instance_id"],"instance_path":path,"expected_digest":actual,"method":method,"configuration":config,"seed":seed,"budget":args.budget,"threads":args.threads,"mip_gap":args.mip_gap,"alloc_domain":args.alloc_domain,"handling_rate_scale":args.handling_rate_scale,"outbound_policy":args.old_outbound_release_policy})
+    return jobs
 def main():
-    a=parser().parse_args();os.makedirs(a.output,exist_ok=True);instances=a.instances or ([os.path.splitext(os.path.basename(a.instance_file))[0]] if a.instance_file else ["tiny_concentration"]);rows=[run_one(i,s,c,a.total_core_time,a.threads,a.alloc_domain,a.handling_rate_scale,a.old_outbound_release_policy,a.mip_gap,a.instance_file) for i in instances for s in a.seeds for c in configs(a.suite)]
-    with open(os.path.join(a.output,"results.csv"),"w",newline="",encoding="utf8") as f:w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerows(rows)
-    with open(os.path.join(a.output,"results.json"),"w",encoding="utf8") as f:json.dump(rows,f,indent=2)
-    print(f"wrote {len(rows)} equal-budget rows")
-if __name__=="__main__":main()
+    args=parser().parse_args();jobs=build_jobs(args);rows=run_jobs(jobs,args.output,resume=args.resume,rerun_failed=args.rerun_failed,save_solutions=args.save_solutions,command=" ".join(sys.argv));print(f"results: {len(rows)} total rows, {len(jobs)} requested jobs");return 0
+if __name__=="__main__":raise SystemExit(main())
