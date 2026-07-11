@@ -72,8 +72,20 @@ required-key 检查没有强制该字段。
 `legacy_sorted` 按排序贝位扣减两者；`conservative` 从 logical inventory 扣减，但不释放
 capacity occupancy。验证要求 unserved outbound 为 0，且模拟 occupancy 不超过 capacity。
 
-## Current schema limits
+## On-disk benchmark schema
 
-当前是内存 schema，tuple-key dict 尚不能直接作为论文 benchmark JSON。磁盘字段记录、
-canonical ordering、digest 和 raw/prepared 文件边界将在 Task 05 冻结；在此之前不得把
-临时字符串化 tuple key 当作正式 benchmark 格式。
+正式 benchmark 交换格式为 JSON `yard-bay-instance-v1`，顶层固定包含
+`schema_version`、`problem_protocol`、`instance_id`、`digest`、`instance_state=raw`
+和 `data`。只保存 raw instance；加载后由运行入口以显式协议参数调用一次
+`prepare_instance`。带 `handling_rate_source` 等 prepared-only 字段的对象会被拒绝，
+从而防止重复 prepare。
+
+Tuple-key 字段按 `benchmark_schema.RECORD_SCHEMAS` 保存为带 `record_schema`、显式
+`columns` 和稳定排序 `records` 的对象。当前覆盖 distance、initial inventory、两级
+arrivals、outbound volume/request、fixed inbound/mode、bay mode、handling rate 和
+两个 old maps。未注册的非字符串 dict key 会失败；不使用 `eval`、拼接 key 或 pickle。
+
+Digest 为 canonical UTF-8 compact JSON 的 SHA-256，覆盖 schema version、problem
+protocol、raw data、generator spec 和 seed；不覆盖保存时间、绝对路径或算法配置。
+加载默认重新计算并验证。字段、schema 或 protocol 迁移不得静默进行；未知顶层字段、
+record schema 不匹配、重复 record 和 digest 错误都会失败。

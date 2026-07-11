@@ -4,7 +4,7 @@ import argparse, json, os
 from datetime import datetime
 from config import MasterWeights,Weights
 from data import prepare_instance
-from instance_registry import build_builtin_instance,list_builtin_instances
+from instance_registry import list_builtin_instances,resolve_instance
 from solver_true_benders import solve_true_benders_pipeline
 
 def serial(v):
@@ -14,7 +14,7 @@ def serial(v):
 
 def parser():
     p=argparse.ArgumentParser(description="True BBC + adaptive LNS + joint-group bay concentration")
-    p.add_argument("--instance",choices=list_builtin_instances(),default="3new6old");p.add_argument("--total-core-time",type=float,default=60)
+    source=p.add_mutually_exclusive_group();source.add_argument("--instance",choices=list_builtin_instances(),default="3new6old");source.add_argument("--instance-file");p.add_argument("--total-core-time",type=float,default=60)
     p.add_argument("--root-time-share",type=float,default=.05);p.add_argument("--warm-start-time-share",type=float,default=.15);p.add_argument("--alns-time-share",type=float,default=.25);p.add_argument("--main-bbc-time-share",type=float,default=.55)
     p.add_argument("--root-cut-prepass",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--root-cut-max-iters",type=int,default=100);p.add_argument("--root-cut-time",type=float);p.add_argument("--root-cut-relative-improvement-tol",type=float,default=1e-4);p.add_argument("--root-cut-violation-tol",type=float,default=1e-6);p.add_argument("--root-cut-stall-iters",type=int,default=5)
     p.add_argument("--aggregate-recourse-lb",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--analytic-recourse-lb",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--cut-strategy",choices=("standard","stabilized"),default="standard")
@@ -25,10 +25,10 @@ def parser():
     return p
 
 def main():
-    a=parser().parse_args();data=prepare_instance(build_builtin_instance(a.instance),handling_rate_scale=a.handling_rate_scale,old_outbound_release_policy=a.old_outbound_release_policy)
+    a=parser().parse_args();raw=resolve_instance(builtin_name=None if a.instance_file else a.instance,instance_file=a.instance_file);data=prepare_instance(raw,handling_rate_scale=a.handling_rate_scale,old_outbound_release_policy=a.old_outbound_release_policy)
     lns={"repair_time":a.lns_repair_time,"min_destroy":a.lns_min_destroy,"max_destroy":a.lns_max_destroy,"restarts":a.lns_restarts,"stall_iters":a.lns_stall_iters}
     weights=Weights(master=MasterWeights(concentration=a.concentration_weight));r=solve_true_benders_pipeline(data,weights,total_core_time=a.total_core_time,root_time_share=a.root_time_share,warm_start_time_share=a.warm_start_time_share,alns_time_share=a.alns_time_share,main_bbc_time_share=a.main_bbc_time_share,mip_gap=a.mip_gap,alloc_domain=a.alloc_domain,concentration_enabled=a.concentration,add_valid_inequalities=a.valid_inequalities,aggregate_recourse_lb=a.aggregate_recourse_lb,analytic_recourse_lb=a.analytic_recourse_lb,cut_strategy=a.cut_strategy,root_prepass=a.root_cut_prepass,root_cut_max_iters=a.root_cut_max_iters,root_cut_time=a.root_cut_time,root_cut_relative_improvement_tol=a.root_cut_relative_improvement_tol,root_cut_violation_tol=a.root_cut_violation_tol,root_cut_stall_iters=a.root_cut_stall_iters,node_cuts=a.node_cuts,node_cut_limit=a.node_cut_limit,node_separation_policy=a.node_separation_policy,node_separation_interval=a.node_separation_interval,callback_time_share_limit=a.callback_time_share_limit,enable_alns=a.alns,seed=a.seed,threads=a.threads,warm_start=a.warm_start,numeric_focus=a.numeric_focus,lns_options=lns)
-    out=os.path.abspath(os.path.join(a.output_root,f"true_bbc_{datetime.now():%Y%m%d_%H%M%S}_{a.instance}"));os.makedirs(out,exist_ok=True)
+    instance_label=a.instance if not a.instance_file else os.path.splitext(os.path.basename(a.instance_file))[0];out=os.path.abspath(os.path.join(a.output_root,f"true_bbc_{datetime.now():%Y%m%d_%H%M%S}_{instance_label}"));os.makedirs(out,exist_ok=True)
     if r.get("ok"):
         json.dump(serial(r["core_best"]["solution"]),open(os.path.join(out,"core_best_solution.json"),"w",encoding="utf8"),indent=2);r["core_best"]["solution_file"]="core_best_solution.json"
     json.dump(serial(r),open(os.path.join(out,"summary.json"),"w",encoding="utf8"),indent=2,default=str)

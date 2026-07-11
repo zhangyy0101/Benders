@@ -35,3 +35,13 @@ def get_builtin_instance_factory(name: str) -> InstanceFactory:
 def build_builtin_instance(name: str) -> dict:
     """Build a fresh raw instance."""
     return get_builtin_instance_factory(name)()
+
+
+def resolve_instance(*, builtin_name=None, instance_file=None) -> dict:
+    """Resolve exactly one built-in name or raw benchmark JSON file."""
+    if (builtin_name is None) == (instance_file is None):
+        raise ValueError("provide exactly one of builtin_name or instance_file")
+    if instance_file is not None:
+        from benchmark_io import load_instance
+        return load_instance(instance_file)
+    return build_builtin_instance(builtin_name)
