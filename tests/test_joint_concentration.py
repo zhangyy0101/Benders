@@ -32,7 +32,7 @@ def test_tiny_direct_matches_bbc_with_concentration():
 def test_no_attribute_instance_disables_concentration():
     d=prepare_instance(get_data_baptbi_5n_4b_4p());assert not has_joint_attribute_groups(d);c=evaluate_joint_group_concentration(d,{"alloc_boxes":{}});assert c["status"]=="NOT_APPLICABLE" and c["raw_used_bays"] is None
 def test_concentration_destroy_is_bay_structured():
-    d=fixture();m,v,_=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);keys=list(s["x"]);pool=concentration_destroy_pool(d,s,keys);assert "concentration" in OPERATORS and pool and len(pool)<len(keys)
+    d=fixture();m,v,_=build_monolithic_model(d,Weights());m.optimize();s=extract_solution(v);keys=list(s["x"]);pool=concentration_destroy_pool(d,s);assert "concentration" in OPERATORS and pool and len(pool)<len(keys)
 def test_pipeline_has_no_refinement_stage_or_arguments():
     assert "refinement" not in inspect.signature(solve_true_benders_pipeline).parameters;d=fixture();r=solve_true_benders_pipeline(d,Weights(),total_core_time=2);assert "attribute_refinement" not in r
 def test_height_mix_variables_do_not_exist():
