@@ -1,0 +1,107 @@
+{
+  "status": "pilot_only",
+  "final_algorithm_frozen": false,
+  "selected_instances": [
+    "S01",
+    "M01",
+    "L01"
+  ],
+  "seed_policy": "S01 stochastic configs use 0,1,2; M01/L01 preliminary seed 0 only",
+  "recommendations": [
+    {
+      "configuration": "bbc_valid",
+      "category": "Needs more evidence",
+      "median_gap_improvement_vs_core": 0.00033001522871312083,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_root",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.9402750251475055,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_warm",
+      "category": "Needs more evidence",
+      "median_gap_improvement_vs_core": 0.003104226124211462,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_alns",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.939496745850532,
+      "runs": 5,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_root_warm",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.9404545774516717,
+      "runs": 3,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_root_alns",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.9548763282176312,
+      "runs": 5,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    },
+    {
+      "configuration": "bbc_full_current",
+      "category": "Keep for next round",
+      "median_gap_improvement_vs_core": 0.9580322735947555,
+      "runs": 5,
+      "note": "Pilot evidence only; confirm with more instances and seeds."
+    }
+  ],
+  "benchmark_adjustment_needed": false,
+  "benchmark_note": "Observed feasibility and KPI variation are assessed in difficulty_report.md; retain pilot1 pending broader calibration.",
+  "kpi_signal_stats": {
+    "open_hours": {
+      "mean": 1289.6923076923076,
+      "median": 666.0,
+      "min": 96.0,
+      "max": 4632.0,
+      "stddev": 1718.1460215823595
+    },
+    "concentration": {
+      "mean": 55.8974358974359,
+      "median": 21.0,
+      "min": 8.0,
+      "max": 199.0,
+      "stddev": 68.87513595195102
+    },
+    "distance_per_box": {
+      "mean": 165.4444823745544,
+      "median": 133.9707105486337,
+      "min": 103.37107556537313,
+      "max": 349.2067079000661,
+      "stddev": 79.58509620404615
+    },
+    "workload_cv": {
+      "mean": 0.6237530477542985,
+      "median": 0.614802632165027,
+      "min": 0.3332663260342989,
+      "max": 0.8416508914254618,
+      "stddev": 0.10240059268144466
+    },
+    "conflict_per_box": {
+      "mean": 4.981512602481895,
+      "median": 4.919302734548523,
+      "min": 4.4282700788585805,
+      "max": 6.0966257689748256,
+      "stddev": 0.600470075975133
+    },
+    "reserved_utilization": {
+      "mean": 0.5283019015619013,
+      "median": 0.5573877497777369,
+      "min": 0.43211594986540586,
+      "max": 0.6958117628795927,
+      "stddev": 0.10592992891412134
+    }
+  }
+}
