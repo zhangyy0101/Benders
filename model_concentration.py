@@ -1,5 +1,7 @@
 """Canonical bay-level joint ship-group concentration formulation."""
 from __future__ import annotations
+import gurobipy as gp
+from gurobipy import GRB
 from model_common import group_size,groups,remaining_capacity,required_reserve
 
 TOL=1e-9
@@ -25,9 +27,6 @@ def concentration_metadata(data,alloc_domain="integer"):
     return {"available":available,"final_period":final,"positive_ship_groups":positive,"big_m":M,"feasible_bays":feasible,"scale":scale}
 
 def build_joint_group_concentration(model,data,alloc_vars,*,alloc_domain="integer",enabled=True,x_vars=None,relax=False):
-    import gurobipy as gp
-    from gurobipy import GRB
-
     relax=relax or model.ModelName.endswith("_lp");meta=concentration_metadata(data,alloc_domain);active=bool(enabled and meta["available"]);use={}
     if active:
       indices=[(j,g,i) for j,g in meta["positive_ship_groups"] for i in meta["feasible_bays"][j,g]];use=model.addVars(indices,lb=0,ub=1,vtype=GRB.CONTINUOUS if relax else GRB.BINARY,name="joint_group_bay_use");final=meta["final_period"]
