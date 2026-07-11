@@ -5,7 +5,7 @@ import csv
 import json
 from pathlib import Path
 
-from benchmark_io import compare_instances, instance_digest, load_instance
+from benchmark_io import instance_digest, load_instance
 from benchmark_schema import PROBLEM_PROTOCOL, SCHEMA_VERSION
 from data import simulate_old_inventory, validate_instance_units
 from model_concentration import has_joint_attribute_groups

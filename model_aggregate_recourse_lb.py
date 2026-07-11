@@ -1,7 +1,6 @@
 """Valid analytic and size-level aggregate lower approximations of global recourse."""
 from __future__ import annotations
 import gurobipy as gp
-from gurobipy import GRB
 from model_common import arrival,fixed_in_block,group_size,groups,objective_scales,outbound_pressure,scale_factor
 def analytic_recourse_lower_bounds(data,weights):
     G=groups(data);sc=objective_scales(data);factor=scale_factor(weights);distance=sum(sum(arrival(data,j,g,n) for g in G if group_size(data,g)==int(s))*min(float(data["Dist"][j,k]) for k in data["K"]) for j in data["J_new"] for s in data["S"] for n in data["N"]);pressure=outbound_pressure(data);conflict=sum(sum(arrival(data,j,g,n) for j in data["J_new"] for g in G)*min(float(pressure[k,n]) for k in data["K"]) for n in data["N"])

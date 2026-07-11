@@ -1,9 +1,8 @@
 """Complete monolithic formulation shared by direct solve, ALNS and validation."""
 from __future__ import annotations
-import math
 import gurobipy as gp
 from gurobipy import GRB
-from model_common import add_common_master_valid_inequalities,arrival,fixed_in_block,group_size,groups,objective_scales,first_stage_cost,outbound_pressure,remaining_capacity,required_reserve,scale_factor
+from model_common import add_common_master_valid_inequalities,arrival,fixed_in_block,group_size,groups,objective_scales,outbound_pressure,remaining_capacity,required_reserve,scale_factor
 from model_concentration import build_joint_group_concentration
 
 def build_monolithic_model(data,weights,*,alloc_domain="integer",add_valid_inequalities=True,concentration_enabled=True):
