@@ -41,5 +41,5 @@ def test_adaptive_lns_uses_persistent_model_and_tracks_operators():
     assert all("weight" in x for x in r["operator_stats"].values())
 
 def test_all_public_adapters_pass_strict_inventory_validation():
-    from solve_direct_gurobi import INSTANCES
-    for factory in INSTANCES.values(): prepare_instance(factory())
+    from instance_registry import BUILTIN_INSTANCES
+    for factory in BUILTIN_INSTANCES.values(): prepare_instance(factory())
