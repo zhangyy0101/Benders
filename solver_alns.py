@@ -4,7 +4,8 @@ import math,random,time
 from gurobipy import GRB
 from model_common import group_size,groups,outbound_pressure,remaining_capacity,required_reserve
 from model_concentration import evaluate_joint_group_concentration
-from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
+from model_monolithic import build_monolithic_model,extract_solution
+from solution_evaluation import evaluate_common_solution as evaluate_solution
 
 OPERATORS=("random","active","block","interval","ship","conflict","distance","concentration")
 RANKED_OPERATORS={"conflict","distance","concentration"}

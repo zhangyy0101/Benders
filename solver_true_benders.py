@@ -5,7 +5,8 @@ import gurobipy as gp
 from gurobipy import GRB
 from model_common import first_stage_cost
 from model_master import build_master_model,extract_master_point
-from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
+from model_monolithic import build_monolithic_model,extract_solution
+from solution_evaluation import evaluate_common_solution as evaluate_solution
 from model_recourse import BendersCutPool,GlobalRecourseOracle
 from solution_validation import validate_solution
 

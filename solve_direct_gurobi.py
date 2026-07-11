@@ -6,7 +6,8 @@ from gurobipy import GRB
 from config import MasterWeights,Weights
 from data import prepare_instance
 from instance_registry import BUILTIN_INSTANCES,build_builtin_instance,list_builtin_instances
-from model_monolithic import build_monolithic_model,evaluate_solution,extract_solution
+from model_monolithic import build_monolithic_model,extract_solution
+from solution_evaluation import evaluate_common_solution
 # Backward-compatible read-only-by-convention alias. New code uses instance_registry.
 INSTANCES=BUILTIN_INSTANCES
 def status_name(s):return {GRB.OPTIMAL:"OPTIMAL",GRB.TIME_LIMIT:"TIME_LIMIT",GRB.INFEASIBLE:"INFEASIBLE",GRB.SUBOPTIMAL:"SUBOPTIMAL"}.get(s,str(s))
@@ -22,7 +23,7 @@ def solve_direct_gurobi(data,weights,*,time_limit=30,mip_gap=.03,threads=1,alloc
                 if k in v.get(name,{}):v[name][k].Start=value
     remaining=max(0,deadline-time.perf_counter());t=time.perf_counter()
     if remaining>0:m.Params.TimeLimit=remaining;m.optimize()
-    optimization_runtime=time.perf_counter()-t;runtime=time.perf_counter()-started;solution=extract_solution(v) if m.SolCount else None;evaluation=evaluate_solution(data,weights,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled) if solution else None
+    optimization_runtime=time.perf_counter()-t;runtime=time.perf_counter()-started;solution=extract_solution(v) if m.SolCount else None;evaluation=evaluate_common_solution(data,weights,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled) if solution else None
     if solution and abs(m.ObjVal-evaluation["core_cost"])>1e-5:raise AssertionError("direct objective mismatch")
     ub=evaluation["core_cost"] if evaluation else None;lb=float(m.ObjBound) if remaining>0 and m.Status not in (GRB.INFEASIBLE,GRB.INF_OR_UNBD) else None;return {"ok":solution is not None,"status":int(m.Status) if remaining>0 else None,"status_name":status_name(m.Status) if remaining>0 else "DEADLINE_EXHAUSTED","ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"model_build_runtime":build_runtime,"optimization_runtime":optimization_runtime,"runtime":runtime,"nodes":float(m.NodeCount) if remaining>0 else 0.0,"solution":solution,"components":evaluation}
 
@@ -39,7 +40,7 @@ def solve_direct_alns_pipeline(data,weights,*,total_time=180,warm_start_time_sha
     main_limit=max(0,deadline-time.perf_counter());main=solve_direct_gurobi(data,weights,time_limit=main_limit,mip_gap=mip_gap,threads=threads,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,concentration_enabled=concentration_enabled,seed=seed+1,verbose=False,start_solution=start)
     candidates=[q for q in (warm,main) if q["ok"]]
     if alns.get("best_solution") is not None:
-        ae=evaluate_solution(data,weights,alns["best_solution"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);candidates.append({"ok":True,"ub":ae["core_cost"],"solution":alns["best_solution"],"components":ae,"status_name":"ALNS"})
+        ae=evaluate_common_solution(data,weights,alns["best_solution"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);candidates.append({"ok":True,"ub":ae["core_cost"],"solution":alns["best_solution"],"components":ae,"status_name":"ALNS"})
     best=min(candidates,key=lambda q:q["ub"]) if candidates else main;lb=main.get("lb");ub=best.get("ub")
     return {"ok":bool(candidates),"algorithm":"direct_gurobi_warm_alns","status_name":main["status_name"],"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"runtime":time.perf_counter()-pipeline_started,"nodes":main["nodes"],"solution":best.get("solution"),"components":best.get("components"),"time_budget":{"total":total,"warm":warm_budget,"alns":alns_budget,"main":main_budget,"main_actual_limit":main_limit},"warm_start":{k:warm.get(k) for k in ("ok","status_name","ub","lb","gap","runtime")},"alns":{k:v for k,v in alns.items() if k!="best_solution"},"main_solve":{k:main.get(k) for k in ("ok","status_name","ub","lb","gap","runtime","nodes")}}
 def parser():

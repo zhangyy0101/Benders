@@ -17,6 +17,8 @@
     "concentration_mode": "joint-group-bay"
   },
   "candidate_algorithm_defaults": {
+    "algorithm_family": "true_bbc_alns",
+    "problem_protocol_version": "paper-exp-v1",
     "status": "provisional",
     "configuration_name": "algorithm-candidate-001",
     "configuration_version": "1",

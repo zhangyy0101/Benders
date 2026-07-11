@@ -7,6 +7,7 @@ import pytest
 import main
 import run_experiments
 import solve_direct_gurobi
+from algorithm_configuration import configuration_hash
 from config import Weights
 from data import TIME_BUCKET_HOURS
 from solver_alns import adaptive_lns
@@ -35,6 +36,8 @@ def test_protocol_identity_and_objective_defaults(defaults):
     candidate = defaults["candidate_algorithm_defaults"]
     assert fixed["version"] == "paper-exp-v1" and fixed["status"] == "fixed"
     assert candidate["status"] == "provisional"
+    assert candidate["algorithm_family"] == "true_bbc_alns"
+    assert candidate["problem_protocol_version"] == fixed["version"]
     assert candidate["configuration_name"].startswith("algorithm-candidate-")
     assert fixed["weights"] == {
         "open": weights.master.x,
@@ -129,3 +132,13 @@ def test_fixed_and_provisional_namespaces_do_not_overlap(defaults):
     fixed = set(defaults["problem_protocol"])
     provisional = set(defaults["candidate_algorithm_defaults"])
     assert fixed.isdisjoint(provisional - {"status"})
+
+
+def test_configuration_hash_is_stable_and_covers_every_setting(defaults):
+    candidate = defaults["candidate_algorithm_defaults"]
+    reordered = dict(reversed(list(candidate.items())))
+    assert configuration_hash(candidate) == configuration_hash(reordered)
+    changed = json.loads(json.dumps(candidate))
+    changed["alns_parameters"]["repair_time"] += 1
+    assert configuration_hash(candidate) != configuration_hash(changed)
+    assert len(configuration_hash(candidate)) == 64

@@ -60,6 +60,10 @@ hash even if `configuration_name` is accidentally reused. Results are keyed by t
 problem protocol, instance digest, method, seed, budget, and configuration hash;
 new configurations must never overwrite old results.
 
+The canonical implementation is `algorithm_configuration.configuration_hash`:
+UTF-8 JSON, recursively sorted object keys, compact separators, then SHA-256. The
+hash itself is derived metadata and is not included in its own input payload.
+
 Development configurations use `algorithm-candidate-*`. After calibration and
 ablation, a separately reviewed immutable record may be named `algorithm-final-v1`.
 No current configuration has that status.
