@@ -1,0 +1,74 @@
+{
+  "ok": true,
+  "status": 2,
+  "status_name": "OPTIMAL",
+  "ub": 19333.333333333332,
+  "lb": 19333.3333333333,
+  "gap": 1.6935418584737285e-15,
+  "model_build_runtime": 0.004410899942740798,
+  "optimization_runtime": 0.014234400005079806,
+  "runtime": 0.01867079990915954,
+  "nodes": 1.0,
+  "components": {
+    "open_cost": 2666.6666666666665,
+    "concentration_raw_used_bays": 2,
+    "concentration_normalized": 0.3333333333333333,
+    "concentration_cost": 3333.333333333333,
+    "concentration": {
+      "available": true,
+      "final_period": 1,
+      "positive_ship_groups": [
+        [
+          "J1",
+          "G20"
+        ],
+        [
+          "J1",
+          "G40"
+        ]
+      ],
+      "big_m": {
+        "J1|G20|A20": 4.0,
+        "J1|G20|B20": 4.0,
+        "J1|G20|C20": 4.0,
+        "J1|G40|A40": 4.0,
+        "J1|G40|B40": 4.0,
+        "J1|G40|C40": 4.0
+      },
+      "feasible_bays": {
+        "J1|G20": [
+          "A20",
+          "B20",
+          "C20"
+        ],
+        "J1|G40": [
+          "A40",
+          "B40",
+          "C40"
+        ]
+      },
+      "scale": 6,
+      "enabled": true,
+      "status": "ENABLED",
+      "used_bays": {
+        "J1|G20": [
+          "A20"
+        ],
+        "J1|G40": [
+          "B40"
+        ]
+      },
+      "used_bays_total": 2,
+      "raw_used_bays": 2,
+      "normalized": 0.3333333333333333
+    },
+    "recourse_cost": 13333.333333333332,
+    "core_cost": 19333.333333333332,
+    "distance_raw": 1200.0,
+    "balance_raw": 5.333333333333333,
+    "conflict_raw": 0.0,
+    "distance_cost": 8000.0,
+    "balance_cost": 5333.333333333333,
+    "conflict_cost": 0.0
+  }
+}

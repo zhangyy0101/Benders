@@ -71,12 +71,26 @@ def gurobi_checks():
         model.update()
         assert model.NumVars > 0 and model.NumConstrs > 0
 
+    def short_large(solver, label):
+        data = prepared("3new6old")
+        result = solver(data, Weights(), time_limit=3, mip_gap=.03, threads=1)
+        status = result.get("status_name")
+        assert isinstance(status, str) and status, f"{label} returned no status: {result}"
+        if result.get("ok"):
+            report = validate_solution(data, result["solution"])
+            assert report["feasible"], report
+            if label == "Direct":
+                assert abs(result["ub"] - result["components"]["core_cost"]) <= 1e-5
+        print(f"INFO {label} 3new6old status={status} incumbent={result.get('ok', False)}")
+
     return [
         ("Direct tiny", lambda: direct("tiny")),
         ("BBC tiny", lambda: bbc("tiny")),
         ("Direct tiny_concentration", lambda: direct("tiny_concentration")),
         ("BBC tiny_concentration", lambda: bbc("tiny_concentration")),
         ("3new6old model build", build_large),
+        ("Direct 3new6old short solve", lambda: short_large(solve_direct_gurobi, "Direct")),
+        ("BBC 3new6old short solve", lambda: short_large(solve_bbc_phase, "BBC")),
     ]
 
 

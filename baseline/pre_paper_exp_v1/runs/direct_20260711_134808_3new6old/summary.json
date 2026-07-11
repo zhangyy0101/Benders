@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": 9,
+  "status_name": "TIME_LIMIT",
+  "ub": null,
+  "lb": 16439.296739593472,
+  "gap": null,
+  "model_build_runtime": 0.8843592000193894,
+  "optimization_runtime": 7.121728400001302,
+  "runtime": 8.00616590003483,
+  "nodes": 1.0,
+  "components": null
+}
