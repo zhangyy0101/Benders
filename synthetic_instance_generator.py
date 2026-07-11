@@ -64,8 +64,8 @@ class SyntheticInstanceSpec:
             raise ValueError("arrival_overlap_level must be in [0, 1]")
         if not 0 <= self.mode_20ft_share <= 1:
             raise ValueError("mode_20ft_share must be in [0, 1]")
-        if self.group_profile != "standard":
-            raise ValueError(f"unsupported group_profile {self.group_profile!r}; expected 'standard'")
+        if self.group_profile not in {"standard", "standard6"}:
+            raise ValueError(f"unsupported group_profile {self.group_profile!r}; expected 'standard' or 'standard6'")
 
 
 def _validate_range(name, bounds, lower, upper):
@@ -76,13 +76,18 @@ def _validate_range(name, bounds, lower, upper):
         raise ValueError(f"invalid {name}: {bounds!r}; expected {lower} <= low <= high <= {upper}")
 
 
-def _groups():
+def _groups(profile):
     attrs = {
         "Group_20_POD_A_STD_LIGHT": {"size": 20, "pod": "POD_A", "height": "STD", "weight_class": "LIGHT"},
         "Group_20_POD_B_HIGH_HEAVY": {"size": 20, "pod": "POD_B", "height": "HIGH", "weight_class": "HEAVY"},
         "Group_40_POD_A_STD_LIGHT": {"size": 40, "pod": "POD_A", "height": "STD", "weight_class": "LIGHT"},
         "Group_40_POD_B_HIGH_HEAVY": {"size": 40, "pod": "POD_B", "height": "HIGH", "weight_class": "HEAVY"},
     }
+    if profile == "standard6":
+        attrs.update({
+            "Group_20_POD_C_STD_MEDIUM": {"size": 20, "pod": "POD_C", "height": "STD", "weight_class": "MEDIUM"},
+            "Group_40_POD_C_HIGH_MEDIUM": {"size": 40, "pod": "POD_C", "height": "HIGH", "weight_class": "MEDIUM"},
+        })
     return list(attrs), attrs
 
 
@@ -150,7 +155,7 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
     berths = [f"Berth_{index:03d}" for index in range(1, spec.num_berths + 1)]
     ShipBerth = {j: berths[index % len(berths)] for index, j in enumerate(J_new)}
     Dist = {(j, k): float(100 + 75 * abs(K.index(k) - (index % len(K))) + 7 * index) for index, j in enumerate(J_new) for k in K}
-    G, GroupAttrs = _groups()
+    G, GroupAttrs = _groups(spec.group_profile)
 
     initial = {}
     Fixed_In_Flow = {(j, s, i, n): 0.0 for j in J_old for s in S for i in I_list for n in N}
@@ -191,12 +196,16 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
         ships_config[j] = {"total_boxes": total, "share_20ft": share20, **window}
         for size, size_share in ((20, share20), (40, 1 - share20)):
             size_groups = [g for g in G if GroupAttrs[g]["size"] == size]
-            group_share = rng.uniform(.35, .65)
+            raw_group_shares = [rng.uniform(.5, 1.5) for _ in size_groups]
+            group_shares = [value / sum(raw_group_shares) for value in raw_group_shares]
             for n, period_share in enumerate(profile):
                 value = total * size_share * period_share
                 Arrivals_interval[j, size, n] = value
-                Arrivals_group_interval[j, size_groups[0], n] = value * group_share
-                Arrivals_group_interval[j, size_groups[1], n] = value - value * group_share
+                assigned = 0.0
+                for position, group in enumerate(size_groups):
+                    group_value = value - assigned if position == len(size_groups) - 1 else value * group_shares[position]
+                    Arrivals_group_interval[j, group, n] = group_value
+                    assigned += group_value
 
     Fixed_Mode_Force = {(i, n): None for i in I_list for n in N}
     Old_Box_Occupancy_Map = {(i, j): sum(initial.get((i, j, s), 0.0) for s in S) + sum(Fixed_In_Flow.get((j, s, i, n), 0.0) for s in S for n in N) for i in I_list for j in J_old}
