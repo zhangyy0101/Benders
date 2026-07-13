@@ -153,3 +153,8 @@ utilization。业务 KPI 的 canonical 实现由 Task 03 完成；本协议不�
 version。已生成 benchmark 不得静默覆盖；schema/generator 变化需迁移或生成新版本。
 正式实验的每个结果必须记录 protocol version、instance digest、Git commit 和 dirty
 状态。
+# Pilot2 experiment extension
+
+All methods expose `anytime_trace` records with `time`, `phase`, `source`, `ub`, `lb`, and `gap`. Time is measured from pipeline start; best UB cannot increase and valid LB cannot decrease. Gap integration excludes intervals missing either bound. Primal integrals are post-processed after the same-instance best known solution is available.
+
+Paired ablations match exactly on instance, seed, budget, threads, and problem protocol. Seeds are 0, 1, and 2. Missing pairs are reported and are never replaced by unpaired configuration medians.

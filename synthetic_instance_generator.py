@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from data import simulate_old_inventory, validate_instance_units
 from model_concentration import has_joint_attribute_groups
 
-GENERATOR_VERSION = "synthetic-yard-v1"
+GENERATOR_VERSION = "synthetic-yard-v2"
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,12 @@ class SyntheticInstanceSpec:
     peak_position_range: tuple[float, float]
     mode_20ft_share: float
     group_profile: str = "standard"
+    pod_count_range: tuple[int, int] = (2, 2)
+    positive_group_count_range: tuple[int, int] = (4, 6)
+    single_combination_pod_ratio_range: tuple[float, float] = (.2, .5)
+    arrival_overlap_ratio_range: tuple[float, float] = (0, 1)
+    pressure_positive_ratio_range: tuple[float, float] = (0, 1)
+    minimum_active_group_boxes: int = 2
 
     def validate(self):
         positive_ints = {
@@ -64,8 +70,8 @@ class SyntheticInstanceSpec:
             raise ValueError("arrival_overlap_level must be in [0, 1]")
         if not 0 <= self.mode_20ft_share <= 1:
             raise ValueError("mode_20ft_share must be in [0, 1]")
-        if self.group_profile not in {"standard", "standard6"}:
-            raise ValueError(f"unsupported group_profile {self.group_profile!r}; expected 'standard' or 'standard6'")
+        if self.group_profile not in {"standard", "standard6", "pilot2_small", "pilot2_medium", "pilot2_large"}:
+            raise ValueError(f"unsupported group_profile {self.group_profile!r}")
 
 
 def _validate_range(name, bounds, lower, upper):
@@ -92,6 +98,17 @@ def _groups(profile):
 
 
 def _period_profile(rng, spec, ship_index):
+    if spec.group_profile.startswith("pilot2_"):
+        patterns={
+            "pilot2_small":[(0,5),(3,5)],
+            "pilot2_medium":[(0,7),(2,7),(4,7)],
+            "pilot2_large":[(0,10),(0,11),(1,10),(1,11),(2,10)],
+        }
+        start,duration=patterns[spec.group_profile][ship_index]
+        peak=start+duration//2;weights=[0.0]*spec.num_periods
+        for n in range(start,min(spec.num_periods,start+duration)):weights[n]=float(1+min(n-start,start+duration-1-n))
+        total=sum(weights)
+        return [v/total for v in weights],{"start_period":start,"end_period":start+duration,"active_duration":duration,"peak_period":peak,"realized_active_periods":[n for n,v in enumerate(weights) if v>0]}
     horizon = float(spec.num_periods)
     window = max(1.0, horizon * (.40 + .55 * spec.arrival_overlap_level))
     available_start = max(0.0, horizon - window)
@@ -111,6 +128,42 @@ def _period_profile(rng, spec, ship_index):
         weights[min(spec.num_periods - 1, int(start))] = 1.0
     total = sum(weights)
     return [value / total for value in weights], {"start_period": start, "end_period": min(horizon, start + window), "peak_period": peak}
+
+def _split_integer(total,count,rng,minimum=1):
+    total=int(round(total));minimum=int(minimum)
+    if total<count*minimum:raise ValueError(f"cannot split {total} boxes over {count} groups with minimum {minimum}")
+    result=[minimum]*count
+    for _ in range(total-count*minimum):result[rng.randrange(count)]+=1
+    return result
+
+def _pilot2_ship_groups(rng,spec,ship):
+    pod_count=rng.randint(*spec.pod_count_range);pods=[f"POD_{i:02d}" for i in rng.sample(range(1,9),pod_count)]
+    target=rng.randint(*spec.positive_group_count_range);single_target=max(1,round(pod_count*rng.uniform(*spec.single_combination_pod_ratio_range)))
+    attrs={};by_pod={pod:[] for pod in pods}
+    for pos,pod in enumerate(pods):
+        sizes=[20,40] if (spec.group_profile!="pilot2_small" or rng.random()<.35) else [rng.choice((20,40))]
+        if pos==0:sizes=[20,40]
+        for size in sizes:
+            combos=[("STD","LIGHT"),("STD","HEAVY"),("HIGH","LIGHT"),("HIGH","HEAVY")]
+            rng.shuffle(combos);max_combo={"pilot2_small":2,"pilot2_medium":3,"pilot2_large":4}[spec.group_profile]
+            count=1 if pos<single_target else rng.randint(1,max_combo)
+            for height,weight in combos[:count]:
+                g=f"Group_{size}_{pod}_{height}_{weight}";attrs[g]={"size":size,"pod":pod,"height":height,"weight_class":weight};by_pod[pod].append(g)
+    candidates=[]
+    for pod in pods:
+      for size in (20,40):
+       for h in ("STD","HIGH"):
+        for w in ("LIGHT","HEAVY"):
+         g=f"Group_{size}_{pod}_{h}_{w}"
+         if g not in attrs:candidates.append((g,{"size":size,"pod":pod,"height":h,"weight_class":w}))
+    while len(attrs)<target and candidates:
+        idx=rng.randrange(len(candidates));g,a=candidates.pop(idx);attrs[g]=a;by_pod[a["pod"]].append(g)
+    while len(attrs)>target:
+        removable=[g for g,a in attrs.items() if len(by_pod[a["pod"]])>1]
+        if not removable:break
+        g=rng.choice(removable);by_pod[attrs[g]["pod"]].remove(g);del attrs[g]
+    heights={a["height"] for a in attrs.values()};weights={a["weight_class"] for a in attrs.values()};sizes={a["size"] for a in attrs.values()}
+    return attrs,pods,{"pod_count":pod_count,"positive_group_count":len(attrs),"single_combination_pod_count":sum(any(sum(a["size"]==s for a in (attrs[g] for g in by_pod[p]))==1 for s in (20,40)) for p in pods),"height_coverage":sorted(heights),"weight_coverage":sorted(weights),"size_coverage":sorted(sizes)}
 
 
 def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
@@ -155,7 +208,8 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
     berths = [f"Berth_{index:03d}" for index in range(1, spec.num_berths + 1)]
     ShipBerth = {j: berths[index % len(berths)] for index, j in enumerate(J_new)}
     Dist = {(j, k): float(100 + 75 * abs(K.index(k) - (index % len(K))) + 7 * index) for index, j in enumerate(J_new) for k in K}
-    G, GroupAttrs = _groups(spec.group_profile)
+    pilot2=spec.group_profile.startswith("pilot2_")
+    G, GroupAttrs = ([],{}) if pilot2 else _groups(spec.group_profile)
 
     initial = {}
     Fixed_In_Flow = {(j, s, i, n): 0.0 for j in J_old for s in S for i in I_list for n in N}
@@ -176,24 +230,41 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
                 available = sum(initial.get((i, ship, modes[i]), 0.0) for i in Bays_in_Block[k])
                 if available <= 0:
                     continue
+                if pilot2:
+                    active_blocks={"pilot2_small":3,"pilot2_medium":5,"pilot2_large":9}[spec.group_profile]
+                    if block_index>=active_blocks or ship_index!=block_index%len(J_old):continue
                 ratio = rng.uniform(*spec.outbound_pressure_ratio_range)
                 if block_index == 0 and ship_index == 0 and spec.outbound_pressure_ratio_range[1] > 0:
                     ratio = max(ratio, sum(spec.outbound_pressure_ratio_range) / 2)
                 total = available * ratio
-                weights = [1.0 + ((n + 2 * block_index + ship_index) % 4) for n in N]
+                if pilot2:
+                    length={"pilot2_small":4,"pilot2_medium":8,"pilot2_large":9}[spec.group_profile];start=(2*block_index+ship_index)%max(1,len(N)-length+1)
+                    weights=[0.0 if n<start or n>=start+length else 1.0+3.0*(n==start+length//2) for n in N]
+                else:weights = [1.0 + ((n + 2 * block_index + ship_index) % 4) for n in N]
                 for n, weight in enumerate(weights):
                     value = total * weight / sum(weights)
                     Block_Outbound_Req[k, ship, n] = value
                     Block_Outbound_Vol[k, n] += value
 
     Arrivals_interval = {}
-    Arrivals_group_interval = {(j, g, n): 0.0 for j in J_new for g in G for n in N}
+    Arrivals_group_interval = {}
     ships_config = {}
+    active_by_ship={};pods_by_ship={};ship_group_meta={}
     for ship_index, j in enumerate(J_new):
-        total = rng.uniform(*spec.arrival_boxes_per_ship_range)
+        total = round(rng.uniform(*spec.arrival_boxes_per_ship_range)) if pilot2 else rng.uniform(*spec.arrival_boxes_per_ship_range)
         share20 = min(.95, max(.05, spec.mode_20ft_share + rng.uniform(-.08, .08)))
         profile, window = _period_profile(rng, spec, ship_index)
         ships_config[j] = {"total_boxes": total, "share_20ft": share20, **window}
+        if pilot2:
+            attrs,pods,meta=_pilot2_ship_groups(rng,spec,j);GroupAttrs.update(attrs);active_by_ship[j]=sorted(attrs);pods_by_ship[j]=pods;ship_group_meta[j]=meta
+            volumes=_split_integer(total,len(attrs),rng,spec.minimum_active_group_boxes)
+            group_volume=dict(zip(sorted(attrs),volumes))
+            for n,period_share in enumerate(profile):
+                by_size={s:0.0 for s in S}
+                for g in active_by_ship[j]:
+                    value=group_volume[g]*period_share;Arrivals_group_interval[j,g,n]=value;by_size[attrs[g]["size"]]+=value
+                for size in S:Arrivals_interval[j,size,n]=by_size[size]
+            continue
         for size, size_share in ((20, share20), (40, 1 - share20)):
             size_groups = [g for g in G if GroupAttrs[g]["size"] == size]
             raw_group_shares = [rng.uniform(.5, 1.5) for _ in size_groups]
@@ -206,6 +277,8 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
                     group_value = value - assigned if position == len(size_groups) - 1 else value * group_shares[position]
                     Arrivals_group_interval[j, group, n] = group_value
                     assigned += group_value
+
+    if pilot2:G=sorted(GroupAttrs)
 
     Fixed_Mode_Force = {(i, n): None for i in I_list for n in N}
     Old_Box_Occupancy_Map = {(i, j): sum(initial.get((i, j, s), 0.0) for s in S) + sum(Fixed_In_Flow.get((j, s, i, n), 0.0) for s in S for n in N) for i in I_list for j in J_old}
@@ -233,6 +306,7 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
         "New_Outbound_Req": {},
         "benchmark_metadata": {"source_type": "synthetic", "generator_version": GENERATOR_VERSION, "spec_name": spec.name, "seed": seed, "spec": asdict(spec)},
     }
+    if pilot2:data.update({"ActiveGroupsByShip":active_by_ship,"ActivePODsByShip":pods_by_ship,"ShipGroupGenerationMetadata":ship_group_meta})
     _precheck(data)
     return data
 

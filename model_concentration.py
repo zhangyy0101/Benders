@@ -1,19 +1,18 @@
 """Canonical bay-level joint ship-group concentration formulation."""
 from __future__ import annotations
-from model_common import group_size,groups,remaining_capacity,required_reserve
+from model_common import group_size,remaining_capacity,required_reserve,ship_group_pairs
 
 TOL=1e-9
 def has_joint_attribute_groups(data):
     G=list(data.get("G") or []);attrs=data.get("GroupAttrs",{});arr=data.get("Arrivals_group_interval",{})
     if not G or any(g not in attrs or g not in data.get("GroupSize",{}) for g in G):return False
     if any(any(str(attrs[g].get(a,"ALL")).upper() in {"","ALL","NONE"} for a in ("pod","height","weight_class")) for g in G):return False
-    return all((j,g,n) in arr for j in data["J_new"] for g in G for n in data["N"])
+    return all((j,g,n) in arr for j,g in ship_group_pairs(data) for n in data["N"])
 
 def concentration_metadata(data,alloc_domain="integer"):
     available=has_joint_attribute_groups(data);final=max(data["N"]);rem=remaining_capacity(data);positive=[];M={};feasible={}
     if available:
-      for j in data["J_new"]:
-       for g in groups(data):
+      for j,g in ship_group_pairs(data):
         required=required_reserve(data,j,g,final,alloc_domain)
         if required<=TOL:continue
         positive.append((j,g));feasible[j,g]=[]

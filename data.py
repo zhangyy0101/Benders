@@ -66,7 +66,7 @@ def validate_instance_units(data: dict) -> None:
     if data.get("G"):
       for j in data["J_new"]:
        for s in data["S"]:
-        gs=[g for g in data["G"] if int(data["GroupSize"][g])==int(s)]
+        active=data.get("ActiveGroupsByShip",{}).get(j,data["G"]);gs=[g for g in active if int(data["GroupSize"][g])==int(s)]
         for n in data["N"]:
          if any((j,g,n) not in data["Arrivals_group_interval"] for g in gs):raise ValueError("missing grouped arrival")
          if abs(sum(float(data["Arrivals_group_interval"][j,g,n]) for g in gs)-float(data["Arrivals_interval"][j,s,n]))>1e-6:raise ValueError("grouped arrival mismatch")

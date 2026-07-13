@@ -45,3 +45,6 @@ python scripts/audit_benchmarks.py benchmarks/paper_exp_v1_pilot
 
 The current algorithm remains provisional. Mathematical correctness is gated by
 `scripts/validate_small_benchmarks.py`; algorithm selection/calibration occurs in later stages.
+# Pilot2 development status
+
+`benchmarks/paper_exp_v1_pilot2` adds deterministic 12-period synthetic instances, sparse ship-group indexing, realized overlap/pressure audits, isolated C0-C8 configurations, canonical anytime output, and paired-analysis tooling. Pilot1 and its exact results are retained unchanged. Public real-data adaptation and final paper experiments remain out of scope, and the final algorithm is not frozen.

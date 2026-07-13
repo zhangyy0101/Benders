@@ -73,3 +73,8 @@ LP recourse, sequential single-cut outer loop, with no callback, warm start, ALN
 root prepass, aggregate/analytic lower bound, valid inequalities, node cuts, or
 stabilization. It is not a candidate configuration and is not claimed as a strict
 replication of a named paper.
+# Pilot2 component-isolated candidates
+
+The provisional sequence `C0_bbc_core` through `C8_both_lb_root_warm_alns_valid` isolates analytic LB, aggregate LB, root prepass, warm start, ALNS, their root interaction, and valid inequalities. Phase shares are explicit; unused phase time remains available to main BBC. Deprecated `bbc_*` aliases remain readable but are not evidence of isolated effects. Stabilization and node cuts are outside this screen.
+
+`final_algorithm_frozen` remains `false`; none of these names denotes a final algorithm.

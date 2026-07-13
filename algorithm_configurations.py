@@ -10,6 +10,15 @@ def _cfg(name,**changes):
     return value
 def _shares(root=0,warm=0,alns=0):return {"root":root,"warm":warm,"alns":alns,"main":1-root-warm-alns}
 CONFIGURATIONS={
+ "C0_bbc_core":_cfg("C0_bbc_core"),
+ "C1_core_analytic":_cfg("C1_core_analytic",analytic_recourse_lb=True),
+ "C2_core_aggregate":_cfg("C2_core_aggregate",aggregate_recourse_lb=True),
+ "C3_core_both_lb":_cfg("C3_core_both_lb",analytic_recourse_lb=True,aggregate_recourse_lb=True),
+ "C4_both_lb_root":_cfg("C4_both_lb_root",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,phase_shares=_shares(root=.05)),
+ "C5_both_lb_warm":_cfg("C5_both_lb_warm",analytic_recourse_lb=True,aggregate_recourse_lb=True,warm_start=True,phase_shares=_shares(warm=.15)),
+ "C6_both_lb_warm_alns":_cfg("C6_both_lb_warm_alns",analytic_recourse_lb=True,aggregate_recourse_lb=True,warm_start=True,alns=True,phase_shares=_shares(warm=.15,alns=.25)),
+ "C7_both_lb_root_warm_alns":_cfg("C7_both_lb_root_warm_alns",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,phase_shares=_shares(.05,.15,.25)),
+ "C8_both_lb_root_warm_alns_valid":_cfg("C8_both_lb_root_warm_alns_valid",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,valid_inequalities=True,phase_shares=_shares(.05,.15,.25)),
  "bbc_core":_cfg("bbc_core"),
  "bbc_valid":_cfg("bbc_valid",valid_inequalities=True),
  "bbc_analytic_lb":_cfg("bbc_analytic_lb",analytic_recourse_lb=True),

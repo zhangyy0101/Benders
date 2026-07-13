@@ -13,7 +13,7 @@ class BendersCutRecord:
         if not self.signature:
             payload=(self.cut_type,round(self.constant,12),round(self.eta_coeff,12),sorted((str(k),round(v,12)) for k,v in self.x_coefficients.items() if abs(v)>1e-12),sorted((str(k),round(v,12)) for k,v in self.alloc_coefficients.items() if abs(v)>1e-12));self.signature=hashlib.sha256(repr(payload).encode()).hexdigest()
     def value_at(self,point):return self.constant+self.eta_coeff*float(point.get("eta",0))+sum(v*point["x"].get(k,0) for k,v in self.x_coefficients.items())+sum(v*point["alloc_boxes"].get(k,0) for k,v in self.alloc_coefficients.items())
-    def as_expression(self,master_vars):return self.constant+self.eta_coeff*master_vars["eta"]+gp.quicksum(v*master_vars["x"][k] for k,v in self.x_coefficients.items())+gp.quicksum(v*master_vars["alloc_boxes"][k] for k,v in self.alloc_coefficients.items())
+    def as_expression(self,master_vars):return self.constant+self.eta_coeff*master_vars["eta"]+gp.quicksum(v*master_vars["x"][k] for k,v in self.x_coefficients.items() if k in master_vars["x"])+gp.quicksum(v*master_vars["alloc_boxes"][k] for k,v in self.alloc_coefficients.items() if k in master_vars["alloc_boxes"])
     def coefficient_metrics(self):
         values=[abs(v) for v in [self.eta_coeff,*self.x_coefficients.values(),*self.alloc_coefficients.values()] if abs(v)>1e-12];return {"min_nonzero_coefficient":min(values,default=0),"max_nonzero_coefficient":max(values,default=0),"coefficient_ratio":max(values)/min(values) if values else 0,"cut_density":len(values)/(1+len(self.x_coefficients)+len(self.alloc_coefficients))}
 @dataclass

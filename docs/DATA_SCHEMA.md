@@ -89,3 +89,10 @@ Digest 为 canonical UTF-8 compact JSON 的 SHA-256，覆盖 schema version、pr
 protocol、raw data、generator spec 和 seed；不覆盖保存时间、绝对路径或算法配置。
 加载默认重新计算并验证。字段、schema 或 protocol 迁移不得静默进行；未知顶层字段、
 record schema 不匹配、重复 record 和 digest 错误都会失败。
+# Pilot2 sparse group extension
+
+`paper-exp-v1-pilot2` keeps the mathematical protocol unchanged and uses 12 six-hour periods for Small, Medium, and Large. Groups encode `size + POD + height + weight_class`, where sizes are 20/40, heights are STD/HIGH, weights are LIGHT/HEAVY, and PODs are `POD_01` through `POD_08`.
+
+`ActiveGroupsByShip[ship]` is the authoritative sparse index. `ActivePODsByShip` and `ShipGroupGenerationMetadata` describe generation coverage; global `G` is the union. If `ActiveGroupsByShip` is absent, readers must use legacy dense `J_new × G` behavior. Missing inactive solution keys and inactive arrivals mean zero.
+
+A single-combination POD has at least one active size with exactly one `(height, weight_class)` combination. `arrival_overlap_ratio` is the share of globally active periods containing at least two active new ships. Pairwise window overlap is intersection-over-union. Pressure zero/positive ratios use all block-period cells; CV uses the population standard deviation, and p95 is nearest-rank.

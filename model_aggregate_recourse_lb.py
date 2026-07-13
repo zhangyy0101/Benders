@@ -1,7 +1,7 @@
 """Valid analytic and size-level aggregate lower approximations of global recourse."""
 from __future__ import annotations
 import gurobipy as gp
-from model_common import arrival,fixed_in_block,group_size,groups,objective_scales,outbound_pressure,scale_factor
+from model_common import arrival,fixed_in_block,group_size,groups,objective_scales,outbound_pressure,scale_factor,ship_groups,ship_group_pairs
 def analytic_recourse_lower_bounds(data,weights):
     G=groups(data);sc=objective_scales(data);factor=scale_factor(weights);distance=sum(sum(arrival(data,j,g,n) for g in G if group_size(data,g)==int(s))*min(float(data["Dist"][j,k]) for k in data["K"]) for j in data["J_new"] for s in data["S"] for n in data["N"]);pressure=outbound_pressure(data);conflict=sum(sum(arrival(data,j,g,n) for j in data["J_new"] for g in G)*min(float(pressure[k,n]) for k in data["K"]) for n in data["N"])
     m=gp.Model("analytic_balance_lb");m.Params.OutputFlag=0;flow=m.addVars(data["K"],data["N"],lb=0);total=m.addVars(data["K"],data["N"],lb=0);avg=m.addVars(data["N"],lb=0);bal=m.addVars(data["K"],data["N"],lb=0);fixed=fixed_in_block(data)
@@ -15,7 +15,7 @@ def add_aggregate_recourse_relaxation(model,data,weights,x,alloc,eta,*,enabled=T
     J,K,S,N=data["J_new"],data["K"],data["S"],data["N"];G=groups(data);alpha=float(data["Alpha"]);modes={i:int(data["Fixed_Bay_Mode"][i]) for i in data["I_list"]};z=model.addVars(J,K,S,N,lb=0,name="agg_z");total=model.addVars(K,N,lb=0,name="agg_total");avg=model.addVars(N,lb=0,name="agg_avg");bal=model.addVars(K,N,lb=0,name="agg_bal")
     for j in J:
       for s in S:
-       gs=[g for g in G if group_size(data,g)==int(s)]
+       gs=[g for g in ship_groups(data,j) if group_size(data,g)==int(s)]
        for n in N:
         model.addConstr(gp.quicksum(z[j,k,s,n] for k in K)==sum(arrival(data,j,g,n) for g in gs),name=f"agg_arrival_{j}_{s}_{n}")
         for k in K:
