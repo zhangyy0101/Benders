@@ -19,6 +19,7 @@ CONFIGURATIONS={
  "C6_both_lb_warm_alns":_cfg("C6_both_lb_warm_alns",analytic_recourse_lb=True,aggregate_recourse_lb=True,warm_start=True,alns=True,phase_shares=_shares(warm=.15,alns=.25)),
  "C7_both_lb_root_warm_alns":_cfg("C7_both_lb_root_warm_alns",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,phase_shares=_shares(.05,.15,.25)),
  "C8_both_lb_root_warm_alns_valid":_cfg("C8_both_lb_root_warm_alns_valid",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,valid_inequalities=True,phase_shares=_shares(.05,.15,.25)),
+ "algorithm-candidate-v1":_cfg("algorithm-candidate-v1",aggregate_recourse_lb=True,valid_inequalities=True,status="proposed"),
  "bbc_core":_cfg("bbc_core"),
  "bbc_valid":_cfg("bbc_valid",valid_inequalities=True),
  "bbc_analytic_lb":_cfg("bbc_analytic_lb",analytic_recourse_lb=True),

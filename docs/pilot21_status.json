@@ -1,5 +1,5 @@
 {
-  "stage": "p2-fast-internal-screen-complete",
+  "stage": "p3-adaptive-confirmation-complete",
   "fixed_benchmark_generated": true,
   "exact_validation_gate_passed": true,
   "small_finite_time_gate_passed": true,
@@ -23,6 +23,14 @@
       "C6_both_lb_warm_alns",
       "C8_both_lb_root_warm_alns_valid"
     ],
+    "candidate_algorithm_frozen": false,
+    "final_algorithm_frozen": false
+  },
+  "p3_adaptive_confirmation": {
+    "actual_run_count": 39,
+    "seed2_executed_for": ["warm_bundle", "alns"],
+    "recommended_candidate_configuration": "algorithm-candidate-v1",
+    "approved_for_candidate_freeze_review": true,
     "candidate_algorithm_frozen": false,
     "final_algorithm_frozen": false
   },
