@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from data import simulate_old_inventory, validate_instance_units
 from model_concentration import has_joint_attribute_groups
 
-GENERATOR_VERSION = "synthetic-yard-v2.1-development"
+GENERATOR_VERSION = "synthetic-yard-v2.1"
 
 
 @dataclass(frozen=True)

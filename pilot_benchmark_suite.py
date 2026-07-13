@@ -9,7 +9,7 @@ from model_common import ship_groups
 from model_concentration import has_joint_attribute_groups
 from synthetic_instance_generator import GENERATOR_VERSION,SyntheticInstanceSpec
 
-PILOT_VERSION="paper-exp-v1-pilot2"
+PILOT_VERSION="paper-exp-v1-pilot2.1"
 SEEDS={**{f"S{i:02d}":1100+i for i in range(1,4)},**{f"M{i:02d}":2100+i for i in range(1,4)},**{f"L{i:02d}":3100+i for i in range(1,4)}}
 RANGES={"small":{"groups":(8,14),"pods":(5,5),"overlap":(.25,.50),"pressure":(.25,.45)},"medium":{"groups":(14,24),"pods":(6,7),"overlap":(.50,.75),"pressure":(.45,.65)},"large":{"groups":(22,36),"pods":(8,8),"overlap":(.75,1),"pressure":(.60,.80)}}
 
@@ -53,7 +53,10 @@ def audit_suite(suite_dir):
  root=Path(suite_dir);manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"));reports=[]
  for row in manifest["instances"]:
   report=audit_instance(load_instance(root/row["relative_path"]),row["digest"],row["size_class"]);report.update(instance_id=row["instance_id"],relative_path=row["relative_path"]);reports.append(report)
- result={"pilot_version":manifest.get("pilot_version",PILOT_VERSION),"status":"PASS" if all(r["status"]=="PASS" for r in reports) else "FAIL","instance_count":len(reports),"instances":reports};(root/"audit_report.json").write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8");(root/"audit_report.md").write_text("# Pilot2 development audit\n\nOverall: **%s**\n\n%s\n"%(result["status"],"\n".join(f"- {r['instance_id']}: {r['status']} ({', '.join(x['check'] for x in r['failures']) or 'all checks passed'})" for r in reports)),encoding="utf-8");status={r["instance_id"]:r["status"] for r in reports}
+ diversity={}
+ for size in ("small","medium","large"):
+  subset=[r for r in reports if r["instance_id"].lower().startswith(size[0])];diversity[size]={"overlap_varies":len({r["metrics"]["arrival_overlap_ratio"] for r in subset})>1,"pressure_varies":len({r["metrics"]["positive_pressure_block_period_ratio"] for r in subset})>1}
+ diversity_ok=all(all(v.values()) for v in diversity.values());result={"pilot_version":manifest.get("pilot_version",PILOT_VERSION),"status":"PASS" if all(r["status"]=="PASS" for r in reports) and diversity_ok else "FAIL","instance_count":len(reports),"suite_diversity":diversity,"instances":reports};(root/"audit_report.json").write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8");(root/"audit_report.md").write_text("# Pilot2.1 benchmark audit\n\nOverall: **%s**\n\nSuite diversity: `%s`\n\n%s\n"%(result["status"],json.dumps(diversity,ensure_ascii=False),"\n".join(f"- {r['instance_id']}: {r['status']} ({', '.join(x['check'] for x in r['failures']) or 'all checks passed'})" for r in reports)),encoding="utf-8");status={r["instance_id"]:r["status"] for r in reports}
  for row in manifest["instances"]:row["audit_status"]=status[row["instance_id"]]
  write_manifests(root,manifest["instances"]);return result
 

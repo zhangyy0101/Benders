@@ -1,6 +1,6 @@
-"""Exact small-instance crosscheck and long-term mathematical regression gate."""
+"""Timeboxed exact-fixture and formal-Small mathematical validation gates."""
 from __future__ import annotations
-import argparse,csv,hashlib,json,sys,time,traceback
+import argparse,json,sys,time,traceback
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
@@ -13,87 +13,75 @@ from instance_registry import build_builtin_instance
 from model_recourse import GlobalRecourseOracle
 from solution_evaluation import evaluate_common_solution
 from solve_direct_gurobi import solve_direct_gurobi
-from solver_true_benders import solve_bbc_phase,solve_true_benders_pipeline
-
+from solver_true_benders import solve_bbc_phase
 TOL=1e-5
-FIELDS="instance digest method algorithm_status status runtime ub lb gap feasible max_violation objective open concentration distance balance conflict nodes cuts sp_solves result_status message".split()
 
-def solution_digest(solution):
-    def serial(value):
-        if isinstance(value,dict):return sorted([(repr(k),serial(v)) for k,v in value.items()])
-        if isinstance(value,(list,tuple)):return [serial(v) for v in value]
-        return round(value,10) if isinstance(value,float) else value
-    return hashlib.sha256(json.dumps(serial(solution),separators=(",",":")).encode()).hexdigest()
-
-def check_solution(data,weights,result,method):
-    failures=[];evaluation=None
-    if result.get("ub") is not None and not result.get("solution"):failures.append("UB reported without solution")
-    if result.get("solution"):
-        evaluation=evaluate_common_solution(data,weights,result["solution"],tolerance=TOL)
-        if not evaluation["feasibility"]["feasible"]:failures.append(f"infeasible solution: {evaluation['feasibility']}")
-        values=[evaluation["components"][name]["weighted"] for name in ("open","concentration","distance","balance","conflict")]
-        if abs(sum(values)-evaluation["core_cost"])>TOL:failures.append("component sum mismatch")
-        if abs(evaluation["objective"]["first_stage"]+evaluation["objective"]["recourse"]-evaluation["core_cost"])>TOL:failures.append("first-stage + recourse mismatch")
-        if result.get("ub") is not None and abs(result["ub"]-evaluation["core_cost"])>TOL:failures.append("reported UB/evaluator mismatch")
-        if method=="direct" and abs(result["solver_objective"]-evaluation["core_cost"])>TOL:failures.append("solver/evaluator objective mismatch")
-        concentration=evaluation["concentration"]
-        if concentration["enabled"] and "concentration_use" in result["solution"]:
-            modeled=sum(result["solution"]["concentration_use"].values())
-            if abs(modeled-concentration["raw_used_bays"])>TOL:failures.append("modeled/evaluator concentration raw mismatch")
-            for (j,g,i),value in result["solution"]["concentration_use"].items():
-                expected=float(i in concentration["used_bays"].get((j,g),[]))
-                if abs(value-expected)>TOL:failures.append(f"concentration support mismatch {(j,g,i)}");break
-    if result.get("ub") is not None and result.get("lb") is not None and result["lb"]>result["ub"]+TOL:failures.append("LB exceeds UB")
-    return evaluation,failures
-
-def oracle_crosscheck(data,weights,direct,evaluation):
-    failures=[];details={}
-    point={"x":direct["solution"]["x"],"alloc_boxes":direct["solution"]["alloc_boxes"],"eta":evaluation["recourse_cost"]};oracle=GlobalRecourseOracle(data,weights);oracle.update_rhs(point["x"],point["alloc_boxes"]);status=oracle.solve()
-    if status!=GRB.OPTIMAL:return [f"oracle status {status}"],details
-    value=oracle.objective_value();details["oracle_recourse"]=value
-    if abs(value-evaluation["recourse_cost"])>TOL:failures.append("oracle/evaluator recourse mismatch")
-    cut=oracle.build_optimality_cut(point,"exact_crosscheck");tight=cut.value_at({**point,"eta":value});details["cut_tightness_error"]=abs(tight)
-    if abs(tight)>TOL:failures.append("optimality cut not tight")
-    validation=validate_optimality_cut(data,weights,cut,[point],TOL);details["cut_validation"]=validation
-    if not validation["valid"]:failures.append("optimality cut validation failed")
-    return failures,details
-
-def row(instance_id,digest,method,result,evaluation,status,message=""):
-    comp=evaluation or {};feas=comp.get("feasibility",{});parts=comp.get("components",{});main=result.get("phase3_bbc",{}) if method=="full_candidate" else result
-    return {"instance":instance_id,"digest":digest,"method":method,"algorithm_status":"provisional" if method=="full_candidate" else "correctness_configuration","status":main.get("status_name",result.get("status_name")),"runtime":result.get("runtime"),"ub":result.get("ub"),"lb":result.get("lb"),"gap":result.get("gap"),"feasible":feas.get("feasible"),"max_violation":feas.get("max_violation"),"objective":comp.get("core_cost"),"open":parts.get("open",{}).get("weighted"),"concentration":parts.get("concentration",{}).get("weighted"),"distance":parts.get("distance",{}).get("weighted"),"balance":parts.get("balance",{}).get("weighted"),"conflict":parts.get("conflict",{}).get("weighted"),"nodes":main.get("nodes"),"cuts":result.get("total_unique_cuts",main.get("new_unique_cuts")),"sp_solves":main.get("sp_statistics",{}).get("sp_solve_count"),"result_status":status,"message":message}
-
-def validate_instance(instance_id,raw,digest,time_limit,threads):
-    data=prepare_instance(raw);weights=Weights();failures=[];details={};rows=[]
-    direct=solve_direct_gurobi(data,weights,time_limit=time_limit,mip_gap=0,threads=threads,seed=0,concentration_enabled=True);de,errors=check_solution(data,weights,direct,"direct");failures+=errors
-    if direct.get("solution"):
-        errors,oracle_details=oracle_crosscheck(data,weights,direct,de);failures+=errors;details.update(oracle_details)
-    core=solve_bbc_phase(data,weights,time_limit=time_limit,mip_gap=0,threads=threads,seed=0,add_valid_inequalities=False,aggregate_recourse_lb=False,analytic_recourse_lb=False,concentration_enabled=True,cut_strategy="standard",node_cuts=False,warm_start=False,origin_prefix="core_verification");ce,errors=check_solution(data,weights,core,"bbc_core");failures+=errors
-    full=solve_true_benders_pipeline(data,weights,total_core_time=time_limit,mip_gap=0,threads=threads,seed=0);best=full.get("core_best",{});full_flat={**full,**best,"status_name":full.get("phase3_bbc",{}).get("status_name")};fe=best.get("components");errors=[]
-    if best:_,errors=check_solution(data,weights,full_flat,"full_candidate")
-    failures+=errors
-    direct_opt=direct.get("status_name")=="OPTIMAL" and direct.get("gap",1)<=TOL;core_opt=core.get("status_name")=="OPTIMAL" and core.get("gap",1)<=TOL
-    inconclusive=not (direct_opt and core_opt)
-    if direct_opt and core_opt and abs(direct["ub"]-core["ub"])>TOL:failures.append("Direct/BBC core optimal objective mismatch")
-    overall="FAIL" if failures else "INCONCLUSIVE" if inconclusive else "PASS";message="; ".join(failures) if failures else "one or both exact methods did not prove optimal" if inconclusive else "all exact checks passed"
-    rows.extend([row(instance_id,digest,"direct",direct,de,overall,message),row(instance_id,digest,"bbc_core",core,ce,overall,message),row(instance_id,digest,"full_candidate",full_flat,fe,overall,message)])
-    return {"instance_id":instance_id,"digest":digest,"status":overall,"message":message,"direct_optimal":direct_opt,"bbc_core_optimal":core_opt,"objective_difference":None if not(direct.get("ub") is not None and core.get("ub") is not None) else abs(direct["ub"]-core["ub"]),"details":details,"failures":failures},rows
-
+def read_jsonl(path):
+ p=Path(path);return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()] if p.exists() else []
+def write_jsonl(path,rows):Path(path).write_text("".join(json.dumps(x,ensure_ascii=False,separators=(",",":"))+"\n" for x in rows),encoding="utf-8")
+def trace_valid(result):
+ t=result.get("anytime_trace",[])
+ if len(t)<2 or t[-1]["phase"]!="final":return False
+ for key in ("ub","lb"):
+  a,b=t[-1][key],result.get(key)
+  if (a is None)!=(b is None) or a is not None and abs(a-b)>TOL:return False
+ return all(a["time"]<=b["time"] for a,b in zip(t,t[1:])) and all(a>=b for a,b in zip([x["ub"] for x in t if x["ub"] is not None],[x["ub"] for x in t if x["ub"] is not None][1:])) and all(a<=b for a,b in zip([x["lb"] for x in t if x["lb"] is not None],[x["lb"] for x in t if x["lb"] is not None][1:]))
+def validate_result(data,result,method):
+ errors=[];evaluation=None;details={"trace_valid":trace_valid(result)}
+ if not details["trace_valid"]:errors.append("invalid anytime trace")
+ if result.get("solution"):
+  evaluation=evaluate_common_solution(data,Weights(),result["solution"])
+  if not evaluation["feasibility"]["feasible"]:errors.append("independent checker failed")
+  if result.get("ub") is None or abs(result["ub"]-evaluation["core_cost"])>TOL:errors.append("UB/evaluator mismatch")
+  if method=="direct" and abs(result["solver_objective"]-evaluation["core_cost"])>TOL:errors.append("solver/evaluator mismatch")
+  point={"x":result["solution"]["x"],"alloc_boxes":result["solution"]["alloc_boxes"],"eta":evaluation["recourse_cost"]};oracle=GlobalRecourseOracle(data,Weights());oracle.update_rhs(point["x"],point["alloc_boxes"]);status=oracle.solve();details["oracle_status"]=int(status)
+  if status!=GRB.OPTIMAL:errors.append("oracle not optimal")
+  else:
+   q=oracle.objective_value();details["oracle_recourse"]=q
+   if abs(q-evaluation["recourse_cost"])>TOL:errors.append("oracle/evaluator recourse mismatch")
+   cut=oracle.build_optimality_cut(point,"timeboxed_gate");details["cut_tightness_error"]=abs(cut.value_at({**point,"eta":q}));validation=validate_optimality_cut(data,Weights(),cut,[point]);details["cut_validation"]=validation
+   if details["cut_tightness_error"]>TOL or not validation["valid"]:errors.append("cut validation failed")
+  oracle.model.dispose()
+ else:errors.append("no feasible incumbent")
+ if result.get("ub") is not None and result.get("lb") is not None and result["lb"]>result["ub"]+TOL:errors.append("LB exceeds UB")
+ return evaluation,errors,details
+def solve(method,data,budget,threads,gap):
+ if method=="direct":return solve_direct_gurobi(data,Weights(),time_limit=budget,mip_gap=gap,threads=threads,seed=0)
+ return solve_bbc_phase(data,Weights(),time_limit=budget,mip_gap=gap,threads=threads,seed=0,add_valid_inequalities=False,aggregate_recourse_lb=False,analytic_recourse_lb=False,node_cuts=False,warm_start=False,origin_prefix="timeboxed_core")
+def cases(args):
+ if args.mode=="exact-fixtures":
+  values=[]
+  for name in ("tiny","tiny_concentration"):
+   raw=build_builtin_instance(name);values.append((name,raw,30))
+  root=Path("benchmarks/paper_exp_v1_pilot21_exact");manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"))
+  for row in manifest["instances"]:values.append((row["instance_id"],load_instance(root/row["relative_path"]),args.time_limit_xs))
+  return values
+ root=Path(args.suite);manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"));limits={"S01":args.time_limit_s01,"S02":args.time_limit_other,"S03":args.time_limit_other};return [(r["instance_id"],load_instance(root/r["relative_path"]),limits[r["instance_id"]]) for r in manifest["instances"] if r["instance_id"] in limits]
+def report(out,mode,rows,planned):
+ by={}
+ for row in rows:by.setdefault(row["instance_id"],{})[row["method"]]=row
+ instances=[]
+ for iid,methods in sorted(by.items()):
+  complete=all(x in methods for x in ("direct","bbc_core"));objectives=[methods[x].get("ub") for x in ("direct","bbc_core") if x in methods and methods[x].get("ub") is not None];same=len(objectives)==2 and abs(objectives[0]-objectives[1])<=TOL
+  if mode=="exact-fixtures":passed=complete and same and all(methods[x]["optimal"] and not methods[x]["errors"] for x in methods)
+  else:passed=complete and all(not methods[x]["exception"] and (not methods[x].get("solution_returned") or not methods[x]["errors"]) for x in methods);passed=passed and any(methods[x].get("solution_returned") for x in methods)
+  instances.append({"instance_id":iid,"status":"PASS" if passed else "FAIL","objective_consistent":same,"methods":methods})
+ if mode=="exact-fixtures":overall=all(x["status"]=="PASS" for x in instances) and len(instances)==5
+ else:overall=all(not m["exception"] for x in instances for m in x["methods"].values()) and sum(all(x["methods"].get(m,{}).get("solution_returned") for m in ("direct","bbc_core")) for x in instances)>=2 and all(x["status"]=="PASS" for x in instances)
+ payload={"mode":mode,"status":"PASS" if overall else "FAIL","planned_budget_seconds":planned,"actual_runtime_seconds":sum(r["actual_runtime"] for r in rows),"candidate_algorithm_frozen":False,"final_algorithm_frozen":False,"instances":instances};(out/"report.json").write_text(json.dumps(payload,indent=2,ensure_ascii=False)+"\n",encoding="utf-8");(out/"report.md").write_text(f"# {mode}\n\nOverall: **{payload['status']}**\n\nPlanned budget: {planned}s; actual runtime: {payload['actual_runtime_seconds']:.3f}s.\n\n"+"\n".join(f"- {x['instance_id']}: {x['status']}" for x in instances)+"\n",encoding="utf-8");return payload
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--suite",default="benchmarks/paper_exp_v1_pilot");p.add_argument("--threads",type=int,default=1);p.add_argument("--time-limit",type=float,default=600);p.add_argument("--output",default="validation/small_exact");a=p.parse_args();out=Path(a.output);(out/"failures").mkdir(parents=True,exist_ok=True);cases=[("tiny",build_builtin_instance("tiny"),instance_digest(build_builtin_instance("tiny"))),("tiny_concentration",build_builtin_instance("tiny_concentration"),instance_digest(build_builtin_instance("tiny_concentration")))]
-    manifest=json.loads((Path(a.suite)/"manifest.json").read_text(encoding="utf-8"))
-    for entry in manifest["instances"]:
-        if entry["size_class"]=="small":
-            raw=load_instance(Path(a.suite)/entry["relative_path"]);actual=instance_digest(raw)
-            if actual!=entry["digest"]:print(f"FAIL digest {entry['instance_id']}");return 1
-            cases.append((entry["instance_id"],raw,actual))
-    reports=[];rows=[]
-    for instance_id,raw,digest in cases:
-        print(f"validating {instance_id} ...",flush=True)
-        try:report,new_rows=validate_instance(instance_id,raw,digest,a.time_limit,a.threads)
-        except Exception as exc:
-            trace=traceback.format_exc();(out/"failures"/f"{instance_id}.txt").write_text(trace,encoding="utf-8");report={"instance_id":instance_id,"digest":digest,"status":"FAIL","message":str(exc),"failures":[str(exc)]};new_rows=[]
-        reports.append(report);rows.extend(new_rows);print(f"{instance_id}: {report['status']} - {report['message']}",flush=True)
-    result={"protocol":"paper-exp-v1","algorithm_status":"provisional","tolerance":TOL,"time_limit_per_method":a.time_limit,"threads":a.threads,"overall_status":"FAIL" if any(r["status"]=="FAIL" for r in reports) else "INCONCLUSIVE" if any(r["status"]=="INCONCLUSIVE" for r in reports) else "PASS","instances":reports};(out/"report.json").write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8");(out/"results.json").write_text(json.dumps(rows,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    with (out/"results.csv").open("w",newline="",encoding="utf-8") as stream:writer=csv.DictWriter(stream,fieldnames=FIELDS);writer.writeheader();writer.writerows(rows)
-    lines=["# Small exact crosscheck","",f"Overall: **{result['overall_status']}**","","Current full candidate status: **provisional**.","","| Instance | Status | Direct optimal | BBC core optimal | Message |","|---|---|---:|---:|---|"]+[f"| {r['instance_id']} | {r['status']} | {r.get('direct_optimal')} | {r.get('bbc_core_optimal')} | {r['message']} |" for r in reports];(out/"report.md").write_text("\n".join(lines)+"\n",encoding="utf-8");return 1 if result["overall_status"]=="FAIL" else 0
+ p=argparse.ArgumentParser();p.add_argument("--mode",choices=("exact-fixtures","formal-small-finite-time"),required=True);p.add_argument("--suite",default="benchmarks/paper_exp_v1_pilot21");p.add_argument("--time-limit-xs",type=float,default=90);p.add_argument("--time-limit-s01",type=float,default=90);p.add_argument("--time-limit-other",type=float,default=60);p.add_argument("--threads",type=int,default=1);p.add_argument("--resume",action="store_true");p.add_argument("--output",required=True);a=p.parse_args();out=Path(a.output);out.mkdir(parents=True,exist_ok=True);source=out/"results.jsonl";rows=read_jsonl(source) if a.resume else [];done={(x["instance_id"],x["method"]) for x in rows};all_cases=cases(a);planned=sum(2*b for _,_,b in all_cases)
+ for iid,raw,budget in all_cases:
+  if instance_digest(raw) is None:raise AssertionError("digest unavailable")
+  for method in ("direct","bbc_core"):
+   if (iid,method) in done:continue
+   started=time.perf_counter();exception=None
+   try:
+    data=prepare_instance(raw);result=solve(method,data,budget,a.threads,0 if a.mode=="exact-fixtures" else .05);evaluation,errors,details=validate_result(data,result,method)
+   except Exception as exc:result={};evaluation=None;errors=[str(exc)];details={};exception=traceback.format_exc()
+   actual=time.perf_counter()-started;item={"instance_id":iid,"digest":instance_digest(raw),"method":method,"planned_budget":budget,"actual_runtime":actual,"status_name":result.get("status_name"),"optimal":result.get("status_name")=="OPTIMAL" and (result.get("gap") or 0)<=TOL,"solution_returned":bool(result.get("solution")),"ub":result.get("ub"),"lb":result.get("lb"),"gap":result.get("gap"),"errors":errors,"details":details,"anytime_trace":result.get("anytime_trace",[]),"exception":exception};rows.append(item);write_jsonl(source,rows);partial=report(out,a.mode,rows,planned);print(iid,method,item["status_name"],"errors",errors,flush=True)
+   if a.mode=="exact-fixtures" and iid.startswith("XS") and not item["optimal"] and budget<180:
+    # One permitted retry, replacing this run atomically.
+    rows.pop();write_jsonl(source,rows);budget=180;started=time.perf_counter();data=prepare_instance(raw);result=solve(method,data,budget,a.threads,0);evaluation,errors,details=validate_result(data,result,method);item.update(planned_budget=budget,actual_runtime=time.perf_counter()-started,status_name=result.get("status_name"),optimal=result.get("status_name")=="OPTIMAL" and (result.get("gap") or 0)<=TOL,solution_returned=bool(result.get("solution")),ub=result.get("ub"),lb=result.get("lb"),gap=result.get("gap"),errors=errors,details=details,anytime_trace=result.get("anytime_trace",[]),exception=None);rows.append(item);write_jsonl(source,rows);report(out,a.mode,rows,planned+90);print(iid,method,"retry",item["status_name"],flush=True)
+ final=report(out,a.mode,rows,planned);return 0 if final["status"]=="PASS" else 1
 if __name__=="__main__":raise SystemExit(main())

@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "instance_id": "L01",
+  "time_limit_seconds": 120,
+  "rerun_methods": 8,
+  "rerun_feasible": 7,
+  "combined_feasible": 8,
+  "combined_methods": 9,
+  "exceptions": 0,
+  "planned_budget_seconds": 960,
+  "actual_runtime_seconds": 985.870094399783,
+  "all_traces_valid": true,
+  "pi_gi_present": true,
+  "checker_passed_for_all_returned_incumbents": true,
+  "p2_entry_allowed": true,
+  "candidate_algorithm_frozen": false,
+  "final_algorithm_frozen": false
+}

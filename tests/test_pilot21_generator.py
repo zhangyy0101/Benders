@@ -6,7 +6,7 @@ from synthetic_instance_generator import generate_synthetic_instance
 def generated():return {iid:(size,generate_synthetic_instance(spec,SEEDS[iid])) for iid,(size,spec) in pilot_specs().items()}
 
 def test_pilot21_is_generated_in_memory_not_a_new_fixed_suite(generated):
- assert PILOT_VERSION=="paper-exp-v1-pilot2"
+ assert PILOT_VERSION=="paper-exp-v1-pilot2.1"
 
 def test_five_level_conservation_and_metadata(generated):
  for _iid,(_size,d) in generated.items():

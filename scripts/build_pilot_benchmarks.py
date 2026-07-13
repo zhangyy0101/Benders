@@ -8,7 +8,7 @@ from pilot_benchmark_suite import PILOT_VERSION,SEEDS,audit_suite,instance_summa
 from synthetic_instance_generator import GENERATOR_VERSION,generate_synthetic_instance
 
 def main():
- p=argparse.ArgumentParser();p.add_argument("--pilot-version",default=PILOT_VERSION);p.add_argument("--output",default="benchmarks/paper_exp_v1_pilot2");p.add_argument("--overwrite",action="store_true");a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("--pilot-version",default=PILOT_VERSION);p.add_argument("--output",default="benchmarks/paper_exp_v1_pilot21");p.add_argument("--overwrite",action="store_true");a=p.parse_args()
  if a.pilot_version!=PILOT_VERSION:raise ValueError(f"this builder creates {PILOT_VERSION}, not {a.pilot_version}")
  root=Path(a.output);root.mkdir(parents=True,exist_ok=True);rows=[]
  for iid,(size,spec) in pilot_specs().items():
@@ -29,7 +29,7 @@ Groups encode size, POD, height, and weight class. `ActiveGroupsByShip` is the s
 
 `arrival_overlap_ratio` is the fraction of globally active periods with more than one active new ship. Pairwise overlap is intersection-over-union of two ship windows. Pressure ratios count zero/positive block-period cells; `pressure_cv` is population standard deviation divided by mean and `pressure_p95` is the nearest-rank percentile.
 
-Seeds remain S01-S03=1101-1103, M01-M03=2101-2103, and L01-L03=3101-3103. Pilot1 remains unchanged. Both candidate and final algorithms remain provisional.
+Seeds remain S01-S03=1101-1103, M01-M03=2101-2103, and L01-L03=3101-3103. Pilot1 and Pilot2 remain unchanged. Both candidate and final algorithms remain provisional.
 """,encoding="utf-8")
  audit=audit_suite(root);print(f"audit: {audit['status']}");return 0 if audit["status"]=="PASS" else 1
 if __name__=="__main__":raise SystemExit(main())
