@@ -1,0 +1,25 @@
+{
+  "candidate_algorithm_frozen": true,
+  "candidate_configuration": "algorithm-candidate-v1",
+  "candidate_configuration_hash": "fc505c53a75c375b8f7c4532830c577221827c1c820a10cc688686234cac8bce",
+  "retained_components": [
+    "exact_bbc_core",
+    "global_recourse_oracle",
+    "feasibility_cuts",
+    "optimality_cuts",
+    "aggregate_recourse_lb"
+  ],
+  "removed_components": [
+    "analytic_recourse_lb",
+    "root_prepass",
+    "warm_start",
+    "alns",
+    "valid_inequalities"
+  ],
+  "final_algorithm_frozen": false,
+  "approved_for_public_data_pilot": true,
+  "public_data_revision_policy": {
+    "algorithm_changes_allowed": true,
+    "next_version_if_changed": "algorithm-candidate-v2"
+  }
+}

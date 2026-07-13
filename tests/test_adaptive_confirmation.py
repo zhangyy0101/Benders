@@ -14,9 +14,8 @@ def test_p2_selection_has_required_size():
     assert 4 <= len(configs) <= 6
 
 
-def test_proposed_candidate_respects_structure_limit():
+def test_frozen_candidate_respects_structure_limit():
     config = get_algorithm_configuration("algorithm-candidate-v1")
-    assert config["status"] == "proposed"
+    assert config["status"] == "frozen_candidate"
     assert config["aggregate_recourse_lb"]
-    assert config["valid_inequalities"]
-    assert not any(config[key] for key in ("analytic_recourse_lb", "root_prepass", "warm_start", "alns"))
+    assert not any(config[key] for key in ("analytic_recourse_lb", "root_prepass", "warm_start", "alns", "valid_inequalities"))

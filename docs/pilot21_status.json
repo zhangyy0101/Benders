@@ -1,5 +1,5 @@
 {
-  "stage": "p3-adaptive-confirmation-complete",
+  "stage": "p4-candidate-v1-frozen",
   "fixed_benchmark_generated": true,
   "exact_validation_gate_passed": true,
   "small_finite_time_gate_passed": true,
@@ -33,6 +33,14 @@
     "approved_for_candidate_freeze_review": true,
     "candidate_algorithm_frozen": false,
     "final_algorithm_frozen": false
+  },
+  "p4_candidate_freeze_review": {
+    "candidate_configuration": "algorithm-candidate-v1",
+    "candidate_configuration_hash": "fc505c53a75c375b8f7c4532830c577221827c1c820a10cc688686234cac8bce",
+    "candidate_algorithm_frozen": true,
+    "approved_for_public_data_pilot": true,
+    "final_algorithm_frozen": false,
+    "new_solver_runs": 0
   },
   "candidate_algorithm_frozen": false,
   "final_algorithm_frozen": false
