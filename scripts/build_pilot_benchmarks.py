@@ -29,7 +29,7 @@ Groups encode size, POD, height, and weight class. `ActiveGroupsByShip` is the s
 
 `arrival_overlap_ratio` is the fraction of globally active periods with more than one active new ship. Pairwise overlap is intersection-over-union of two ship windows. Pressure ratios count zero/positive block-period cells; `pressure_cv` is population standard deviation divided by mean and `pressure_p95` is the nearest-rank percentile.
 
-Seeds remain S01-S03=1101-1103, M01-M03=2101-2103, and L01-L03=3101-3103. Pilot1 remains unchanged. The algorithm remains provisional (`final_algorithm_frozen=false`).
+Seeds remain S01-S03=1101-1103, M01-M03=2101-2103, and L01-L03=3101-3103. Pilot1 remains unchanged. Both candidate and final algorithms remain provisional.
 """,encoding="utf-8")
  audit=audit_suite(root);print(f"audit: {audit['status']}");return 0 if audit["status"]=="PASS" else 1
 if __name__=="__main__":raise SystemExit(main())

@@ -9,6 +9,7 @@ from config import Weights
 from data import prepare_instance
 from experiment_methods import run_method
 from experiment_schema import SCHEMA_VERSION,stable_run_id,validate_result
+from anytime import trace_metrics
 
 def _git(args):
     try:return subprocess.check_output(["git",*args],text=True,stderr=subprocess.DEVNULL).strip()
@@ -56,7 +57,8 @@ def execute_run(*,instance_id,instance_path,expected_digest,method,configuration
         wall=time.perf_counter()-started;status={"ok":False,"status":"EXCEPTION","termination_reason":"exception","exception_type":type(exc).__name__,"exception_message":str(exc),"feasible_incumbent_found":False,"solution_source":None};timing={"wall_clock":wall,**{key:None for key in ("solver_reported","model_build","solve","root","warm","alns","main","callback","sp_total")}};optimization={key:None for key in ("ub","lb","gap","nodes","cuts","sp_solves","cache_hits","cache_misses","cache_hit_rate","time_to_first_feasible","time_to_best","solution_source")};traceback_text=traceback.format_exc()
     evaluation_safe=_json_safe(evaluation) if evaluation else None;result={"schema_version":SCHEMA_VERSION,"run_id":run_id,"identity":{"instance_id":instance_id,**identity,"configuration_name":configuration["configuration_name"],"configuration_version":configuration["configuration_version"],"configuration_status":configuration["status"]},"configuration":configuration,"status":status,"timing":timing,"optimization":optimization,"method_diagnostics":_json_safe(_method_diagnostics(solver)) if status["status"]!="EXCEPTION" else None,"evaluation":evaluation_safe,"environment":environment_metadata(command)}
     if status["status"]=="EXCEPTION":result["exception_traceback"]=traceback_text
-    else:result["anytime_trace"]=_json_safe(solver.get("anytime_trace",[]))
+    else:
+        result["anytime_trace"]=_json_safe(solver.get("anytime_trace",[]));result["optimization"].update(trace_metrics(result["anytime_trace"],budget,None))
     if solution and save_solutions:
         digest_solution=solution_digest(solution);relative=f"solutions/{run_id}.json";payload={"run_id":run_id,"solution_digest":digest_solution,"feasibility_pass":evaluation["feasibility"]["feasible"],"evaluation":evaluation_safe,"solution":_solution_payload(solution)};_atomic_write(Path(output)/relative,json.dumps(payload,indent=2,ensure_ascii=False)+"\n");result["solution_file"]={"relative_path":relative,"solution_digest":digest_solution,"feasibility_pass":True}
     validate_result(result);return result
@@ -65,6 +67,15 @@ def export_results(output,rows):
     for row in rows:flat.append({"run_id":row["run_id"],"instance_id":row["identity"]["instance_id"],"method":row["identity"]["method_family"],"configuration":row["identity"]["configuration_name"],"seed":row["identity"]["seed"],"ok":row["status"]["ok"],"status":row["status"]["status"],"wall_clock":row["timing"]["wall_clock"],"ub":row["optimization"]["ub"],"lb":row["optimization"]["lb"],"gap":row["optimization"]["gap"],"evaluation_json":json.dumps(row["evaluation"],separators=(",",":")) if row["evaluation"] else None})
     if flat:
         import io;stream=io.StringIO();writer=csv.DictWriter(stream,fieldnames=list(flat[0]));writer.writeheader();writer.writerows(flat);_atomic_write(root/"results.csv",stream.getvalue())
+def enrich_anytime_metrics(rows):
+    bks={}
+    for row in rows:
+        ub=row.get("optimization",{}).get("ub");iid=row.get("identity",{}).get("instance_id")
+        if iid is not None and ub is not None:bks[iid]=min(float(ub),bks.get(iid,float("inf")))
+    for row in rows:
+        trace=row.get("anytime_trace",[]);identity=row.get("identity",{});iid=identity.get("instance_id")
+        if trace:row["optimization"].update(trace_metrics(trace,identity.get("budget",row.get("timing",{}).get("wall_clock",0)),bks.get(iid)))
+    return rows
 def run_jobs(jobs,output,*,resume=False,rerun_failed=False,save_solutions=False,method_runner=run_method,command=None,source_filename="results.jsonl",export_derived=True):
     root=Path(output);source=root/source_filename;existing=read_jsonl(source);by_id={row["run_id"]:row for row in existing}
     for job in jobs:
@@ -74,5 +85,7 @@ def run_jobs(jobs,output,*,resume=False,rerun_failed=False,save_solutions=False,
         if old:existing=[row for row in existing if row["run_id"]!=rid];_atomic_write(source,"".join(json.dumps(row,separators=(",",":"),ensure_ascii=False)+"\n" for row in existing))
         atomic_append_jsonl(source,result);existing.append(result);by_id[rid]=result
         if export_derived:export_results(output,existing)
+    enrich_anytime_metrics(existing)
+    if existing:_atomic_write(source,"".join(json.dumps(row,separators=(",",":"),ensure_ascii=False)+"\n" for row in existing))
     if export_derived:export_results(output,existing)
     return existing

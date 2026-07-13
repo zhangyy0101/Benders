@@ -96,3 +96,5 @@ record schema 不匹配、重复 record 和 digest 错误都会失败。
 `ActiveGroupsByShip[ship]` is the authoritative sparse index. `ActivePODsByShip` and `ShipGroupGenerationMetadata` describe generation coverage; global `G` is the union. If `ActiveGroupsByShip` is absent, readers must use legacy dense `J_new × G` behavior. Missing inactive solution keys and inactive arrivals mean zero.
 
 A single-combination POD has at least one active size with exactly one `(height, weight_class)` combination. `arrival_overlap_ratio` is the share of globally active periods containing at least two active new ships. Pairwise window overlap is intersection-over-union. Pressure zero/positive ratios use all block-period cells; CV uses the population standard deviation, and p95 is nearest-rank.
+
+Pilot2.1 development generation is hierarchical: ship total → `PODVolumeByShip` → `PODSizeVolumeByShip` → `GroupVolumeByShip` → period arrivals. `ActualSizeShareByShip` is calculated from final integer group volumes; it is never an unused input share. Every level is conserved and every active group has at least two boxes. This development generator does not create a fixed Pilot2.1 benchmark.

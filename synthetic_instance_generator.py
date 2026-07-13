@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from data import simulate_old_inventory, validate_instance_units
 from model_concentration import has_joint_attribute_groups
 
-GENERATOR_VERSION = "synthetic-yard-v2"
+GENERATOR_VERSION = "synthetic-yard-v2.1-development"
 
 
 @dataclass(frozen=True)
@@ -99,12 +99,12 @@ def _groups(profile):
 
 def _period_profile(rng, spec, ship_index):
     if spec.group_profile.startswith("pilot2_"):
-        patterns={
-            "pilot2_small":[(0,5),(3,5)],
-            "pilot2_medium":[(0,7),(2,7),(4,7)],
-            "pilot2_large":[(0,10),(0,11),(1,10),(1,11),(2,10)],
+        variant=max(1,min(3,int(spec.name[-1]) if spec.name[-1].isdigit() else 1));patterns={
+            "pilot2_small":{1:[(0,5),(3,5)],2:[(0,6),(3,6)],3:[(0,6),(2,6)]},
+            "pilot2_medium":{1:[(0,7),(2,7),(4,7)],2:[(0,6),(3,6),(6,6)],3:[(0,8),(2,8),(3,8)]},
+            "pilot2_large":{1:[(1,9),(1,9),(0,6),(4,8),(6,6)],2:[(0,12),(0,12),(1,10),(2,9),(3,8)],3:[(0,10),(0,10),(1,10),(2,10),(3,9)]},
         }
-        start,duration=patterns[spec.group_profile][ship_index]
+        start,duration=patterns[spec.group_profile][variant][ship_index]
         peak=start+duration//2;weights=[0.0]*spec.num_periods
         for n in range(start,min(spec.num_periods,start+duration)):weights[n]=float(1+min(n-start,start+duration-1-n))
         total=sum(weights)
@@ -137,33 +137,41 @@ def _split_integer(total,count,rng,minimum=1):
     return result
 
 def _pilot2_ship_groups(rng,spec,ship):
-    pod_count=rng.randint(*spec.pod_count_range);pods=[f"POD_{i:02d}" for i in rng.sample(range(1,9),pod_count)]
-    target=rng.randint(*spec.positive_group_count_range);single_target=max(1,round(pod_count*rng.uniform(*spec.single_combination_pod_ratio_range)))
-    attrs={};by_pod={pod:[] for pod in pods}
+    pod_count=rng.randint(*spec.pod_count_range);pods=[f"POD_{i:02d}" for i in sorted(rng.sample(range(1,9),pod_count))]
+    target=rng.randint(*spec.positive_group_count_range);lo,hi=spec.single_combination_pod_ratio_range;valid=[n for n in range(1,pod_count+1) if lo<=n/pod_count<=hi]
+    if not valid:raise ValueError(f"no integer singleton POD count for pod_count={pod_count}, range={spec.single_combination_pod_ratio_range}")
+    singleton=set(rng.sample(pods,rng.choice(valid)));attrs={};by_pod={pod:[] for pod in pods};combos=[("STD","LIGHT"),("STD","HEAVY"),("HIGH","LIGHT"),("HIGH","HEAVY")]
+    def add(pod,size,chosen):
+        for height,weight in chosen:
+            g=f"Group_{size}_{pod}_{height}_{weight}";attrs[g]={"size":size,"pod":pod,"height":height,"weight_class":weight};by_pod[pod].append(g)
     for pos,pod in enumerate(pods):
-        sizes=[20,40] if (spec.group_profile!="pilot2_small" or rng.random()<.35) else [rng.choice((20,40))]
-        if pos==0:sizes=[20,40]
-        for size in sizes:
-            combos=[("STD","LIGHT"),("STD","HEAVY"),("HIGH","LIGHT"),("HIGH","HEAVY")]
-            rng.shuffle(combos);max_combo={"pilot2_small":2,"pilot2_medium":3,"pilot2_large":4}[spec.group_profile]
-            count=1 if pos<single_target else rng.randint(1,max_combo)
-            for height,weight in combos[:count]:
-                g=f"Group_{size}_{pod}_{height}_{weight}";attrs[g]={"size":size,"pod":pod,"height":height,"weight_class":weight};by_pod[pod].append(g)
-    candidates=[]
-    for pod in pods:
-      for size in (20,40):
-       for h in ("STD","HIGH"):
-        for w in ("LIGHT","HEAVY"):
-         g=f"Group_{size}_{pod}_{h}_{w}"
-         if g not in attrs:candidates.append((g,{"size":size,"pod":pod,"height":h,"weight_class":w}))
-    while len(attrs)<target and candidates:
-        idx=rng.randrange(len(candidates));g,a=candidates.pop(idx);attrs[g]=a;by_pod[a["pod"]].append(g)
-    while len(attrs)>target:
-        removable=[g for g,a in attrs.items() if len(by_pod[a["pod"]])>1]
-        if not removable:break
-        g=rng.choice(removable);by_pod[attrs[g]["pod"]].remove(g);del attrs[g]
+        size=20 if pos%2==0 else 40;chosen=rng.sample(combos,1 if pod in singleton else 2);add(pod,size,chosen)
+    # Grow without ever creating an accidental singleton size on non-singleton PODs.
+    while len(attrs)<target:
+        options=[]
+        for pod in pods:
+            for size in (20,40):
+                present=[g for g in by_pod[pod] if attrs[g]["size"]==size];missing=[c for c in combos if f"Group_{size}_{pod}_{c[0]}_{c[1]}" not in attrs]
+                if present and missing and pod not in singleton:options.append((pod,size,[rng.choice(missing)]))
+                elif not present and len(attrs)+2<=target:options.append((pod,size,rng.sample(combos,2)))
+        if not options:break
+        add(*rng.choice(options))
+    if len(attrs)!=target:raise ValueError(f"could not construct {target} active groups; created {len(attrs)}")
     heights={a["height"] for a in attrs.values()};weights={a["weight_class"] for a in attrs.values()};sizes={a["size"] for a in attrs.values()}
-    return attrs,pods,{"pod_count":pod_count,"positive_group_count":len(attrs),"single_combination_pod_count":sum(any(sum(a["size"]==s for a in (attrs[g] for g in by_pod[p]))==1 for s in (20,40)) for p in pods),"height_coverage":sorted(heights),"weight_coverage":sorted(weights),"size_coverage":sorted(sizes)}
+    actual_single=sum(any(sum(attrs[g]["size"]==s for g in by_pod[p])==1 for s in (20,40)) for p in pods)
+    if not lo<=actual_single/pod_count<=hi:raise ValueError(f"single-combination ratio {actual_single/pod_count} outside {lo,hi}")
+    return attrs,pods,{"pod_count":pod_count,"positive_group_count":len(attrs),"single_combination_pod_count":actual_single,"height_coverage":sorted(heights),"weight_coverage":sorted(weights),"size_coverage":sorted(sizes)}
+
+def _allocate_hierarchy(rng,total,attrs,pods,minimum_group):
+    by_pod={p:[g for g,a in attrs.items() if a["pod"]==p] for p in pods};pod_min=[minimum_group*len(by_pod[p]) for p in pods];pod_extra=_split_integer(total-sum(pod_min),len(pods),rng,0);pod_vol={p:pod_min[i]+pod_extra[i] for i,p in enumerate(pods)}
+    # Force a nonuniform allocation whenever mathematically possible.
+    if len(set(pod_vol.values()))==1 and total>sum(pod_min):pod_vol[pods[0]]+=1;pod_vol[pods[-1]]-=1
+    pod_size={};group_vol={}
+    for pod in pods:
+        sizes=sorted({attrs[g]["size"] for g in by_pod[pod]});counts={s:sum(attrs[g]["size"]==s for g in by_pod[pod]) for s in sizes};mins=[minimum_group*counts[s] for s in sizes];extra=_split_integer(pod_vol[pod]-sum(mins),len(sizes),rng,0);pod_size[pod]={str(s):mins[i]+extra[i] for i,s in enumerate(sizes)}
+        for s in sizes:
+            gs=sorted(g for g in by_pod[pod] if attrs[g]["size"]==s);vols=_split_integer(pod_size[pod][str(s)],len(gs),rng,minimum_group);group_vol.update(zip(gs,vols))
+    return pod_vol,pod_size,group_vol
 
 
 def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
@@ -238,7 +246,7 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
                     ratio = max(ratio, sum(spec.outbound_pressure_ratio_range) / 2)
                 total = available * ratio
                 if pilot2:
-                    length={"pilot2_small":4,"pilot2_medium":8,"pilot2_large":9}[spec.group_profile];start=(2*block_index+ship_index)%max(1,len(N)-length+1)
+                    variant=max(1,min(3,int(spec.name[-1]) if spec.name[-1].isdigit() else 1));base={"pilot2_small":2,"pilot2_medium":6,"pilot2_large":7}[spec.group_profile];length=base+variant;start=(2*block_index+ship_index)%max(1,len(N)-length+1)
                     weights=[0.0 if n<start or n>=start+length else 1.0+3.0*(n==start+length//2) for n in N]
                 else:weights = [1.0 + ((n + 2 * block_index + ship_index) % 4) for n in N]
                 for n, weight in enumerate(weights):
@@ -249,22 +257,26 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
     Arrivals_interval = {}
     Arrivals_group_interval = {}
     ships_config = {}
-    active_by_ship={};pods_by_ship={};ship_group_meta={}
+    active_by_ship={};pods_by_ship={};ship_group_meta={};pod_volume_by_ship={};pod_size_volume_by_ship={};group_volume_by_ship={};actual_size_share_by_ship={}
     for ship_index, j in enumerate(J_new):
         total = round(rng.uniform(*spec.arrival_boxes_per_ship_range)) if pilot2 else rng.uniform(*spec.arrival_boxes_per_ship_range)
-        share20 = min(.95, max(.05, spec.mode_20ft_share + rng.uniform(-.08, .08)))
         profile, window = _period_profile(rng, spec, ship_index)
-        ships_config[j] = {"total_boxes": total, "share_20ft": share20, **window}
         if pilot2:
-            attrs,pods,meta=_pilot2_ship_groups(rng,spec,j);GroupAttrs.update(attrs);active_by_ship[j]=sorted(attrs);pods_by_ship[j]=pods;ship_group_meta[j]=meta
-            volumes=_split_integer(total,len(attrs),rng,spec.minimum_active_group_boxes)
-            group_volume=dict(zip(sorted(attrs),volumes))
+            last_error=None
+            for attempt in range(1,51):
+                try:attrs,pods,meta=_pilot2_ship_groups(rng,spec,j);break
+                except ValueError as exc:last_error=exc
+            else:raise ValueError(f"failed to sample valid group structure for {j} after 50 attempts: {last_error}")
+            meta["generation_attempts"]=attempt;GroupAttrs.update(attrs);active_by_ship[j]=sorted(attrs);pods_by_ship[j]=pods;ship_group_meta[j]=meta
+            pod_volume,pod_size_volume,group_volume=_allocate_hierarchy(rng,total,attrs,pods,spec.minimum_active_group_boxes);pod_volume_by_ship[j]=pod_volume;pod_size_volume_by_ship[j]=pod_size_volume;group_volume_by_ship[j]=group_volume
+            size_totals={s:sum(v for g,v in group_volume.items() if attrs[g]["size"]==s) for s in S};actual_size_share_by_ship[j]={str(s):size_totals[s]/total for s in S};ships_config[j]={"total_boxes":total,"actual_size_share":actual_size_share_by_ship[j],**window}
             for n,period_share in enumerate(profile):
                 by_size={s:0.0 for s in S}
                 for g in active_by_ship[j]:
                     value=group_volume[g]*period_share;Arrivals_group_interval[j,g,n]=value;by_size[attrs[g]["size"]]+=value
                 for size in S:Arrivals_interval[j,size,n]=by_size[size]
             continue
+        share20 = min(.95, max(.05, spec.mode_20ft_share + rng.uniform(-.08, .08)));ships_config[j] = {"total_boxes": total, "share_20ft": share20, **window}
         for size, size_share in ((20, share20), (40, 1 - share20)):
             size_groups = [g for g in G if GroupAttrs[g]["size"] == size]
             raw_group_shares = [rng.uniform(.5, 1.5) for _ in size_groups]
@@ -306,12 +318,24 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
         "New_Outbound_Req": {},
         "benchmark_metadata": {"source_type": "synthetic", "generator_version": GENERATOR_VERSION, "spec_name": spec.name, "seed": seed, "spec": asdict(spec)},
     }
-    if pilot2:data.update({"ActiveGroupsByShip":active_by_ship,"ActivePODsByShip":pods_by_ship,"ShipGroupGenerationMetadata":ship_group_meta})
+    if pilot2:data.update({"ActiveGroupsByShip":active_by_ship,"ActivePODsByShip":pods_by_ship,"ShipGroupGenerationMetadata":ship_group_meta,"PODVolumeByShip":pod_volume_by_ship,"PODSizeVolumeByShip":pod_size_volume_by_ship,"GroupVolumeByShip":group_volume_by_ship,"ActualSizeShareByShip":actual_size_share_by_ship})
     _precheck(data)
     return data
 
 
 def _precheck(data):
+    if data.get("GroupVolumeByShip"):
+        for j in data["J_new"]:
+            total=int(data["ships_config"][j]["total_boxes"]);pods=data["ActivePODsByShip"][j];gv=data["GroupVolumeByShip"][j]
+            if sum(data["PODVolumeByShip"][j].values())!=total:raise ValueError(f"POD volumes do not conserve ship total for {j}")
+            if sum(gv.values())!=total:raise ValueError(f"group volumes do not conserve ship total for {j}")
+            for pod in pods:
+                sizes=data["PODSizeVolumeByShip"][j][pod]
+                if sum(sizes.values())!=data["PODVolumeByShip"][j][pod]:raise ValueError(f"size volumes do not conserve POD {j}/{pod}")
+                for size,value in sizes.items():
+                    if sum(v for g,v in gv.items() if data["GroupPOD"][g]==pod and data["GroupSize"][g]==int(size))!=value:raise ValueError(f"group volumes do not conserve POD-size {j}/{pod}/{size}")
+            for g,value in gv.items():
+                if value<2 or abs(sum(data["Arrivals_group_interval"][j,g,n] for n in data["N"])-value)>1e-6:raise ValueError(f"invalid group volume for {j}/{g}")
     simulation = simulate_old_inventory(data)
     if simulation["max_capacity_violation"] > 1e-6 or max(simulation["unserved_outbound"].values(), default=0) > 1e-6:
         raise ValueError(f"old-operation feasibility failed: {simulation}")

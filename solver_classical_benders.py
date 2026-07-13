@@ -6,6 +6,7 @@ from model_common import first_stage_cost
 from model_master import build_master_model,extract_master_point
 from model_recourse import BendersCutPool,GlobalRecourseOracle
 from solution_evaluation import evaluate_common_solution
+from anytime import canonicalize
 
 def relative_gap(ub,lb):
     if ub is None or lb is None:return None
@@ -57,4 +58,6 @@ def solve_classical_benders(data,weights,*,time_limit,mip_gap=0.0,alloc_domain="
     ub=None if best_ub==float("inf") else best_ub;gap=relative_gap(ub,global_lb)
     if ub is not None and global_lb is not None and global_lb>ub+tolerance:raise AssertionError("Classical Benders LB exceeds UB")
     status_name="OPTIMAL" if termination=="optimal" else "TIME_LIMIT" if termination=="time_limit" else "ITERATION_LIMIT" if termination=="iteration_limit" else "STOPPED"
-    return {"ok":best_solution is not None,"algorithm":"classical_benders","configuration_status":"baseline","status_name":status_name,"termination_reason":termination,"ub":ub,"lb":global_lb,"gap":gap,"runtime":time.perf_counter()-started,"solution":best_solution,"components":best_evaluation,"iterations":iteration,"iteration_trace":trace,"optimality_cuts":optimality_cuts,"feasibility_cuts":feasibility_cuts,"duplicate_cuts":pool.duplicate_skips,"sp_statistics":oracle.statistics(),"cache_hits":cache_hits,"cache_size":len(cache),"first_feasible_time":first_feasible_time,"best_solution_time":best_solution_time,"used_callback":False,"strengthening":{"valid_inequalities":False,"aggregate_recourse_lb":False,"analytic_recourse_lb":False,"root_prepass":False,"warm_start":False,"alns":False,"node_cuts":False,"stabilization":False}}
+    runtime=time.perf_counter()-started;elapsed=0.0;points=[]
+    for item in trace:elapsed+=item["master_runtime"]+item["sp_runtime"];points.append({"time":elapsed,"phase":"main","source":"classical_iteration","ub":item["ub"],"lb":item["lb"]})
+    return {"anytime_trace":canonicalize(points,runtime,ub,global_lb),"ok":best_solution is not None,"algorithm":"classical_benders","configuration_status":"baseline","status_name":status_name,"termination_reason":termination,"ub":ub,"lb":global_lb,"gap":gap,"runtime":runtime,"solution":best_solution,"components":best_evaluation,"iterations":iteration,"iteration_trace":trace,"optimality_cuts":optimality_cuts,"feasibility_cuts":feasibility_cuts,"duplicate_cuts":pool.duplicate_skips,"sp_statistics":oracle.statistics(),"cache_hits":cache_hits,"cache_size":len(cache),"first_feasible_time":first_feasible_time,"best_solution_time":best_solution_time,"used_callback":False,"strengthening":{"valid_inequalities":False,"aggregate_recourse_lb":False,"analytic_recourse_lb":False,"root_prepass":False,"warm_start":False,"alns":False,"node_cuts":False,"stabilization":False}}

@@ -158,3 +158,5 @@ version。已生成 benchmark 不得静默覆盖；schema/generator 变化需迁
 All methods expose `anytime_trace` records with `time`, `phase`, `source`, `ub`, `lb`, and `gap`. Time is measured from pipeline start; best UB cannot increase and valid LB cannot decrease. Gap integration excludes intervals missing either bound. Primal integrals are post-processed after the same-instance best known solution is available.
 
 Paired ablations match exactly on instance, seed, budget, threads, and problem protocol. Seeds are 0, 1, and 2. Missing pairs are reported and are never replaced by unpaired configuration medians.
+
+Direct records MIPSOL incumbents and significant MIP bounds. BBC records completed root LP bounds, warm/ALNS incumbents, exact-recourse MIPSOL upper bounds, and valid main-master bounds. ALNS and Classical Benders expose their meaningful iteration events on the same pipeline-relative time axis. Post-processing derives `time_to_first_feasible`, `time_to_best`, `primal_integral`, and `gap_integral`; the primal reference is the same-instance BKS, while gap integration excludes intervals lacking either valid bound.

@@ -64,7 +64,8 @@ def evaluate_common_solution(
         raise TypeError("solution must be a dictionary")
     missing = [name for name in REQUIRED_SOLUTION_FIELDS if not isinstance(solution.get(name), dict)]
     complete = not missing
-    I, J, G, N, K = data["I_list"], data["J_new"], groups(data), data["N"], data["K"]
+    from model_common import ship_group_pairs,ship_groups
+    I, J, G, N, K = data["I_list"], data["J_new"], groups(data), data["N"], data["K"];pairs=ship_group_pairs(data)
     scales = objective_scales(data)
     factor = scale_factor(weights)
     x = solution.get("x", {})
@@ -72,12 +73,12 @@ def evaluate_common_solution(
     share = solution.get("in_share", {})
     balance_values = solution.get("g_bal", {})
 
-    arrivals_by_ship = {j: sum(arrival(data, j, g, n) for g in G for n in N) for j in J}
+    arrivals_by_ship = {j: sum(arrival(data, j, g, n) for g in ship_groups(data,j) for n in N) for j in J}
     arrivals_by_size = {
-        str(size): sum(arrival(data, j, g, n) for j in J for g in G for n in N if group_size(data, g) == int(size))
+        str(size): sum(arrival(data, j, g, n) for j,g in pairs for n in N if group_size(data, g) == int(size))
         for size in data["S"]
     }
-    period_arrivals = {n: sum(arrival(data, j, g, n) for j in J for g in G) for n in N}
+    period_arrivals = {n: sum(arrival(data, j, g, n) for j,g in pairs) for n in N}
     active_periods = [n for n in N if period_arrivals[n] > tolerance]
     total_arrivals = sum(arrivals_by_ship.values())
 
@@ -89,16 +90,16 @@ def evaluate_common_solution(
     bays_per_group = [len(concentration["used_bays"].get(pair, [])) for pair in concentration["positive_ship_groups"]] if concentration["enabled"] else []
 
     pressure = outbound_pressure(data)
-    distance_raw = sum(float(data["Dist"][j, k]) * float(share.get((j, k, g, n), 0)) for j in J for k in K for g in G for n in N)
+    distance_raw = sum(float(data["Dist"][j, k]) * float(share.get((j, k, g, n), 0)) for j,g in pairs for k in K for n in N)
     balance_raw = sum(float(value) for value in balance_values.values())
     conflict_by_period = {
-        n: sum(float(pressure[k, n]) * float(share.get((j, k, g, n), 0)) for j in J for k in K for g in G)
+        n: sum(float(pressure[k, n]) * float(share.get((j, k, g, n), 0)) for j,g in pairs for k in K)
         for n in N
     }
     conflict_raw = sum(conflict_by_period.values())
     positive_pressure_boxes = sum(
         float(share.get((j, k, g, n), 0))
-        for j in J for k in K for g in G for n in N if pressure[k, n] > tolerance
+        for j,g in pairs for k in K for n in N if pressure[k, n] > tolerance
     )
 
     workloads = {n: [float(solution.get("in_total", {}).get((k, n), 0)) for k in K] for n in N}
@@ -115,11 +116,11 @@ def evaluate_common_solution(
     old = old_occupancy(data)
     capacities = {(i, n): float(data["I"][i]["cap"]) for i in I for n in N}
     reserved_occupancy = {
-        (i, n): old.get((i, n), 0) + sum(float(alloc.get((i, j, g, n), 0)) for j in J for g in G)
+        (i, n): old.get((i, n), 0) + sum(float(alloc.get((i, j, g, n), 0)) for j,g in pairs)
         for i in I for n in N
     }
     physical_occupancy = None if "inv" not in solution else {
-        (i, n): old.get((i, n), 0) + sum(float(solution["inv"].get((j, g, i, n), 0)) for j in J for g in G)
+        (i, n): old.get((i, n), 0) + sum(float(solution["inv"].get((j, g, i, n), 0)) for j,g in pairs)
         for i in I for n in N
     }
 
