@@ -1,5 +1,5 @@
 {
-  "stage": "pilot2.1-gates-passed",
+  "stage": "p2-fast-internal-screen-complete",
   "fixed_benchmark_generated": true,
   "exact_validation_gate_passed": true,
   "small_finite_time_gate_passed": true,
@@ -12,6 +12,20 @@
     "exceptions": 0
   },
   "p2_entry_allowed": true,
+  "approved_for_p2": true,
+  "p2_fast_internal_screen": {
+    "completed_runs": 27,
+    "exceptions": 0,
+    "recommended_p3_configs": [
+      "C0_bbc_core",
+      "C2_core_aggregate",
+      "C5_both_lb_warm",
+      "C6_both_lb_warm_alns",
+      "C8_both_lb_root_warm_alns_valid"
+    ],
+    "candidate_algorithm_frozen": false,
+    "final_algorithm_frozen": false
+  },
   "candidate_algorithm_frozen": false,
   "final_algorithm_frozen": false
 }
