@@ -9,28 +9,25 @@ def has_joint_attribute_groups(data):
     if any(any(str(attrs[g].get(a,"ALL")).upper() in {"","ALL","NONE"} for a in ("pod","height","weight_class")) for g in G):return False
     return all((j,g,n) in arr for j,g in ship_group_pairs(data) for n in data["N"])
 
-def concentration_metadata(data,alloc_domain="integer",allowed_group_bays=None):
+def concentration_metadata(data,alloc_domain="integer"):
     available=has_joint_attribute_groups(data);final=max(data["N"]);rem=remaining_capacity(data);positive=[];M={};feasible={}
     if available:
       for j,g in ship_group_pairs(data):
         required=required_reserve(data,j,g,final,alloc_domain)
         if required<=TOL:continue
         positive.append((j,g));feasible[j,g]=[]
-        allowed=None if allowed_group_bays is None else set(allowed_group_bays.get((j,g),()))
         for i in data["I_list"]:
          if int(data["Fixed_Bay_Mode"][i])==group_size(data,g):
           value=max(0,min(required,rem[i,final]));M[j,g,i]=value
-          if value>TOL and (allowed is None or i in allowed):feasible[j,g].append(i)
-    # Normalization is always defined by the complete original problem.
-    if allowed_group_bays is None:scale=max(1,sum(len(feasible[p]) for p in positive))
-    else:scale=concentration_metadata(data,alloc_domain,None)["scale"]
+          if value>TOL:feasible[j,g].append(i)
+    scale=max(1,sum(len(feasible[p]) for p in positive))
     return {"available":available,"final_period":final,"positive_ship_groups":positive,"big_m":M,"feasible_bays":feasible,"scale":scale}
 
-def build_joint_group_concentration(model,data,alloc_vars,*,alloc_domain="integer",enabled=True,x_vars=None,relax=False,allowed_group_bays=None):
+def build_joint_group_concentration(model,data,alloc_vars,*,alloc_domain="integer",enabled=True,x_vars=None,relax=False):
     import gurobipy as gp
     from gurobipy import GRB
 
-    relax=relax or model.ModelName.endswith("_lp");meta=concentration_metadata(data,alloc_domain,allowed_group_bays);active=bool(enabled and meta["available"]);use={}
+    relax=relax or model.ModelName.endswith("_lp");meta=concentration_metadata(data,alloc_domain);active=bool(enabled and meta["available"]);use={}
     if active:
       indices=[(j,g,i) for j,g in meta["positive_ship_groups"] for i in meta["feasible_bays"][j,g]];use=model.addVars(indices,lb=0,ub=1,vtype=GRB.CONTINUOUS if relax else GRB.BINARY,name="joint_group_bay_use");final=meta["final_period"]
       for j,g,i in indices:
