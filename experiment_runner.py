@@ -61,6 +61,9 @@ def execute_run(*,instance_id,instance_path,expected_digest,method,configuration
     if status["status"]=="EXCEPTION":result["exception_traceback"]=traceback_text
     else:
         result["anytime_trace"]=_json_safe(solver.get("anytime_trace",[]));result["optimization"].update(trace_metrics(result["anytime_trace"],budget,None))
+    solver_evaluation=solver.get("core_best",{}).get("components") if status["status"]!="EXCEPTION" else None
+    exact_consistent=bool(evaluation and solver_evaluation and abs(float(evaluation.get("recourse_cost",0))-float(solver_evaluation.get("recourse_cost",0)))<=1e-5)
+    result["safety"]={"checker_pass":bool(evaluation and evaluation.get("feasibility",{}).get("feasible")),"lb_le_ub":optimization.get("lb") is None or optimization.get("ub") is None or float(optimization["lb"])<=float(optimization["ub"])+1e-5,"exact_recourse_consistent":exact_consistent,"no_exception":status["status"]!="EXCEPTION"}
     if solution and save_solutions:
         digest_solution=solution_digest(solution);relative=f"solutions/{run_id}.json";payload={"run_id":run_id,"solution_digest":digest_solution,"feasibility_pass":evaluation["feasibility"]["feasible"],"evaluation":evaluation_safe,"solution":_solution_payload(solution)};_atomic_write(Path(output)/relative,json.dumps(payload,indent=2,ensure_ascii=False)+"\n");result["solution_file"]={"relative_path":relative,"solution_digest":digest_solution,"feasibility_pass":True}
     validate_result(result);return result

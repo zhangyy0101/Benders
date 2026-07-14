@@ -1,0 +1,16 @@
+comparison,instance_id,candidate,baseline,gap_improvement_points,gap_relative_improvement,lb_relative_improvement,ub_relative_change,model_build_overhead,candidate_feasible,baseline_feasible
+valid_on_size,S01,V2A_valid,algorithm-candidate-v1,0.015845246032386254,0.1862044286202131,0.0031978407294986706,-0.013880782885426041,2.2884391613941735,True,True
+valid_on_size,M01,V2A_valid,algorithm-candidate-v1,0.007453678591900992,0.07742527006711658,0.0012797241749895267,-0.006910953404396759,0.18376938675187998,True,True
+valid_on_size,L01,V2A_valid,algorithm-candidate-v1,0.012223451256980988,0.07932350105199425,0.0003233584613306216,-0.01392558189848022,-0.1303373933917493,True,True
+valid_on_pod_size,S01,V2C_pod_size_aggregate_valid,V2B_pod_size_aggregate,0.03877761384928021,0.46701055410164644,0.012528991908058871,-0.028552575712256126,-0.7081082872042261,True,True
+valid_on_pod_size,M01,V2C_pod_size_aggregate_valid,V2B_pod_size_aggregate,0.005594379454181175,0.05512369707769513,0.001166899126300924,-0.005028064264307957,0.05538740317817533,True,True
+valid_on_pod_size,L01,V2C_pod_size_aggregate_valid,V2B_pod_size_aggregate,,,,,0.17275604021053015,False,False
+pod_size_without_valid,S01,V2B_pod_size_aggregate,algorithm-candidate-v1,0.0020622684902382032,0.024234620598595033,0.004310971173917219,0.002052263445690762,2.273959209316443,True,True
+pod_size_without_valid,M01,V2B_pod_size_aggregate,algorithm-candidate-v1,-0.00521841396328486,-0.054206403649918654,0.003264237243472049,0.009091033759667175,0.13883436832521673,True,True
+pod_size_without_valid,L01,V2B_pod_size_aggregate,algorithm-candidate-v1,,,,,-0.05600521551961041,False,True
+pod_size_with_valid,S01,V2C_pod_size_aggregate_valid,V2A_valid,0.02499463630713216,0.3609296152691386,0.013652476031519208,-0.012856586271232635,-0.7093935711355176,True,True
+pod_size_with_valid,M01,V2C_pod_size_aggregate_valid,V2A_valid,-0.007077713101004676,-0.079689933920279,0.003151188578167461,0.011004262543471054,0.015325670766590582,True,True
+pod_size_with_valid,L01,V2C_pod_size_aggregate_valid,V2A_valid,,,,,0.2729943509291405,False,True
+combined,S01,V2C_pod_size_aggregate_valid,algorithm-candidate-v1,0.040839882339518414,0.4799273511060484,0.016893975204929974,-0.026558909673979947,-0.04435843876912594,True,True
+combined,M01,V2C_pod_size_aggregate_valid,algorithm-candidate-v1,0.0003759654908963156,0.003905350802245855,0.00443494540536042,0.004017259193386618,0.20191144663680816,True,True
+combined,L01,V2C_pod_size_aggregate_valid,algorithm-candidate-v1,,,,,0.10707558542661452,False,True

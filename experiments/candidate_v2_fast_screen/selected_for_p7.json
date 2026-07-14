@@ -1,0 +1,61 @@
+{
+  "baseline": "algorithm-candidate-v1",
+  "selected_new_configs": [],
+  "approved_for_p7": false,
+  "selection_reasons": {
+    "V2A_valid": {
+      "passed": false,
+      "reasons": [
+        "model-build overhead threshold exceeded"
+      ],
+      "mean_gap_improvement_points": 0.011840791960422745,
+      "l01_gap_improvement_points": 0.012223451256980988,
+      "l01_lb_relative_improvement": 0.0003233584613306216
+    },
+    "V2B_pod_size_aggregate": {
+      "passed": false,
+      "reasons": [
+        "feasible rate below 3/3",
+        "gap improves on fewer than 2/3 instances",
+        "L01 strengthening threshold not met",
+        "model-build overhead threshold exceeded",
+        "safety gate failed"
+      ],
+      "mean_gap_improvement_points": -0.001052048491015552,
+      "l01_gap_improvement_points": null,
+      "l01_lb_relative_improvement": null
+    },
+    "V2C_pod_size_aggregate_valid": {
+      "passed": false,
+      "reasons": [
+        "feasible rate below 3/3",
+        "L01 strengthening threshold not met",
+        "safety gate failed"
+      ],
+      "mean_gap_improvement_points": 0.013738615943471576,
+      "l01_gap_improvement_points": null,
+      "l01_lb_relative_improvement": null
+    }
+  },
+  "candidate_v1_hash_verified": true,
+  "candidate_v1_remains_best": true,
+  "completed_runs": 12,
+  "planned_runs": 12,
+  "actual_runtime_seconds": 1454.266358599998,
+  "component_findings": {
+    "valid_inequalities": {
+      "effective": false,
+      "finding": "V2A improved gap on 3/3 instances and met the L01 gap threshold, but failed the per-instance model-build overhead rule."
+    },
+    "pod_size_aggregate": {
+      "effective": false,
+      "finding": "V2B improved gap on only S01, worsened M01 gap, and found no L01 incumbent."
+    },
+    "combined": {
+      "best": false,
+      "finding": "V2C achieved the best S01 gap but did not find an L01 incumbent and therefore is not the best admissible configuration."
+    }
+  },
+  "candidate_v2_frozen": false,
+  "final_algorithm_frozen": false
+}

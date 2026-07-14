@@ -1,5 +1,5 @@
 {
-  "stage": "p6a-candidate-v2-strengthenings-exact-pass",
+  "stage": "p6b-fast-strengthening-screen-complete-no-selection",
   "candidate_configuration": "algorithm-candidate-v1",
   "approved_for_public_data_pilot": true,
   "fixed_benchmark_generated": true,
@@ -59,6 +59,14 @@
     "candidate_v1_hash_unchanged": true,
     "candidate_v2_frozen": false,
     "approved_for_p6b": true,
+    "final_algorithm_frozen": false
+  },
+  "p6b_fast_strengthening_screen": {
+    "completed_runs": 12,
+    "selected_new_configs": [],
+    "approved_for_p7": false,
+    "candidate_v1_remains_best": true,
+    "candidate_v2_frozen": false,
     "final_algorithm_frozen": false
   },
   "candidate_algorithm_frozen": true,
