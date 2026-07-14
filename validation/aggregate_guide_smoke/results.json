@@ -1,0 +1,1835 @@
+{
+  "status": "PASS",
+  "stage": "01_aggregate_guide",
+  "candidate_hash": "fc505c53a75c375b8f7c4532830c577221827c1c820a10cc688686234cac8bce",
+  "candidate_hash_unchanged": true,
+  "exceptions": 0,
+  "instances": [
+    {
+      "instance_id": "tiny",
+      "time_limit": 0.5,
+      "ok": true,
+      "source": "mip_incumbent",
+      "runtime": 0.008810600033029914,
+      "model_build_runtime": 0.00625359988771379,
+      "optimization_runtime": 0.0022791000083088875,
+      "status_name": "OPTIMAL",
+      "guide_objective": 21000.0,
+      "guide_bound": 21000.0,
+      "support_counts": {
+        "x": 8,
+        "alloc_boxes": 16,
+        "aggregate_z": 8
+      },
+      "diagnostics": {
+        "positive_x_count": 4,
+        "positive_alloc_count": 4,
+        "positive_z_count": 4,
+        "fractional_x_count": 0,
+        "fractional_alloc_count": 0,
+        "aggregate_flow_by_ship_size_block": [
+          {
+            "key": [
+              "J1",
+              20,
+              "A"
+            ],
+            "value": 4.0
+          },
+          {
+            "key": [
+              "J1",
+              40,
+              "B"
+            ],
+            "value": 4.0
+          }
+        ],
+        "alloc_support_by_ship_group_bay": [
+          {
+            "key": [
+              "J1",
+              "G20",
+              "A20"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 6.0
+            }
+          },
+          {
+            "key": [
+              "J1",
+              "G40",
+              "B40"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 6.0
+            }
+          }
+        ],
+        "x_support_by_ship_bay": [
+          {
+            "key": [
+              "J1",
+              "A20"
+            ],
+            "value": 2.0
+          },
+          {
+            "key": [
+              "J1",
+              "B40"
+            ],
+            "value": 2.0
+          }
+        ]
+      },
+      "exception": null
+    },
+    {
+      "instance_id": "XS01",
+      "time_limit": 0.5,
+      "ok": true,
+      "source": "mip_incumbent",
+      "runtime": 0.059879899956285954,
+      "model_build_runtime": 0.015051699941977859,
+      "optimization_runtime": 0.04367570020258427,
+      "status_name": "OPTIMAL",
+      "guide_objective": 33285.87520183332,
+      "guide_bound": 29977.06767387812,
+      "support_counts": {
+        "x": 72,
+        "alloc_boxes": 360,
+        "aggregate_z": 48
+      },
+      "diagnostics": {
+        "positive_x_count": 24,
+        "positive_alloc_count": 60,
+        "positive_z_count": 10,
+        "fractional_x_count": 0,
+        "fractional_alloc_count": 0,
+        "aggregate_flow_by_ship_size_block": [
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_001"
+            ],
+            "value": 10.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              40,
+              "Block_001"
+            ],
+            "value": 9.0
+          }
+        ],
+        "alloc_support_by_ship_group_bay": [
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_04_STD_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 50.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 50.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_08_STD_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 30.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_07_HIGH_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 60.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_07_STD_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 50.0
+            }
+          }
+        ],
+        "x_support_by_ship_bay": [
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_001"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_002"
+            ],
+            "value": 72.0
+          }
+        ]
+      },
+      "exception": null
+    },
+    {
+      "instance_id": "S01",
+      "time_limit": 0.75,
+      "ok": true,
+      "source": "mip_incumbent",
+      "runtime": 0.7583965000230819,
+      "model_build_runtime": 0.06495169992558658,
+      "optimization_runtime": 0.6876499999780208,
+      "status_name": "TIME_LIMIT",
+      "guide_objective": 21581.786552237798,
+      "guide_bound": 18237.44187379349,
+      "support_counts": {
+        "x": 288,
+        "alloc_boxes": 2880,
+        "aggregate_z": 144
+      },
+      "diagnostics": {
+        "positive_x_count": 110,
+        "positive_alloc_count": 399,
+        "positive_z_count": 31,
+        "fractional_x_count": 0,
+        "fractional_alloc_count": 0,
+        "aggregate_flow_by_ship_size_block": [
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_001"
+            ],
+            "value": 12.727272727272727
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              40,
+              "Block_001"
+            ],
+            "value": 5.08080808080808
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_002"
+            ],
+            "value": 24.525252525251982
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              40,
+              "Block_002"
+            ],
+            "value": 7.919191919191919
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_003"
+            ],
+            "value": 8.747474747475287
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_001"
+            ],
+            "value": 14.333333333333332
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              40,
+              "Block_001"
+            ],
+            "value": 13.797979797979798
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_002"
+            ],
+            "value": 6.363636363636363
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              40,
+              "Block_002"
+            ],
+            "value": 1.8181818181818181
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_003"
+            ],
+            "value": 18.3030303030303
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              40,
+              "Block_003"
+            ],
+            "value": 10.383838383838382
+          }
+        ],
+        "alloc_support_by_ship_group_bay": [
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_HIGH_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 17.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_HIGH_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 19.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_07_HIGH_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 8.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 43.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_04_STD_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 12.0,
+              "sum": 80.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_HIGH_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_STD_LIGHT",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 27.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 27.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_LIGHT",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_001_003"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 37.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_HEAVY",
+              "Bay_001_004"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 18.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_LIGHT",
+              "Bay_001_004"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 19.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_STD_LIGHT",
+              "Bay_001_004"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 18.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_HEAVY",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 12.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 31.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_STD_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 12.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_07_HIGH_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 60.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_STD_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 5.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_HEAVY",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 5.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_HIGH_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 64.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 31.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_HIGH_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 31.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_HIGH_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 22.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_07_HIGH_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 21.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_07_STD_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 60.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 9.0,
+              "sum": 97.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_01_HIGH_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 34.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_04_HIGH_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 6.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 23.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 10.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 49.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_07_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 12.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 10.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_01_HIGH_HEAVY",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 12.0,
+              "sum": 92.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_04_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 44.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_04_STD_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 17.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 18.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_HIGH_HEAVY",
+              "Bay_003_003"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_STD_LIGHT",
+              "Bay_003_003"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_HEAVY",
+              "Bay_003_003"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_LIGHT",
+              "Bay_003_003"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          }
+        ],
+        "x_support_by_ship_bay": [
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_001"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_001"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_002"
+            ],
+            "value": 42.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_003"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_004"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_002_001"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_002_001"
+            ],
+            "value": 30.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_002_004"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_002_004"
+            ],
+            "value": 36.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_003_001"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_003_001"
+            ],
+            "value": 54.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_003_003"
+            ],
+            "value": 54.0
+          }
+        ]
+      },
+      "exception": null
+    },
+    {
+      "instance_id": "M01",
+      "time_limit": 2.0,
+      "ok": true,
+      "source": "mip_incumbent",
+      "runtime": 2.039430000120774,
+      "model_build_runtime": 0.40615699999034405,
+      "optimization_runtime": 1.5979695001151413,
+      "status_name": "TIME_LIMIT",
+      "guide_objective": 20851.61857167289,
+      "guide_bound": 3.032299629984501,
+      "support_counts": {
+        "x": 1296,
+        "alloc_boxes": 22464,
+        "aggregate_z": 432
+      },
+      "diagnostics": {
+        "positive_x_count": 218,
+        "positive_alloc_count": 554,
+        "positive_z_count": 64,
+        "fractional_x_count": 0,
+        "fractional_alloc_count": 0,
+        "aggregate_flow_by_ship_size_block": [
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_001"
+            ],
+            "value": 0.9090909090919308
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              40,
+              "Block_002"
+            ],
+            "value": 52.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_004"
+            ],
+            "value": 50.88068181818284
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              20,
+              "Block_005"
+            ],
+            "value": 11.21022727272625
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_001"
+            ],
+            "value": 2.727272727272727
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              40,
+              "Block_001"
+            ],
+            "value": 66.63636363636364
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_002"
+            ],
+            "value": 3.6363636363638325
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              40,
+              "Block_002"
+            ],
+            "value": 6.363636363636363
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_003"
+            ],
+            "value": 21.818181818181817
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              20,
+              "Block_004"
+            ],
+            "value": 14.81818181818182
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              20,
+              "Block_001"
+            ],
+            "value": 50.90909090909091
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              40,
+              "Block_001"
+            ],
+            "value": 29.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              20,
+              "Block_002"
+            ],
+            "value": 37.09090909090909
+          }
+        ],
+        "alloc_support_by_ship_group_bay": [
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_07_STD_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 10.0,
+              "sum": 53.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_07_STD_LIGHT",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 11.0,
+              "sum": 58.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_08_HIGH_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 22.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_08_STD_HEAVY",
+              "Bay_001_001"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 22.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_06_STD_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 10.0,
+              "sum": 53.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_08_HIGH_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_08_HIGH_LIGHT",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 22.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_08_STD_HEAVY",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_08_STD_LIGHT",
+              "Bay_001_002"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 16.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_01_STD_LIGHT",
+              "Bay_001_003"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 11.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_05_STD_LIGHT",
+              "Bay_001_003"
+            ],
+            "value": {
+              "max": 10.0,
+              "sum": 73.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_STD_LIGHT",
+              "Bay_001_003"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 58.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_40_POD_03_STD_HEAVY",
+              "Bay_001_003"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_05_STD_HEAVY",
+              "Bay_001_004"
+            ],
+            "value": {
+              "max": 13.0,
+              "sum": 91.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_07_HIGH_LIGHT",
+              "Bay_001_004"
+            ],
+            "value": {
+              "max": 13.0,
+              "sum": 91.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 1.0,
+              "sum": 7.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_08_STD_LIGHT",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 18.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_05_STD_HEAVY",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 7.0,
+              "sum": 38.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_05_STD_LIGHT",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 42.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_06_HIGH_HEAVY",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_06_HIGH_LIGHT",
+              "Bay_001_005"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_01_STD_LIGHT",
+              "Bay_001_006"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_02_HIGH_LIGHT",
+              "Bay_001_006"
+            ],
+            "value": {
+              "max": 14.0,
+              "sum": 98.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_03_HIGH_LIGHT",
+              "Bay_001_006"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 45.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_03_STD_LIGHT",
+              "Bay_001_006"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 45.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_08_HIGH_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 9.0,
+              "sum": 84.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_08_STD_HEAVY",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 46.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_40_POD_01_HIGH_LIGHT",
+              "Bay_002_001"
+            ],
+            "value": {
+              "max": 10.0,
+              "sum": 73.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_08_STD_LIGHT",
+              "Bay_002_002"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 18.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_03_HIGH_LIGHT",
+              "Bay_002_002"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 42.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_03_STD_LIGHT",
+              "Bay_002_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_05_HIGH_HEAVY",
+              "Bay_002_002"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 26.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_05_HIGH_LIGHT",
+              "Bay_002_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 33.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_06_HIGH_LIGHT",
+              "Bay_002_003"
+            ],
+            "value": {
+              "max": 2.0,
+              "sum": 9.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_002_003"
+            ],
+            "value": {
+              "max": 10.0,
+              "sum": 53.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Group_20_POD_02_STD_LIGHT",
+              "Bay_002_003"
+            ],
+            "value": {
+              "max": 11.0,
+              "sum": 58.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_LIGHT",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 38.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_06_HIGH_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 17.0,
+              "sum": 156.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_08_HIGH_HEAVY",
+              "Bay_002_004"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 57.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_HIGH_HEAVY",
+              "Bay_002_005"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 57.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_STD_HEAVY",
+              "Bay_002_005"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 74.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_40_POD_04_STD_LIGHT",
+              "Bay_002_005"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 57.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_06_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 12.0,
+              "sum": 89.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_06_STD_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 30.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_08_HIGH_LIGHT",
+              "Bay_003_001"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 58.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_004_002"
+            ],
+            "value": {
+              "max": 3.0,
+              "sum": 25.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_STD_HEAVY",
+              "Bay_004_002"
+            ],
+            "value": {
+              "max": 4.0,
+              "sum": 28.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_01_HIGH_HEAVY",
+              "Bay_004_002"
+            ],
+            "value": {
+              "max": 7.0,
+              "sum": 52.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_01_HIGH_LIGHT",
+              "Bay_004_002"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 45.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Group_20_POD_03_HIGH_HEAVY",
+              "Bay_004_002"
+            ],
+            "value": {
+              "max": 7.0,
+              "sum": 52.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_STD_HEAVY",
+              "Bay_004_003"
+            ],
+            "value": {
+              "max": 9.0,
+              "sum": 89.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_07_STD_LIGHT",
+              "Bay_004_003"
+            ],
+            "value": {
+              "max": 17.0,
+              "sum": 156.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_STD_HEAVY",
+              "Bay_004_005"
+            ],
+            "value": {
+              "max": 5.0,
+              "sum": 52.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_04_HIGH_HEAVY",
+              "Bay_004_005"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 57.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_04_HIGH_LIGHT",
+              "Bay_004_005"
+            ],
+            "value": {
+              "max": 8.0,
+              "sum": 74.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_05_HIGH_HEAVY",
+              "Bay_004_005"
+            ],
+            "value": {
+              "max": 7.0,
+              "sum": 66.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_HIGH_HEAVY",
+              "Bay_005_001"
+            ],
+            "value": {
+              "max": 6.0,
+              "sum": 57.0
+            }
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Group_20_POD_02_HIGH_LIGHT",
+              "Bay_005_001"
+            ],
+            "value": {
+              "max": 7.0,
+              "sum": 66.0
+            }
+          }
+        ],
+        "x_support_by_ship_bay": [
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_001_001"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_001_002"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_003"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_001_003"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_004"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_001_005"
+            ],
+            "value": 42.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_005"
+            ],
+            "value": 42.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_001_005"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_001_006"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_002_001"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_002_001"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_002_002"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_002_002"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_002_003"
+            ],
+            "value": 30.0
+          },
+          {
+            "key": [
+              "Ship_New_003",
+              "Bay_002_003"
+            ],
+            "value": 48.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_002_004"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_002_005"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_003_001"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_004_002"
+            ],
+            "value": 54.0
+          },
+          {
+            "key": [
+              "Ship_New_002",
+              "Bay_004_002"
+            ],
+            "value": 60.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_004_003"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_004_005"
+            ],
+            "value": 72.0
+          },
+          {
+            "key": [
+              "Ship_New_001",
+              "Bay_005_001"
+            ],
+            "value": 72.0
+          }
+        ]
+      },
+      "exception": null
+    },
+    {
+      "instance_id": "L01",
+      "time_limit": 5.0,
+      "ok": true,
+      "source": "static_fallback",
+      "runtime": 5.069767999928445,
+      "model_build_runtime": 2.66330310003832,
+      "optimization_runtime": 2.3431826001033187,
+      "status_name": "TIME_LIMIT",
+      "guide_objective": null,
+      "guide_bound": null,
+      "support_counts": {
+        "x": 0,
+        "alloc_boxes": 0,
+        "aggregate_z": 0
+      },
+      "diagnostics": {
+        "positive_x_count": 0,
+        "positive_alloc_count": 0,
+        "positive_z_count": 0,
+        "fractional_x_count": 0,
+        "fractional_alloc_count": 0,
+        "aggregate_flow_by_ship_size_block": [],
+        "alloc_support_by_ship_group_bay": [],
+        "x_support_by_ship_bay": []
+      },
+      "exception": null
+    }
+  ]
+}
