@@ -105,7 +105,13 @@ def main():
         root_prepass=configuration["root_prepass"], node_cuts=configuration["node_cuts"],
         enable_alns=configuration["alns"], warm_start=configuration["warm_start"],
         seed=args.seed, threads=args.threads, numeric_focus=args.numeric_focus,
-        lns_options=configuration.get("alns_parameters"))
+        lns_options=configuration.get("alns_parameters"), primal_repair=configuration.get("primal_repair",False),
+        primal_repair_time_share=configuration.get("primal_repair_time_share",.08),
+        primal_repair_min_seconds=configuration.get("primal_repair_min_seconds",2),
+        primal_repair_max_seconds=configuration.get("primal_repair_max_seconds",20),
+        primal_repair_guide_share=configuration.get("primal_repair_guide_share",.25),
+        primal_repair_mip_gap=configuration.get("primal_repair_mip_gap",.05),
+        primal_repair_max_expansions=configuration.get("primal_repair_max_expansions",2))
     result["configuration_identity"] = {"configuration_name": configuration["configuration_name"],
                                           "configuration_version": configuration["configuration_version"],
                                           "configuration_hash": configuration["configuration_hash"],

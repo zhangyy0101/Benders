@@ -49,6 +49,8 @@ def resolved_algorithm_label(configuration: Mapping) -> str:
     valid_profile = configuration.get("valid_inequality_profile", "common")
     if name == "algorithm-candidate-v1":
         return "aggregate_strengthened_bbc"
+    if configuration.get("primal_repair"):
+        return "aggregate_strengthened_bbc_with_agfr"
     if aggregate_level == "pod_size":
         return "pod_size_aggregate_strengthened_bbc"
     if configuration.get("valid_inequalities") and valid_profile == "compact":
@@ -70,6 +72,14 @@ def validate_algorithm_configuration(configuration: Mapping) -> dict:
         raise ValueError("phase shares must be non-negative and sum to at most 1")
     if configuration.get("alns") and not configuration.get("warm_start"):
         raise ValueError("ALNS requires warm_start")
+    repair=bool(configuration.get("primal_repair",False));method=configuration.get("primal_repair_method","none")
+    if method not in {"none","aggregate_guided_fix_and_repair"}:raise ValueError("unknown primal_repair_method")
+    if not repair and method not in {"none",None}:raise ValueError("disabled primal repair requires method none")
+    if repair:
+        if method!="aggregate_guided_fix_and_repair":raise ValueError("enabled primal repair requires AGFR method")
+        if configuration.get("warm_start") or configuration.get("alns") or configuration.get("root_prepass"):raise ValueError("AGFR cannot be combined with root/warm/ALNS")
+        share=float(configuration.get("primal_repair_time_share",.08));minimum=float(configuration.get("primal_repair_min_seconds",2));maximum=float(configuration.get("primal_repair_max_seconds",20));guide=float(configuration.get("primal_repair_guide_share",.25));expansions=int(configuration.get("primal_repair_max_expansions",2));gap=float(configuration.get("primal_repair_mip_gap",.05))
+        if not 0<=share<=1 or minimum<0 or maximum<minimum or not 0<=guide<=1 or expansions not in {0,1,2} or gap<0:raise ValueError("invalid primal repair controls")
     aggregate_level = configuration.get("aggregate_relaxation_level", "size")
     if aggregate_level not in VALID_AGGREGATE_RELAXATION_LEVELS:
         raise ValueError(f"unknown aggregate_relaxation_level {aggregate_level!r}")
