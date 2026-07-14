@@ -82,6 +82,17 @@ def _extract(model, variables, context):
     return point["x"], point["alloc_boxes"], aggregate_z
 
 
+def _relaxed_views(relaxed, variables, context):
+    mapped = {
+        "x": {key: relaxed.getVarByName(var.VarName) for key, var in variables["x"].items()},
+        "alloc_boxes": {key: relaxed.getVarByName(var.VarName) for key, var in variables["alloc_boxes"].items()},
+        "eta": relaxed.getVarByName(variables["eta"].VarName),
+    }
+    z = context["aggregate"]["variables"]["z"]
+    mapped_context = {"aggregate": {"variables": {"z": {key: relaxed.getVarByName(var.VarName) for key, var in z.items()}}}}
+    return mapped, mapped_context
+
+
 def solve_aggregate_guide(
     data,
     weights,
@@ -103,7 +114,17 @@ def solve_aggregate_guide(
     def remaining():
         return max(0.0, deadline - time.perf_counter())
 
-    for relax, source in ((False, "mip_incumbent"), (True, "lp_fallback")):
+    estimated_group_bay_time = (len(data["I_list"]) *
+                                sum(len(data.get("ActiveGroupsByShip", {}).get(j, data.get("G", data["S"])))
+                                    for j in data["J_new"]) * len(data["N"]))
+    if estimated_group_bay_time > 100_000:
+        diagnostics = _empty_diagnostics(); diagnostics["size_deadline_guard"] = estimated_group_bay_time
+        return {"ok": True, "source": "static_fallback", "runtime": time.perf_counter() - started,
+                "model_build_runtime": 0.0, "optimization_runtime": 0.0,
+                "status_name": "SKIPPED_SIZE_DEADLINE", "guide_objective": None, "guide_bound": None,
+                "x": {}, "alloc_boxes": {}, "aggregate_z": {}, "diagnostics": diagnostics}
+    solve_sequence = ((False, "mip_incumbent"), (True, "lp_fallback"))
+    for relax, source in solve_sequence:
         if remaining() <= 0:
             break
         model = None
@@ -129,7 +150,12 @@ def solve_aggregate_guide(
             model.Params.MIPFocus = 1
             model.Params.Heuristics = 0.5
             model.Params.MIPGap = 0.10
-            model.Params.TimeLimit = available
+            if relax:
+                model.Params.Method = 1
+            # Large masters reserve time for a relaxation of the already-built model.
+            # This prevents an unsuccessful MIP search from consuming the entire guide deadline.
+            reserve_relaxation = not relax and build_runtime > .5
+            model.Params.TimeLimit = min(available, .25) if reserve_relaxation else available
             optimize_started = time.perf_counter()
             model.optimize()
             optimization_runtime += time.perf_counter() - optimize_started
@@ -155,6 +181,28 @@ def solve_aggregate_guide(
                     "diagnostics": _diagnostics(data, x, alloc_boxes, aggregate_z),
                 }
                 return result
+            if reserve_relaxation and remaining() > 0:
+                relaxed = model.relax()
+                relaxed.update()
+                relaxed_variables, relaxed_context = _relaxed_views(relaxed, variables, context)
+                model.dispose(); model = relaxed
+                available = remaining()
+                model.Params.OutputFlag = 0
+                model.Params.Threads = int(threads or 1)
+                model.Params.TimeLimit = available
+                optimize_started = time.perf_counter(); model.optimize()
+                optimization_runtime += time.perf_counter() - optimize_started
+                last_status = model.Status
+                if model.SolCount:
+                    x, alloc_boxes, aggregate_z = _extract(model, relaxed_variables, relaxed_context)
+                    guide_objective, guide_bound = float(model.ObjVal), float(model.ObjBound)
+                    model.dispose(); model = None
+                    return {"ok": True, "source": "lp_fallback", "runtime": time.perf_counter() - started,
+                            "model_build_runtime": build_runtime, "optimization_runtime": optimization_runtime,
+                            "status_name": _status_name(last_status), "guide_objective": guide_objective,
+                            "guide_bound": guide_bound, "x": x, "alloc_boxes": alloc_boxes,
+                            "aggregate_z": aggregate_z,
+                            "diagnostics": _diagnostics(data, x, alloc_boxes, aggregate_z)}
         except Exception as exc:  # A guide failure must be harmless to later AGFR stages.
             errors.append(f"{source}: {type(exc).__name__}: {exc}")
         finally:
