@@ -22,7 +22,6 @@ def solve_aggregate_guided_fix_and_repair(
     guide_time_share: float = .25,
     max_expansions: int = 2,
     candidate_options: dict | None = None,
-    add_valid_inequalities: bool = True,
 ) -> dict:
     started = time.perf_counter()
     deadline = started + max(0.0, float(time_limit))
@@ -124,7 +123,7 @@ def solve_aggregate_guided_fix_and_repair(
         repair = solve_restricted_monolithic_repair(
             data, weights, domain["candidate_bays"], time_limit=remaining(), guide_result=start,
             threads=threads, seed=seed + attempt_index, mip_gap=mip_gap, alloc_domain=alloc_domain,
-            add_valid_inequalities=add_valid_inequalities, concentration_enabled=concentration_enabled, solution_limit=1,
+            add_valid_inequalities=True, concentration_enabled=concentration_enabled, solution_limit=1,
             validation_time_reserve=min(2.5, .15 * max(0.0, float(time_limit))))
         attempt = {"attempt": attempt_index, "expansion_level": level, "coverage_status": coverage,
                    "candidate_pair_ratio": domain["diagnostics"]["candidate_pair_ratio"], **repair}
