@@ -13,7 +13,7 @@ from algorithm_configurations import get_algorithm_configuration, list_algorithm
 from config import MasterWeights, Weights
 from data import prepare_instance
 from instance_registry import list_builtin_instances, resolve_instance
-from solver_true_benders import solve_true_benders_pipeline
+from solver_true_benders import solve_bbc_then_repair_pipeline, solve_true_benders_pipeline
 
 
 def serial(value):
@@ -95,8 +95,7 @@ def main():
                             old_outbound_release_policy=args.old_outbound_release_policy)
     shares = configuration["phase_shares"]
     weights = Weights(master=MasterWeights(concentration=args.concentration_weight))
-    result = solve_true_benders_pipeline(
-        data, weights, total_core_time=args.total_core_time, root_time_share=shares["root"],
+    common = dict(total_core_time=args.total_core_time, root_time_share=shares["root"],
         warm_start_time_share=shares["warm"], alns_time_share=shares["alns"], main_bbc_time_share=shares["main"],
         mip_gap=args.mip_gap, alloc_domain=args.alloc_domain, concentration_enabled=args.concentration,
         add_valid_inequalities=configuration["valid_inequalities"],
@@ -106,6 +105,17 @@ def main():
         enable_alns=configuration["alns"], warm_start=configuration["warm_start"],
         seed=args.seed, threads=args.threads, numeric_focus=args.numeric_focus,
         lns_options=configuration.get("alns_parameters"))
+    repair = dict(primal_repair_time_share=configuration.get("primal_repair_time_share",.08),
+        primal_repair_min_seconds=configuration.get("primal_repair_min_seconds",2),
+        primal_repair_max_seconds=configuration.get("primal_repair_max_seconds",20),
+        primal_repair_mip_gap=configuration.get("primal_repair_mip_gap",.05),
+        primal_repair_max_expansions=configuration.get("primal_repair_max_expansions",2))
+    if configuration.get("primal_repair") and configuration.get("primal_repair_position")=="after_main":
+        result = solve_bbc_then_repair_pipeline(data, weights, **common, **repair)
+    else:
+        result = solve_true_benders_pipeline(data, weights, **common,
+            primal_repair=configuration.get("primal_repair",False),
+            primal_repair_guide_share=configuration.get("primal_repair_guide_share",.25), **repair)
     result["configuration_identity"] = {"configuration_name": configuration["configuration_name"],
                                           "configuration_version": configuration["configuration_version"],
                                           "configuration_hash": configuration["configuration_hash"],

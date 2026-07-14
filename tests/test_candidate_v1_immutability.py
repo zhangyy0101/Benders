@@ -18,7 +18,7 @@ def test_candidate_v1_payload_and_hash_are_immutable():
 
 
 def test_historical_configurations_are_hidden_without_changing_payloads():
-    assert list_algorithm_configurations() == ("algorithm-candidate-v1",)
+    assert list_algorithm_configurations() == ("algorithm-candidate-v1", "candidate-v2-agfr-development")
     assert "C0_bbc_core" in list_algorithm_configurations(include_historical=True)
     assert configuration_registry_status("C0_bbc_core") == "historical_development"
     assert get_algorithm_configuration("C0_bbc_core")["status"] == "candidate"

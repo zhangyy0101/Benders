@@ -1,0 +1,9 @@
+instance_id,seed,guide_source
+tiny,0,mip_incumbent
+tiny_concentration,0,mip_incumbent
+XS01,0,mip_incumbent
+XS02,0,mip_incumbent
+XS03,0,mip_incumbent
+S01,0,mip_incumbent
+M01,0,lp_fallback
+L01,0,static_fallback

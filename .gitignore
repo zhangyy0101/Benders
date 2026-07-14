@@ -28,6 +28,7 @@ env/
 experiments/**/solutions/
 experiments/**/results.json
 validation/**/results.json
+validation/agfr_effectiveness/raw_results.jsonl
 baseline/**/runs/
 baseline/**/logs/
 

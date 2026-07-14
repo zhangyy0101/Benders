@@ -1,0 +1,9 @@
+instance_id,attempt,level,coverage,status,ok,ratio
+tiny,0,0,feasible,SOLUTION_LIMIT,True,0.5
+tiny_concentration,0,0,feasible,SOLUTION_LIMIT,True,0.5
+XS01,0,0,feasible,SOLUTION_LIMIT,True,0.3333333333333333
+XS02,0,0,feasible,SOLUTION_LIMIT,True,0.4666666666666667
+XS03,0,0,feasible,SOLUTION_LIMIT,True,0.6666666666666666
+S01,0,0,feasible,SOLUTION_LIMIT,True,0.5
+M01,0,0,feasible,SOLUTION_LIMIT,True,0.2946236559139785
+L01,0,0,feasible,SOLUTION_LIMIT,True,0.13987341772151898

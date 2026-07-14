@@ -8,7 +8,8 @@ GUROBI_TEST_MODULES = {
     "test_benders_bounds.py", "test_benders_cuts.py", "test_gap95_followup.py",
     "test_joint_concentration.py", "test_pipeline_control.py",
     "test_pipeline_defaults.py", "test_recourse_oracle.py",
-    "test_timing_and_determinism.py",
+    "test_timing_and_determinism.py", "test_agfr_start_solution.py",
+    "test_agfr_trace.py", "test_agfr_fallback.py", "test_agfr_post_bbc.py",
 }
 
 

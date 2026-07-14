@@ -44,10 +44,12 @@ def add_common_master_valid_inequalities(model,data,variables,*,enabled=True):
        bays=[i for i in I if modes[i]==int(size)];sg=[g for g in ship_groups(data,j) if group_size(data,g)==int(size)]
        for n in N:
         need=sum(arrival(data,j,g,n) for g in sg);caps=[float(data["Bay_Handling_Rate"][i,n])*float(data["Intervals"][n]["dur"]) for i in bays];maxcap=max(caps,default=0)
-        if need>1e-9:added.append(model.addConstr(sum(caps[p]*x[i,j,n] for p,i in enumerate(bays))>=alpha*need,name=f"common_handling_{j}_{size}_{n}"))
-        if need>1e-9 and maxcap>0:added.append(model.addConstr(sum(x[i,j,n] for i in bays)>=math.ceil(alpha*need/maxcap-1e-9),name=f"common_min_bays_{j}_{size}_{n}"))
+        present=[(p,i) for p,i in enumerate(bays) if (i,j,n) in x]
+        if need>1e-9:added.append(model.addConstr(sum(caps[p]*x[i,j,n] for p,i in present)>=alpha*need,name=f"common_handling_{j}_{size}_{n}"))
+        if need>1e-9 and maxcap>0:added.append(model.addConstr(sum(x[i,j,n] for _,i in present)>=math.ceil(alpha*need/maxcap-1e-9),name=f"common_min_bays_{j}_{size}_{n}"))
     if not any(float(v)>1e-9 for v in data.get("New_Outbound_Req",{}).values()):
       for n in N[1:]:
        for j in J:
-        for i in I:added.append(model.addConstr(x[i,j,n]>=x[i,j,n-1],name=f"common_x_mono_{i}_{j}_{n}"))
+        for i in I:
+         if (i,j,n) in x and (i,j,n-1) in x:added.append(model.addConstr(x[i,j,n]>=x[i,j,n-1],name=f"common_x_mono_{i}_{j}_{n}"))
     return added

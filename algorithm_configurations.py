@@ -20,6 +20,7 @@ CONFIGURATIONS={
  "C7_both_lb_root_warm_alns":_cfg("C7_both_lb_root_warm_alns",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,phase_shares=_shares(.05,.15,.25)),
  "C8_both_lb_root_warm_alns_valid":_cfg("C8_both_lb_root_warm_alns_valid",analytic_recourse_lb=True,aggregate_recourse_lb=True,root_prepass=True,warm_start=True,alns=True,valid_inequalities=True,phase_shares=_shares(.05,.15,.25)),
  "algorithm-candidate-v1":_cfg("algorithm-candidate-v1",aggregate_recourse_lb=True,status="frozen_candidate"),
+ "candidate-v2-agfr-development":_cfg("candidate-v2-agfr-development",configuration_version="2-post-bbc-local-checked-dev",status="development_candidate",aggregate_recourse_lb=True,primal_repair=True,primal_repair_method="aggregate_guided_fix_and_repair",primal_repair_position="after_main",primal_repair_time_share=.10,primal_repair_min_seconds=3.0,primal_repair_max_seconds=12.0,primal_repair_guide_share=0.0,primal_repair_mip_gap=.03,primal_repair_max_expansions=2),
  "bbc_core":_cfg("bbc_core"),
  "bbc_valid":_cfg("bbc_valid",valid_inequalities=True),
  "bbc_analytic_lb":_cfg("bbc_analytic_lb",analytic_recourse_lb=True),
@@ -33,7 +34,7 @@ CONFIGURATIONS={
  "bbc_stabilized":_cfg("bbc_stabilized",root_prepass=True,warm_start=True,alns=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,valid_inequalities=True,cut_strategy="stabilized",phase_shares=_shares(.05,.15,.25)),
  "bbc_node_cuts":_cfg("bbc_node_cuts",root_prepass=True,warm_start=True,alns=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,valid_inequalities=True,node_cuts=True,phase_shares=_shares(.05,.15,.25)),
 }
-ACTIVE_CONFIGURATIONS = ("algorithm-candidate-v1",)
+ACTIVE_CONFIGURATIONS = ("algorithm-candidate-v1","candidate-v2-agfr-development")
 CONFIGURATION_VISIBILITY = {
     name: ("active" if name in ACTIVE_CONFIGURATIONS else "historical_development")
     for name in CONFIGURATIONS
