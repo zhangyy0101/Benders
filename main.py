@@ -1,39 +1,124 @@
-"""Route-B strengthened true Branch-and-Benders-Cut command line interface."""
+"""Configuration-driven single-instance Branch-and-Benders-Cut CLI."""
 from __future__ import annotations
-import argparse, json, os
+
+import argparse
+import json
+import os
+import sys
+from copy import deepcopy
 from datetime import datetime
-from config import MasterWeights,Weights
+
+from algorithm_configuration import configuration_hash, resolved_algorithm_label, validate_algorithm_configuration
+from algorithm_configurations import get_algorithm_configuration, list_algorithm_configurations
+from config import MasterWeights, Weights
 from data import prepare_instance
-from instance_registry import list_builtin_instances,resolve_instance
+from instance_registry import list_builtin_instances, resolve_instance
 from solver_true_benders import solve_true_benders_pipeline
 
-def serial(v):
-    if isinstance(v,dict): return {("|".join(map(str,k)) if isinstance(k,tuple) else str(k)):serial(x) for k,x in v.items() if k!="cut_pool"}
-    if isinstance(v,(list,tuple)): return [serial(x) for x in v]
-    return v
+
+def serial(value):
+    if isinstance(value, dict):
+        return {("|".join(map(str, key)) if isinstance(key, tuple) else str(key)): serial(item)
+                for key, item in value.items() if key != "cut_pool"}
+    if isinstance(value, (list, tuple)):
+        return [serial(item) for item in value]
+    return value
+
 
 def parser():
-    p=argparse.ArgumentParser(description="True BBC + adaptive LNS + joint-group bay concentration")
-    source=p.add_mutually_exclusive_group();source.add_argument("--instance",choices=list_builtin_instances(),default="3new6old");source.add_argument("--instance-file");p.add_argument("--total-core-time",type=float,default=60)
-    p.add_argument("--root-time-share",type=float,default=.05);p.add_argument("--warm-start-time-share",type=float,default=.15);p.add_argument("--alns-time-share",type=float,default=.25);p.add_argument("--main-bbc-time-share",type=float,default=.55)
-    p.add_argument("--root-cut-prepass",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--root-cut-max-iters",type=int,default=100);p.add_argument("--root-cut-time",type=float);p.add_argument("--root-cut-relative-improvement-tol",type=float,default=1e-4);p.add_argument("--root-cut-violation-tol",type=float,default=1e-6);p.add_argument("--root-cut-stall-iters",type=int,default=5)
-    p.add_argument("--aggregate-recourse-lb",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--analytic-recourse-lb",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--cut-strategy",choices=("standard","stabilized"),default="standard")
-    p.add_argument("--node-cuts",action=argparse.BooleanOptionalAction,default=False);p.add_argument("--node-cut-limit",type=int,default=100);p.add_argument("--node-separation-policy",choices=("root-only","periodic","adaptive"),default="root-only");p.add_argument("--node-separation-interval",type=int,default=20);p.add_argument("--callback-time-share-limit",type=float,default=.4)
-    p.add_argument("--valid-inequalities",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--alns",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--warm-start",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--concentration",action=argparse.BooleanOptionalAction,default=True);p.add_argument("--concentration-weight",type=float,default=10);p.add_argument("--concentration-mode",choices=("joint-group-bay",),default="joint-group-bay")
-    p.add_argument("--lns-repair-time",type=float,default=2);p.add_argument("--lns-min-destroy",type=float,default=.1);p.add_argument("--lns-max-destroy",type=float,default=.35);p.add_argument("--lns-restarts",type=int,default=1);p.add_argument("--lns-stall-iters",type=int,default=10)
-    p.add_argument("--old-outbound-release-policy",choices=("proportional","legacy_sorted","conservative"),default="proportional");p.add_argument("--handling-rate-scale",type=float,default=1);p.add_argument("--alloc-domain",choices=("integer","continuous"),default="integer");p.add_argument("--mip-gap",type=float,default=.03);p.add_argument("--numeric-focus",type=int,choices=range(4),default=1);p.add_argument("--threads",type=int,default=1);p.add_argument("--seed",type=int,default=0);p.add_argument("--output-root",default="outputs")
-    return p
+    value = argparse.ArgumentParser(description="Configuration-driven exact BBC runner")
+    source = value.add_mutually_exclusive_group()
+    source.add_argument("--instance", choices=list_builtin_instances(), default="3new6old")
+    source.add_argument("--instance-file")
+    value.add_argument("--algorithm-config", choices=list_algorithm_configurations(), default="algorithm-candidate-v1")
+    value.add_argument("--total-core-time", type=float, default=60)
+    for flag in ("root-cut-prepass", "aggregate-recourse-lb", "analytic-recourse-lb",
+                 "valid-inequalities", "warm-start", "alns", "node-cuts"):
+        value.add_argument(f"--{flag}", action=argparse.BooleanOptionalAction, default=None)
+    for phase in ("root", "warm-start", "alns", "main-bbc"):
+        value.add_argument(f"--{phase}-time-share", type=float)
+    value.add_argument("--cut-strategy", choices=("standard", "stabilized"))
+    value.add_argument("--concentration", action=argparse.BooleanOptionalAction, default=True)
+    value.add_argument("--concentration-mode", choices=("joint-group-bay",), default="joint-group-bay")
+    value.add_argument("--concentration-weight", type=float, default=10)
+    value.add_argument("--old-outbound-release-policy", choices=("proportional", "legacy_sorted", "conservative"), default="proportional")
+    value.add_argument("--handling-rate-scale", type=float, default=1)
+    value.add_argument("--alloc-domain", choices=("integer", "continuous"), default="integer")
+    value.add_argument("--mip-gap", type=float, default=.03)
+    value.add_argument("--numeric-focus", type=int, choices=range(4), default=1)
+    value.add_argument("--threads", type=int, default=1)
+    value.add_argument("--seed", type=int, default=0)
+    value.add_argument("--output-root", default="outputs")
+    return value
+
+
+def resolve_configuration(args):
+    base = get_algorithm_configuration(args.algorithm_config)
+    configuration = deepcopy(base)
+    field_overrides = {
+        "root_prepass": args.root_cut_prepass, "aggregate_recourse_lb": args.aggregate_recourse_lb,
+        "analytic_recourse_lb": args.analytic_recourse_lb, "valid_inequalities": args.valid_inequalities,
+        "warm_start": args.warm_start, "alns": args.alns, "node_cuts": args.node_cuts,
+        "cut_strategy": args.cut_strategy,
+    }
+    changed = []
+    for key, override in field_overrides.items():
+        if override is not None and override != configuration[key]:
+            configuration[key] = override; changed.append(key)
+    shares = dict(configuration["phase_shares"])
+    phase_overrides = {"root": args.root_time_share, "warm": args.warm_start_time_share,
+                       "alns": args.alns_time_share, "main": args.main_bbc_time_share}
+    for key, override in phase_overrides.items():
+        if override is not None and override != shares[key]:
+            shares[key] = override; changed.append(f"phase_shares.{key}")
+    configuration["phase_shares"] = shares
+    if changed:
+        configuration.pop("configuration_hash", None)
+        configuration["configuration_name"] = f"{base['configuration_name']}-development-override"
+        configuration["configuration_version"] = f"{base['configuration_version']}-override"
+        configuration["status"] = "development_override"
+        configuration["configuration_hash"] = configuration_hash(configuration)
+        print("WARNING: frozen/registered configuration overridden; result is development_override: " + ", ".join(changed), file=sys.stderr)
+    validate_algorithm_configuration(configuration)
+    return configuration
+
 
 def main():
-    a=parser().parse_args();raw=resolve_instance(builtin_name=None if a.instance_file else a.instance,instance_file=a.instance_file);data=prepare_instance(raw,handling_rate_scale=a.handling_rate_scale,old_outbound_release_policy=a.old_outbound_release_policy)
-    lns={"repair_time":a.lns_repair_time,"min_destroy":a.lns_min_destroy,"max_destroy":a.lns_max_destroy,"restarts":a.lns_restarts,"stall_iters":a.lns_stall_iters}
-    weights=Weights(master=MasterWeights(concentration=a.concentration_weight));r=solve_true_benders_pipeline(data,weights,total_core_time=a.total_core_time,root_time_share=a.root_time_share,warm_start_time_share=a.warm_start_time_share,alns_time_share=a.alns_time_share,main_bbc_time_share=a.main_bbc_time_share,mip_gap=a.mip_gap,alloc_domain=a.alloc_domain,concentration_enabled=a.concentration,add_valid_inequalities=a.valid_inequalities,aggregate_recourse_lb=a.aggregate_recourse_lb,analytic_recourse_lb=a.analytic_recourse_lb,cut_strategy=a.cut_strategy,root_prepass=a.root_cut_prepass,root_cut_max_iters=a.root_cut_max_iters,root_cut_time=a.root_cut_time,root_cut_relative_improvement_tol=a.root_cut_relative_improvement_tol,root_cut_violation_tol=a.root_cut_violation_tol,root_cut_stall_iters=a.root_cut_stall_iters,node_cuts=a.node_cuts,node_cut_limit=a.node_cut_limit,node_separation_policy=a.node_separation_policy,node_separation_interval=a.node_separation_interval,callback_time_share_limit=a.callback_time_share_limit,enable_alns=a.alns,seed=a.seed,threads=a.threads,warm_start=a.warm_start,numeric_focus=a.numeric_focus,lns_options=lns)
-    instance_label=a.instance if not a.instance_file else os.path.splitext(os.path.basename(a.instance_file))[0];out=os.path.abspath(os.path.join(a.output_root,f"true_bbc_{datetime.now():%Y%m%d_%H%M%S}_{instance_label}"));os.makedirs(out,exist_ok=True)
-    if r.get("ok"):
-        json.dump(serial(r["core_best"]["solution"]),open(os.path.join(out,"core_best_solution.json"),"w",encoding="utf8"),indent=2);r["core_best"]["solution_file"]="core_best_solution.json"
-    json.dump(serial(r),open(os.path.join(out,"summary.json"),"w",encoding="utf8"),indent=2,default=str)
-    if r.get("ok"):
-        c=r["core_best"];root=r["phase0_root_prepass"];main=r["phase3_bbc"];z=r["concentration"];q=c["components"];print(f"Core UB/LB/gap: {c['ub']:.6f} / {c['lb']:.6f} / {c['gap']:.6f}");print(f"Objective components open/concentration/distance/balance/conflict: {q['open_cost']:.6f} / {q['concentration_cost']:.6f} / {q['distance_cost']:.6f} / {q['balance_cost']:.6f} / {q['conflict_cost']:.6f}");print(f"Concentration raw used bays / normalized: {z['raw_used_bays']} / {z['normalized']}");print(f"Root open/concentration/eta/aggregate: {root.get('master_open_bound')} / {root.get('master_concentration_bound')} / {root.get('master_eta_bound')} / {root.get('aggregate_recourse_bound')}");print(f"Unique cuts / SP solves: {r['total_unique_cuts']} / {main.get('sp_statistics',{}).get('sp_solve_count',0)}")
-    else: print("No exact recourse-feasible incumbent")
-    print(f"Summary: {os.path.join(out,'summary.json')}");return 0 if r.get("ok") else 2
-if __name__=="__main__": raise SystemExit(main())
+    args = parser().parse_args(); configuration = resolve_configuration(args)
+    raw = resolve_instance(builtin_name=None if args.instance_file else args.instance, instance_file=args.instance_file)
+    data = prepare_instance(raw, handling_rate_scale=args.handling_rate_scale,
+                            old_outbound_release_policy=args.old_outbound_release_policy)
+    shares = configuration["phase_shares"]
+    weights = Weights(master=MasterWeights(concentration=args.concentration_weight))
+    result = solve_true_benders_pipeline(
+        data, weights, total_core_time=args.total_core_time, root_time_share=shares["root"],
+        warm_start_time_share=shares["warm"], alns_time_share=shares["alns"], main_bbc_time_share=shares["main"],
+        mip_gap=args.mip_gap, alloc_domain=args.alloc_domain, concentration_enabled=args.concentration,
+        add_valid_inequalities=configuration["valid_inequalities"],
+        aggregate_recourse_lb=configuration["aggregate_recourse_lb"],
+        analytic_recourse_lb=configuration["analytic_recourse_lb"], cut_strategy=configuration["cut_strategy"],
+        root_prepass=configuration["root_prepass"], node_cuts=configuration["node_cuts"],
+        enable_alns=configuration["alns"], warm_start=configuration["warm_start"],
+        seed=args.seed, threads=args.threads, numeric_focus=args.numeric_focus,
+        lns_options=configuration.get("alns_parameters"))
+    result["configuration_identity"] = {"configuration_name": configuration["configuration_name"],
+                                          "configuration_version": configuration["configuration_version"],
+                                          "configuration_hash": configuration["configuration_hash"],
+                                          "configuration_status": configuration["status"],
+                                          "resolved_algorithm_label": resolved_algorithm_label(configuration)}
+    label = args.instance if not args.instance_file else os.path.splitext(os.path.basename(args.instance_file))[0]
+    output = os.path.abspath(os.path.join(args.output_root, f"bbc_{datetime.now():%Y%m%d_%H%M%S}_{label}"))
+    os.makedirs(output, exist_ok=True)
+    if result.get("ok"):
+        with open(os.path.join(output, "core_best_solution.json"), "w", encoding="utf8") as handle:
+            json.dump(serial(result["core_best"]["solution"]), handle, indent=2)
+        result["core_best"]["solution_file"] = "core_best_solution.json"
+    with open(os.path.join(output, "summary.json"), "w", encoding="utf8") as handle:
+        json.dump(serial(result), handle, indent=2, default=str)
+    print(json.dumps(result["configuration_identity"], indent=2))
+    print(f"Summary: {os.path.join(output, 'summary.json')}")
+    return 0 if result.get("ok") else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

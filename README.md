@@ -1,50 +1,47 @@
 # Yard allocation / Benders research code
 
-The repository is organized by responsibility rather than by experiment stage.
+This repository contains exact Branch-and-Benders-Cut, monolithic, classical Benders, and development experiment tooling for the yard-allocation model.
 
-## Entry points
+## Supported candidate entry point
 
-- `main.py` — current provisional BBC pipeline CLI.
-- `solve_direct_gurobi.py` — monolithic Direct Gurobi CLI and Direct+ALNS baseline.
-- `run_experiments.py` — configuration-aware, resumable experiment runner.
-- `scripts/` — smoke tests, benchmark build/audit, and exact regression gates.
+The unique recommended command for candidate evidence is:
 
-## Model and algorithms
+```bash
+python scripts/run_candidate_experiments.py \
+  --instances S01 \
+  --budget 30 \
+  --algorithm-config algorithm-candidate-v1 \
+  --resume
+```
 
-- `model_*.py` — canonical master, monolithic, recourse, concentration, and lower-bound formulations.
-- `solver_true_benders.py` — strengthened true Branch-and-Benders-Cut pipeline.
-- `solver_classical_benders.py` — sequential single-cut Classical Benders baseline.
-- `solver_alns.py` — adaptive large-neighborhood search.
-- `solution_validation.py` / `solution_evaluation.py` — independent feasibility and common KPI evaluation.
-- `cut_validation.py` — independent cut checks.
+Defaults are the fixed Pilot2.1 suite, `algorithm-candidate-v1`, seed 0, one thread, and a 3% MIP gap. Use `--require-clean-git` for formal runs. A dirty worktree always produces a warning.
 
-## Data and reproducibility
+`main.py` is the supported single-instance configuration-driven CLI:
 
-- `data.py` — legacy built-in instances and preparation/validation.
-- `synthetic_instance_generator.py` — deterministic parameterized generator.
-- `benchmark_schema.py` / `benchmark_io.py` — canonical raw-instance JSON and SHA-256 digest.
-- `instance_registry.py` — built-in and benchmark-file resolution.
-- `benchmarks/paper_exp_v1_pilot/` — fixed synthetic pilot suite.
-- `baseline/`, `validation/`, `experiments/smoke/` — required regression evidence; do not treat as final paper results.
+```bash
+python main.py --algorithm-config algorithm-candidate-v1
+```
 
-## Experiment configuration
+Any field override changes the result to a newly hashed `development_override`; it is never reported as frozen candidate-v1. The historical full pipeline remains explicitly callable with `--algorithm-config bbc_full_current`.
 
-- `config.py` — objective weights.
-- `algorithm_configuration.py` / `algorithm_configurations.py` — configuration identity and provisional candidates.
-- `experiment_schema.py`, `experiment_methods.py`, `experiment_runner.py` — method adapters and recoverable result writing.
-- `docs/` — fixed problem protocol, data schema, and provisional algorithm configuration schema.
+`run_experiments.py` is a generic/legacy multi-method runner. Do not use it to create candidate evidence.
+
+## Reproducibility and evidence
+
+- `benchmarks/paper_exp_v1_pilot21/`: fixed Pilot2.1 synthetic suite.
+- `validation/pilot21_exact_fixtures/`: P1 exact correctness evidence.
+- `validation/pilot21_small_finite_time/`: P1 finite-time correctness evidence.
+- `experiments/internal_screen_fast/`: P2 development screening evidence.
+- `experiments/confirmatory_adaptive/`: P3 development confirmation evidence.
+- `algorithm_candidate_decision.json`: authoritative P4 freeze decision.
+- `docs/EVIDENCE_HIERARCHY.md`: precedence rules for historical evidence.
+
+Candidate-v1 is frozen and approved for public-data development/calibration testing. The final algorithm is not frozen, and final holdout execution is not authorized.
 
 ## Verification
 
 ```bash
+python -m py_compile *.py scripts/*.py
 pytest -q
-python scripts/run_smoke_tests.py --pure
-python scripts/run_smoke_tests.py --gurobi
-python scripts/audit_benchmarks.py benchmarks/paper_exp_v1_pilot
+python scripts/run_candidate_v1_smoke.py
 ```
-
-The current algorithm remains provisional. Mathematical correctness is gated by
-`scripts/validate_small_benchmarks.py`; algorithm selection/calibration occurs in later stages.
-# Pilot2 development status
-
-`benchmarks/paper_exp_v1_pilot2` adds deterministic 12-period synthetic instances, sparse ship-group indexing, realized overlap/pressure audits, isolated C0-C8 configurations, canonical anytime output, and paired-analysis tooling. Pilot1 and its exact results are retained unchanged. Public real-data adaptation and final paper experiments remain out of scope, and the final algorithm is not frozen.

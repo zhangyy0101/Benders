@@ -35,7 +35,7 @@ def test_protocol_identity_and_objective_defaults(defaults):
     fixed = defaults["problem_protocol"]
     candidate = defaults["candidate_algorithm_defaults"]
     assert fixed["version"] == "paper-exp-v1" and fixed["status"] == "fixed"
-    assert candidate["status"] == "provisional"
+    assert candidate["status"] == "frozen_candidate"
     assert candidate["algorithm_family"] == "true_bbc_alns"
     assert candidate["problem_protocol_version"] == fixed["version"]
     assert candidate["configuration_name"].startswith("algorithm-candidate-")
@@ -75,18 +75,12 @@ def test_solver_gap_seed_and_concentration_cli_defaults(defaults):
 def test_bbc_phase_share_defaults_match_cli_and_solver(defaults):
     expected = defaults["candidate_algorithm_defaults"]["bbc_phase_shares"]
     args = main.parser().parse_args([])
+    config = main.resolve_configuration(args)
     assert expected == {
-        "root": args.root_time_share,
-        "warm": args.warm_start_time_share,
-        "alns": args.alns_time_share,
-        "main": args.main_bbc_time_share,
-    }
-    signature = signature_defaults(solve_true_benders_pipeline)
-    assert expected == {
-        "root": signature["root_time_share"],
-        "warm": signature["warm_start_time_share"],
-        "alns": signature["alns_time_share"],
-        "main": signature["main_bbc_time_share"],
+        "root": config["phase_shares"]["root"],
+        "warm": config["phase_shares"]["warm"],
+        "alns": config["phase_shares"]["alns"],
+        "main": config["phase_shares"]["main"],
     }
 
 
@@ -104,25 +98,22 @@ def test_direct_alns_phase_share_defaults_match_solver(defaults):
 def test_candidate_switches_and_alns_defaults_match_cli(defaults):
     candidate = defaults["candidate_algorithm_defaults"]
     args = main.parser().parse_args([])
+    config = main.resolve_configuration(args)
     assert {
-        "root_prepass": args.root_cut_prepass,
-        "warm_start": args.warm_start,
-        "alns": args.alns,
-        "aggregate_recourse_lb": args.aggregate_recourse_lb,
-        "analytic_recourse_lb": args.analytic_recourse_lb,
-        "valid_inequalities": args.valid_inequalities,
-        "node_cuts": args.node_cuts,
-        "cut_strategy": args.cut_strategy,
+        "root_prepass": config["root_prepass"],
+        "warm_start": config["warm_start"],
+        "alns": config["alns"],
+        "aggregate_recourse_lb": config["aggregate_recourse_lb"],
+        "analytic_recourse_lb": config["analytic_recourse_lb"],
+        "valid_inequalities": config["valid_inequalities"],
+        "node_cuts": config["node_cuts"],
+        "cut_strategy": config["cut_strategy"],
     } == {key: candidate[key] for key in (
         "root_prepass", "warm_start", "alns", "aggregate_recourse_lb",
         "analytic_recourse_lb", "valid_inequalities", "node_cuts", "cut_strategy",
     )}
     alns = candidate["alns_parameters"]
-    assert (args.lns_repair_time, args.lns_min_destroy, args.lns_max_destroy,
-            args.lns_restarts, args.lns_stall_iters) == (
-        alns["repair_time"], alns["min_destroy"], alns["max_destroy"],
-        alns["restarts"], alns["stall_iters"],
-    )
+    assert config["alns_parameters"] == alns
     signature = signature_defaults(adaptive_lns)
     assert alns["repair_gap"] == signature["repair_gap"]
     assert alns["destination_ratio"] == signature["destination_ratio"]

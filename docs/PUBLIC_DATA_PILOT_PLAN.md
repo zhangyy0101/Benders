@@ -25,7 +25,7 @@ Algorithm changes remain allowed on the development set. If candidate-v1 perform
 
 ## Holdout policy
 
-The holdout may be opened once, only after a later decision explicitly freezes the final algorithm. P4 does not authorize public-data adaptation or holdout execution.
+P4 authorizes development/calibration-set adaptation and testing. It does not authorize final holdout execution. The holdout may be opened once, only after a later decision explicitly freezes the final algorithm.
 
 ## Paper ablation reservation
 

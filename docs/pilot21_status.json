@@ -1,5 +1,7 @@
 {
-  "stage": "p4-candidate-v1-frozen",
+  "stage": "p5-repository-entrypoint-cleanup-complete",
+  "candidate_configuration": "algorithm-candidate-v1",
+  "approved_for_public_data_pilot": true,
   "fixed_benchmark_generated": true,
   "exact_validation_gate_passed": true,
   "small_finite_time_gate_passed": true,
@@ -42,6 +44,14 @@
     "final_algorithm_frozen": false,
     "new_solver_runs": 0
   },
-  "candidate_algorithm_frozen": false,
+  "p5_cleanup": {
+    "branch": "algorithm-candidate-v2-development",
+    "candidate_v1_baseline_tag": "algorithm-candidate-v1-baseline",
+    "candidate_v1_hash_unchanged": true,
+    "candidate_v1_smoke": "PASS",
+    "full_test_suite": "153 passed",
+    "candidate_v2_algorithm_improvement_started": false
+  },
+  "candidate_algorithm_frozen": true,
   "final_algorithm_frozen": false
 }

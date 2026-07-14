@@ -21,6 +21,7 @@ def test_run_id_stable_and_configuration_change_changes_identity():
 
 def test_resume_and_failed_rerun_are_explicit(tmp_path):
     job=fixture_job(tmp_path);out=tmp_path/"out";rows=run_jobs([job],out,method_runner=mock_success);assert len(rows)==1
+    assert "resolved_algorithm_label" in rows[0]["identity"]
     rows=run_jobs([job],out,resume=True,method_runner=lambda *a,**k:(_ for _ in ()).throw(AssertionError("should skip")));assert len(rows)==1
     failed_job=fixture_job(tmp_path/"failed");failed=run_jobs([failed_job],tmp_path/"failed_out",method_runner=mock_failure);assert failed[0]["status"]["status"]=="EXCEPTION"
     unchanged=run_jobs([failed_job],tmp_path/"failed_out",resume=True,method_runner=mock_success);assert not unchanged[0]["status"]["ok"]

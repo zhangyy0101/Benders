@@ -1,7 +1,7 @@
 """Named provisional BBC configurations for development and ablation."""
 from __future__ import annotations
 from copy import deepcopy
-from algorithm_configuration import configuration_hash
+from algorithm_configuration import configuration_hash,validate_algorithm_configuration
 
 BASE={"algorithm_family":"true_bbc_alns","configuration_version":"1","status":"candidate","root_prepass":False,"warm_start":False,"alns":False,"aggregate_recourse_lb":False,"analytic_recourse_lb":False,"valid_inequalities":False,"node_cuts":False,"cut_strategy":"standard","phase_shares":{"root":0.0,"warm":0.0,"alns":0.0,"main":1.0},"alns_parameters":{"repair_time":2.0,"repair_gap":.03,"min_destroy":.1,"max_destroy":.35,"restarts":1,"stall_iters":10,"destination_ratio":1.0}}
 def _cfg(name,**changes):
@@ -36,4 +36,4 @@ CONFIGURATIONS={
 def list_algorithm_configurations():return tuple(CONFIGURATIONS)
 def get_algorithm_configuration(name):
     if name not in CONFIGURATIONS:raise KeyError(f"unknown algorithm configuration {name!r}; available: {', '.join(CONFIGURATIONS)}")
-    value=deepcopy(CONFIGURATIONS[name]);value["configuration_hash"]=configuration_hash(value);return value
+    value=deepcopy(CONFIGURATIONS[name]);value["configuration_hash"]=configuration_hash(value);validate_algorithm_configuration(value);return value
