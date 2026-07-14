@@ -26,5 +26,7 @@ def test_main_override_gets_new_identity(capsys):
 
 
 def test_legacy_full_remains_explicitly_available():
-    args = main.parser().parse_args(["--algorithm-config", "bbc_full_current"])
+    args = main.parser(include_historical=True).parse_args(
+        ["--include-historical-configs", "--algorithm-config", "bbc_full_current"]
+    )
     assert main.resolve_configuration(args)["configuration_name"] == "bbc_full_current"

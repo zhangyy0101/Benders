@@ -28,7 +28,7 @@ def test_classical_matches_direct_exact_on_tiny(name):
     assert classical["iteration_trace"] and classical["sp_statistics"]["sp_solve_count"]>0
 
 def test_classical_s01_is_feasible_and_matches_direct_if_optimal():
-    data=prepare_instance(load_instance("benchmarks/paper_exp_v1_pilot/small/S01.json"));direct=solve_direct_gurobi(data,Weights(),time_limit=60,mip_gap=0,threads=1);classical=solve_classical_benders(data,Weights(),time_limit=60,mip_gap=0,threads=1)
+    data=prepare_instance(load_instance("benchmarks/paper_exp_v1_pilot21/small/S01.json"));direct=solve_direct_gurobi(data,Weights(),time_limit=60,mip_gap=0,threads=1);classical=solve_classical_benders(data,Weights(),time_limit=60,mip_gap=0,threads=1)
     assert classical["ok"] and classical["components"]["feasibility"]["feasible"]
     assert classical["lb"]<=classical["ub"]+1e-5
     if direct["status_name"]==classical["status_name"]=="OPTIMAL":assert classical["ub"]==pytest.approx(direct["ub"],abs=1e-5)

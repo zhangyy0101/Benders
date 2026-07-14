@@ -22,7 +22,7 @@ Defaults are the fixed Pilot2.1 suite, `algorithm-candidate-v1`, seed 0, one thr
 python main.py --algorithm-config algorithm-candidate-v1
 ```
 
-Any field override changes the result to a newly hashed `development_override`; it is never reported as frozen candidate-v1. The historical full pipeline remains explicitly callable with `--algorithm-config bbc_full_current`.
+Any field override changes the result to a newly hashed `development_override`; it is never reported as frozen candidate-v1. Historical configurations remain explicitly callable with `--include-historical-configs`, for example `--include-historical-configs --algorithm-config bbc_full_current`.
 
 `run_experiments.py` is a generic/legacy multi-method runner. Do not use it to create candidate evidence.
 

@@ -15,7 +15,7 @@ from benchmark_io import instance_digest, load_instance
 from experiment_runner import run_jobs
 
 
-def parser():
+def parser(*, include_historical=False):
     value = argparse.ArgumentParser(description="Run registered BBC candidate configurations")
     value.add_argument("--suite-dir", default="benchmarks/paper_exp_v1_pilot21")
     value.add_argument("--instances", nargs="+")
@@ -27,7 +27,11 @@ def parser():
     value.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     value.add_argument("--rerun-failed", action="store_true")
     value.add_argument("--save-solutions", action="store_true")
-    value.add_argument("--algorithm-config", choices=list_algorithm_configurations(), default="algorithm-candidate-v1")
+    value.add_argument("--include-historical-configs", action="store_true",
+                       help="show and allow archived development configurations")
+    value.add_argument("--algorithm-config",
+                       choices=list_algorithm_configurations(include_historical=include_historical),
+                       default="algorithm-candidate-v1")
     value.add_argument("--require-clean-git", action="store_true")
     return value
 
@@ -56,7 +60,8 @@ def build_jobs(args):
 
 
 def main():
-    args = parser().parse_args()
+    include_historical = "--include-historical-configs" in sys.argv[1:]
+    args = parser(include_historical=include_historical).parse_args()
     jobs = build_jobs(args)
     rows = run_jobs(jobs, args.output, resume=args.resume, rerun_failed=args.rerun_failed,
                     save_solutions=args.save_solutions, command=" ".join(sys.argv),

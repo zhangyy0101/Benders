@@ -33,7 +33,25 @@ CONFIGURATIONS={
  "bbc_stabilized":_cfg("bbc_stabilized",root_prepass=True,warm_start=True,alns=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,valid_inequalities=True,cut_strategy="stabilized",phase_shares=_shares(.05,.15,.25)),
  "bbc_node_cuts":_cfg("bbc_node_cuts",root_prepass=True,warm_start=True,alns=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,valid_inequalities=True,node_cuts=True,phase_shares=_shares(.05,.15,.25)),
 }
-def list_algorithm_configurations():return tuple(CONFIGURATIONS)
+ACTIVE_CONFIGURATIONS = ("algorithm-candidate-v1",)
+CONFIGURATION_VISIBILITY = {
+    name: ("active" if name in ACTIVE_CONFIGURATIONS else "historical_development")
+    for name in CONFIGURATIONS
+}
+
+
+def list_algorithm_configurations(*, include_historical=False):
+    """List normal CLI choices without changing any hashed payload."""
+    return tuple(CONFIGURATIONS) if include_historical else ACTIVE_CONFIGURATIONS
+
+
+def configuration_registry_status(name):
+    """Return visibility metadata deliberately stored outside the payload."""
+    if name not in CONFIGURATIONS:
+        raise KeyError(name)
+    return CONFIGURATION_VISIBILITY[name]
+
+
 def get_algorithm_configuration(name):
     if name not in CONFIGURATIONS:raise KeyError(f"unknown algorithm configuration {name!r}; available: {', '.join(CONFIGURATIONS)}")
     value=deepcopy(CONFIGURATIONS[name]);value["configuration_hash"]=configuration_hash(value);validate_algorithm_configuration(value);return value

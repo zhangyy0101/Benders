@@ -4,7 +4,7 @@ Audit date: 2026-07-11. Branch: `paper-exp-v1-development`.
 
 | Stage | Status | Persistent evidence |
 |---|---|---|
-| 01 baseline/cleanup/smoke | PASS | tag `pre-paper-exp-v1`, `baseline/pre_paper_exp_v1/`, registry and smoke tests |
+| 01 baseline/cleanup/smoke | PASS | archived history at `archive/paper-exp-v1-development`, registry and smoke tests |
 | 02 fixed problem/provisional algorithm | PASS | protocol, data/configuration schemas, machine-readable defaults and hash tests |
 | 03 common evaluator/KPIs | PASS | canonical evaluator, pure/Gurobi consistency tests, incomplete-solution guard |
 | 04 deterministic generator | PASS | frozen spec, local RNG, construction prechecks and regression tests |
@@ -38,7 +38,5 @@ Audit date: 2026-07-11. Branch: `paper-exp-v1-development`.
 
 ## Cleanup policy
 
-Required `baseline/`, `benchmarks/`, `validation/`, and smoke/calibration evidence are retained.
-Caches, obsolete audit directories, the superseded mojibake refactor note, and duplicate calibration
-`results.json`/`results.csv` exports were removed. `raw_results.jsonl` remains the calibration source
-of truth; `summary_by_*.csv` and reports are derived outputs.
+Historical Pilot1 calibration and smoke evidence is preserved by `archive/paper-exp-v1-development`.
+The active tree retains Pilot2.1 benchmarks, validation gates, and compact P1-P3 selection evidence.

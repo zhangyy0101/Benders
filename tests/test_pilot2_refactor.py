@@ -7,16 +7,16 @@ from model_common import arrival,ship_group_pairs,ship_groups
 from model_master import build_master_model
 from pilot_benchmark_suite import RANGES,audit_instance
 
-def test_protected_pilot2_fixed_suite_remains_readable():
+def test_active_pilot21_fixed_suite_remains_readable():
  for size,prefix in (("small","S01"),("medium","M01"),("large","L01")):
-  d=load_instance(f"benchmarks/paper_exp_v1_pilot2/{size}/{prefix}.json");assert len(d["N"])==12
+  d=load_instance(f"benchmarks/paper_exp_v1_pilot21/{size}/{prefix}.json");assert len(d["N"])==12
 
 def test_sparse_helpers_are_backward_compatible_and_inactive_arrival_is_zero():
- d=load_instance("benchmarks/paper_exp_v1_pilot2/small/S01.json");j=d["J_new"][0];inactive=next(g for g in d["G"] if g not in ship_groups(d,j));assert arrival(d,j,inactive,0)==0
+ d=load_instance("benchmarks/paper_exp_v1_pilot21/small/S01.json");j=d["J_new"][0];inactive=next(g for g in d["G"] if g not in ship_groups(d,j));assert arrival(d,j,inactive,0)==0
  legacy=copy.deepcopy(d);legacy.pop("ActiveGroupsByShip");assert len(ship_group_pairs(legacy))==len(legacy["J_new"])*len(legacy["G"])
 
 def test_sparse_master_reduces_alloc_variables():
- d=load_instance("benchmarks/paper_exp_v1_pilot2/small/S01.json");m,v,_=build_master_model(d,Weights());sparse=len(v["alloc_boxes"]);dense=len(d["I_list"])*len(d["J_new"])*len(d["G"])*len(d["N"]);assert sparse<.8*dense;m.dispose()
+ d=load_instance("benchmarks/paper_exp_v1_pilot21/small/S01.json");m,v,_=build_master_model(d,Weights());sparse=len(v["alloc_boxes"]);dense=len(d["I_list"])*len(d["J_new"])*len(d["G"])*len(d["N"]);assert sparse<.8*dense;m.dispose()
 
 def test_c0_c8_hashes_unique_and_required_differences_isolated():
  configs=[get_algorithm_configuration(f"C{i}_{name}") for i,name in enumerate(("bbc_core","core_analytic","core_aggregate","core_both_lb","both_lb_root","both_lb_warm","both_lb_warm_alns","both_lb_root_warm_alns","both_lb_root_warm_alns_valid"))];assert len({c["configuration_hash"] for c in configs})==9

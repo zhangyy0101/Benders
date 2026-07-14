@@ -15,3 +15,23 @@ env/
 
 .idea/
 .vscode/
+
+# Solver outputs
+*.lp
+*.mps
+*.mst
+*.sol
+*.ilp
+*.prm
+
+# Generated experiment payloads
+experiments/**/solutions/
+experiments/**/results.json
+validation/**/results.json
+baseline/**/runs/
+baseline/**/logs/
+
+# Local archives
+artifacts/
+release_artifacts/
+local_results/

@@ -25,12 +25,16 @@ def serial(value):
     return value
 
 
-def parser():
+def parser(*, include_historical=False):
     value = argparse.ArgumentParser(description="Configuration-driven exact BBC runner")
     source = value.add_mutually_exclusive_group()
     source.add_argument("--instance", choices=list_builtin_instances(), default="3new6old")
     source.add_argument("--instance-file")
-    value.add_argument("--algorithm-config", choices=list_algorithm_configurations(), default="algorithm-candidate-v1")
+    value.add_argument("--include-historical-configs", action="store_true",
+                       help="show and allow archived development configurations")
+    value.add_argument("--algorithm-config",
+                       choices=list_algorithm_configurations(include_historical=include_historical),
+                       default="algorithm-candidate-v1")
     value.add_argument("--total-core-time", type=float, default=60)
     for flag in ("root-cut-prepass", "aggregate-recourse-lb", "analytic-recourse-lb",
                  "valid-inequalities", "warm-start", "alns", "node-cuts"):
@@ -84,7 +88,8 @@ def resolve_configuration(args):
 
 
 def main():
-    args = parser().parse_args(); configuration = resolve_configuration(args)
+    include_historical = "--include-historical-configs" in sys.argv[1:]
+    args = parser(include_historical=include_historical).parse_args(); configuration = resolve_configuration(args)
     raw = resolve_instance(builtin_name=None if args.instance_file else args.instance, instance_file=args.instance_file)
     data = prepare_instance(raw, handling_rate_scale=args.handling_rate_scale,
                             old_outbound_release_policy=args.old_outbound_release_policy)
