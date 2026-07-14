@@ -36,18 +36,21 @@ def first_stage_cost(data,weights,x,alloc,*,alloc_domain="integer",concentration
     oc=open_cost(data,weights,x);return {"open_cost":oc,"concentration_cost":cc,"total":oc+cc,"concentration":concentration}
 def required_reserve(data,j,g,n,alloc_domain):
     value=float(data["Alpha"])*sum(arrival(data,j,g,t) for t in data["N"] if t<=n);return float(math.ceil(value-1e-9)) if alloc_domain=="integer" else value
-def add_common_master_valid_inequalities(model,data,variables,*,enabled=True):
-    if not enabled:return []
+def add_common_master_valid_inequalities(model,data,variables,*,enabled=True,profile="common"):
+    import time
+    started=time.perf_counter();families={"ship_size_period_handling":0,"minimum_compatible_open_bays":0,"open_monotonicity":0}
+    if not enabled:return {"enabled":False,"profile":"none","constraints":[],"count":0,"count_by_family":families,"build_time":time.perf_counter()-started}
+    if profile!="common":raise ValueError(f"unknown enabled valid inequality profile {profile!r}")
     x,alloc=variables["x"],variables["alloc_boxes"];I,J,N=data["I_list"],data["J_new"],data["N"];modes={i:int(data["Fixed_Bay_Mode"][i]) for i in I};alpha=float(data["Alpha"]);added=[]
     for j in J:
       for size in data["S"]:
        bays=[i for i in I if modes[i]==int(size)];sg=[g for g in ship_groups(data,j) if group_size(data,g)==int(size)]
        for n in N:
         need=sum(arrival(data,j,g,n) for g in sg);caps=[float(data["Bay_Handling_Rate"][i,n])*float(data["Intervals"][n]["dur"]) for i in bays];maxcap=max(caps,default=0)
-        if need>1e-9:added.append(model.addConstr(sum(caps[p]*x[i,j,n] for p,i in enumerate(bays))>=alpha*need,name=f"common_handling_{j}_{size}_{n}"))
-        if need>1e-9 and maxcap>0:added.append(model.addConstr(sum(x[i,j,n] for i in bays)>=math.ceil(alpha*need/maxcap-1e-9),name=f"common_min_bays_{j}_{size}_{n}"))
+        if need>1e-9:added.append(model.addConstr(sum(caps[p]*x[i,j,n] for p,i in enumerate(bays))>=alpha*need,name=f"common_handling_{j}_{size}_{n}"));families["ship_size_period_handling"]+=1
+        if need>1e-9 and maxcap>0:added.append(model.addConstr(sum(x[i,j,n] for i in bays)>=math.ceil(alpha*need/maxcap-1e-9),name=f"common_min_bays_{j}_{size}_{n}"));families["minimum_compatible_open_bays"]+=1
     if not any(float(v)>1e-9 for v in data.get("New_Outbound_Req",{}).values()):
       for n in N[1:]:
        for j in J:
-        for i in I:added.append(model.addConstr(x[i,j,n]>=x[i,j,n-1],name=f"common_x_mono_{i}_{j}_{n}"))
-    return added
+        for i in I:added.append(model.addConstr(x[i,j,n]>=x[i,j,n-1],name=f"common_x_mono_{i}_{j}_{n}"));families["open_monotonicity"]+=1
+    return {"enabled":True,"profile":profile,"constraints":added,"count":len(added),"count_by_family":families,"build_time":time.perf_counter()-started}

@@ -49,12 +49,12 @@ def resolved_algorithm_label(configuration: Mapping) -> str:
     valid_profile = configuration.get("valid_inequality_profile", "common")
     if name == "algorithm-candidate-v1":
         return "aggregate_strengthened_bbc"
-    if aggregate_level == "pod_size":
-        return "pod_size_aggregate_strengthened_bbc"
-    if configuration.get("valid_inequalities") and valid_profile == "compact":
-        return "aggregate_strengthened_bbc_with_compact_valid_inequalities"
     if configuration.get("alns") or configuration.get("warm_start") or configuration.get("root_prepass"):
         return "true_bbc_alns_legacy"
+    if aggregate_level == "pod_size":
+        return "pod_size_aggregate_strengthened_bbc"
+    if configuration.get("valid_inequalities") and valid_profile in {"common", "compact"}:
+        return "aggregate_strengthened_bbc_with_compact_valid_inequalities"
     return "aggregate_strengthened_bbc" if configuration.get("aggregate_recourse_lb") else "exact_bbc_core"
 
 

@@ -1,5 +1,5 @@
 {
-  "stage": "p5-repository-entrypoint-cleanup-complete",
+  "stage": "p6a-candidate-v2-strengthenings-exact-pass",
   "candidate_configuration": "algorithm-candidate-v1",
   "approved_for_public_data_pilot": true,
   "fixed_benchmark_generated": true,
@@ -51,6 +51,15 @@
     "candidate_v1_smoke": "PASS",
     "full_test_suite": "153 passed",
     "candidate_v2_algorithm_improvement_started": false
+  },
+  "p6a_candidate_v2_strengthenings": {
+    "implemented_configs": ["V2A_valid", "V2B_pod_size_aggregate", "V2C_pod_size_aggregate_valid"],
+    "exact_gate": "PASS",
+    "exact_gate_runs": 25,
+    "candidate_v1_hash_unchanged": true,
+    "candidate_v2_frozen": false,
+    "approved_for_p6b": true,
+    "final_algorithm_frozen": false
   },
   "candidate_algorithm_frozen": true,
   "final_algorithm_frozen": false
