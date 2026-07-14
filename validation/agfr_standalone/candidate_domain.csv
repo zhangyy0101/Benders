@@ -1,9 +1,0 @@
-instance_id,seed,candidate_pair_ratio,joint_coverage_status,soft_cap_exceptions,expansion_level
-tiny,0,0.5,feasible,0,0
-tiny_concentration,0,0.5,feasible,0,0
-XS01,0,0.3333333333333333,feasible,0,0
-XS02,0,0.4666666666666667,feasible,0,0
-XS03,0,0.6666666666666666,feasible,0,0
-S01,0,0.5,feasible,0,0
-M01,0,0.2946236559139785,feasible,0,0
-L01,0,0.13987341772151898,feasible,0,0

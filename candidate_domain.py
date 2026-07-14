@@ -7,7 +7,7 @@ import time
 import gurobipy as gp
 from gurobipy import GRB
 
-from model_common import arrival, fixed_in_block, group_size, outbound_pressure, remaining_capacity, required_reserve, ship_groups
+from model_common import arrival, group_size, outbound_pressure, remaining_capacity, required_reserve, ship_groups
 
 
 TOLERANCE = 1e-7
@@ -76,8 +76,7 @@ def _individual_coverage(data, j, group, bays, rem):
     return not failures, failures
 
 
-def check_joint_candidate_feasibility(data, candidate_bays, *, time_limit: float = 2.0, threads: int = 1,
-                                      integer_reserve: bool = False) -> dict:
+def check_joint_candidate_feasibility(data, candidate_bays, *, time_limit: float = 2.0, threads: int = 1) -> dict:
     """Check necessary joint feasibility using a continuous, objective-free LP."""
     started = time.perf_counter()
     if time_limit <= 0:
@@ -89,7 +88,7 @@ def check_joint_candidate_feasibility(data, candidate_bays, *, time_limit: float
         model.Params.TimeLimit = max(0.0, float(time_limit))
         pairs = [(j, g) for j in data["J_new"] for g in ship_groups(data, j)]
         keys = [(i, j, g, n) for j, g in pairs for i in candidate_bays[j, g] for n in data["N"]]
-        reserve = model.addVars(keys, lb=0, vtype=GRB.INTEGER if integer_reserve else GRB.CONTINUOUS, name="reserve")
+        reserve = model.addVars(keys, lb=0, name="reserve")
         flow = model.addVars([(j, g, i, n) for i, j, g, n in keys], lb=0, name="flow")
         inventory = model.addVars([(j, g, i, n) for i, j, g, n in keys], lb=0, name="inventory")
         alpha = float(data["Alpha"])
@@ -97,8 +96,7 @@ def check_joint_candidate_feasibility(data, candidate_bays, *, time_limit: float
         for j, g in pairs:
             bays = candidate_bays[j, g]
             for n in data["N"]:
-                reserve_domain = "integer" if integer_reserve else "continuous"
-                model.addConstr(gp.quicksum(reserve[i, j, g, n] for i in bays) == required_reserve(data, j, g, n, reserve_domain))
+                model.addConstr(gp.quicksum(reserve[i, j, g, n] for i in bays) == required_reserve(data, j, g, n, "continuous"))
                 model.addConstr(gp.quicksum(flow[j, g, i, n] for i in bays) == arrival(data, j, g, n))
                 for i in bays:
                     previous = inventory[j, g, i, n - 1] if n > 0 else float(data["initial_inventory_data"].get((i, j, g), 0))
@@ -119,46 +117,8 @@ def check_joint_candidate_feasibility(data, candidate_bays, *, time_limit: float
         model.optimize()
         status = "feasible" if model.SolCount else "infeasible" if model.Status == GRB.INFEASIBLE else "unknown"
         name = {GRB.OPTIMAL: "OPTIMAL", GRB.INFEASIBLE: "INFEASIBLE", GRB.TIME_LIMIT: "TIME_LIMIT"}.get(model.Status, str(model.Status))
-        partial_start = None
-        full_start = None
-        if model.SolCount:
-            alloc_start = {}
-            x_start = {}
-            reserve_support = {}
-            for i, j, g, n in keys:
-                value = float(reserve[i, j, g, n].X)
-                if value > TOLERANCE:
-                    x_start[i, j, n] = 1.0
-                    item = reserve_support.setdefault((j, g, i), {"max": 0.0, "sum": 0.0})
-                    item["max"] = max(item["max"], value); item["sum"] += value
-                    if abs(value - round(value)) <= 1e-7:
-                        alloc_start[i, j, g, n] = float(round(value))
-            partial_start = {"x": x_start, "alloc_boxes": alloc_start}
-            if integer_reserve:
-                alloc_values = {(i, j, g, n): float(reserve[i, j, g, n].X) for i, j, g, n in keys}
-                flow_values = {(j, g, i, n): float(flow[j, g, i, n].X) for i, j, g, n in keys}
-                inventory_values = {(j, g, i, n): float(inventory[j, g, i, n].X) for i, j, g, n in keys}
-                x_values = {(i, j, n): float(any(alloc_values.get((i, j, g, n), 0) > TOLERANCE
-                                                        for g in ship_groups(data, j)))
-                            for j in data["J_new"] for i in {bay for g in ship_groups(data, j) for bay in candidate_bays[j, g]}
-                            for n in data["N"]}
-                share_values = {(j, k, g, n): sum(flow_values.get((j, g, i, n), 0.0) for i in data["Bays_in_Block"][k])
-                                for j, g in pairs for k in data["K"] for n in data["N"]}
-                fixed = fixed_in_block(data)
-                total_values = {(k, n): fixed[k, n] + sum(share_values[j, k, g, n] for j, g in pairs)
-                                for k in data["K"] for n in data["N"]}
-                avg_values = {n: sum(total_values[k, n] for k in data["K"]) / len(data["K"]) for n in data["N"]}
-                balance_values = {(k, n): abs(total_values[k, n] - avg_values[n]) for k in data["K"] for n in data["N"]}
-                final = max(data["N"])
-                use_values = {(j, g, i): float(alloc_values.get((i, j, g, final), 0) > TOLERANCE)
-                              for j, g in pairs for i in candidate_bays[j, g]}
-                full_start = {"x": x_values, "alloc_boxes": alloc_values, "din": flow_values,
-                              "inv": inventory_values, "in_share": share_values, "in_total": total_values,
-                              "avg": avg_values, "g_bal": balance_values, "concentration_use": use_values}
         return {"status": status, "status_name": name, "runtime": time.perf_counter() - started,
-                "variable_count": model.NumVars, "constraint_count": model.NumConstrs,
-                "partial_start": partial_start, "full_start": full_start,
-                "reserve_support": reserve_support if model.SolCount else {}}
+                "variable_count": model.NumVars, "constraint_count": model.NumConstrs}
     except Exception as exc:
         return {"status": "unknown", "status_name": "ERROR", "runtime": time.perf_counter() - started,
                 "error": f"{type(exc).__name__}: {exc}"}
@@ -177,8 +137,6 @@ def build_candidate_domain(
     max_bays_per_group: int = 12,
     max_candidate_fraction: float = 0.40,
     expansion_level: int = 0,
-    auto_expand_joint: bool = True,
-    joint_time_limit: float = 2.0,
 ) -> dict:
     if not 0 <= block_mass_target <= 1 or not 0 <= max_candidate_fraction <= 1:
         raise ValueError("mass target and candidate fraction must lie in [0, 1]")
@@ -276,13 +234,7 @@ def build_candidate_domain(
             chosen = [i for i in ranking if bay_scores[j, group, i]["alloc_support"] > TOLERANCE]
             target_count = min(len(ranking), min_bays_per_group + (2 if expansion_level >= 1 else 0) + (3 if expansion_level >= 2 else 0))
             selected_block_bays = [i for i in ranking if data["I"][i]["block"] in selected_blocks]
-            selection_order = selected_block_bays + ranking
-            if guide_result.get("source") == "static_fallback" and ranking:
-                peers = [g for g in ship_groups(data, j) if group_size(data, g) == size]
-                offset = (peers.index(group) * max(1, target_count)) % len(ranking)
-                rotated = ranking[offset:] + ranking[:offset]
-                selection_order = ([i for i in rotated if data["I"][i]["block"] in selected_blocks] + rotated)
-            for i in selection_order:
+            for i in selected_block_bays + ranking:
                 if len(chosen) >= target_count:
                     break
                 if i not in chosen:
@@ -306,15 +258,15 @@ def build_candidate_domain(
     # A proven joint infeasibility triggers one deterministic full-compatible expansion.
     # This avoids making the returned domain depend on the timing of several successive LPs.
     # A timeout remains unknown and never triggers expansion.
-    joint = check_joint_candidate_feasibility(data, candidate_bays, time_limit=joint_time_limit)
+    joint = check_joint_candidate_feasibility(data, candidate_bays)
     expansion_rounds = 0
-    if auto_expand_joint and joint["status"] == "infeasible":
+    if joint["status"] == "infeasible":
         changed = any(len(candidate_bays[key]) < len(ranking) for key, ranking in bay_rankings.items())
         if changed:
             candidate_bays = {key: list(ranking) for key, ranking in bay_rankings.items()}
             expansion_rounds = 1
             forced_exceptions.append({"reason": "joint_coverage", "action": "full_compatible_expansion"})
-            joint = check_joint_candidate_feasibility(data, candidate_bays, time_limit=joint_time_limit)
+            joint = check_joint_candidate_feasibility(data, candidate_bays)
 
     candidate_ship_bays = {(i, j) for (j, _g), bays in candidate_bays.items() for i in bays}
     full_pairs = sum(len(_compatible_bays(data, g)) for j in data["J_new"] for g in ship_groups(data, j))

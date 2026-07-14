@@ -15,16 +15,14 @@ from solution_validation import validate_solution
 def _status_name(status):
     return {GRB.OPTIMAL: "OPTIMAL", GRB.TIME_LIMIT: "TIME_LIMIT", GRB.INFEASIBLE: "INFEASIBLE",
             GRB.INF_OR_UNBD: "INF_OR_UNBD", GRB.INTERRUPTED: "INTERRUPTED",
-            GRB.SUBOPTIMAL: "SUBOPTIMAL", GRB.SOLUTION_LIMIT: "SOLUTION_LIMIT"}.get(status, str(status))
+            GRB.SUBOPTIMAL: "SUBOPTIMAL"}.get(status, str(status))
 
 
 def solve_restricted_monolithic_repair(data, weights, allowed_group_bays, *, time_limit: float,
                                        guide_result=None, threads: int = 1, seed: int = 0,
                                        mip_gap: float = .03, alloc_domain: str = "integer",
                                        add_valid_inequalities: bool = True,
-                                       concentration_enabled: bool = True,
-                                       solution_limit: int | None = None,
-                                       validation_time_reserve: float = 0.0) -> dict:
+                                       concentration_enabled: bool = True) -> dict:
     started = time.perf_counter()
     deadline = started + max(0.0, float(time_limit))
     build_started = time.perf_counter()
@@ -34,34 +32,26 @@ def solve_restricted_monolithic_repair(data, weights, allowed_group_bays, *, tim
     build_runtime = time.perf_counter() - build_started
     try:
         guide = guide_result or {}
-        for name, values in variables.items():
-            supplied = guide.get(name, {})
-            for key, var in values.items():
-                if key in supplied:
-                    var.Start = float(supplied[key])
+        for key, var in variables["x"].items():
+            if key in guide.get("x", {}):
+                var.Start = float(guide["x"][key])
+        for key, var in variables["alloc_boxes"].items():
+            if key in guide.get("alloc_boxes", {}):
+                var.Start = float(guide["alloc_boxes"][key])
         remaining = max(0.0, deadline - time.perf_counter())
         model.Params.OutputFlag = 0
         model.Params.Threads = int(threads or 1)
         model.Params.Seed = int(seed)
         model.Params.MIPGap = float(mip_gap)
-        model.Params.MIPFocus = 1
-        model.Params.Heuristics = .5
-        if solution_limit is not None:
-            model.Params.SolutionLimit = max(1, int(solution_limit))
-        model.Params.TimeLimit = max(0.0, remaining - max(0.0, float(validation_time_reserve)))
+        model.Params.TimeLimit = remaining
         optimize_started = time.perf_counter()
-        first_incumbent_time = [None]
-        def incumbent_callback(_model, where):
-            if where == GRB.Callback.MIPSOL and first_incumbent_time[0] is None:
-                first_incumbent_time[0] = time.perf_counter() - started
-        if model.Params.TimeLimit > 0:
-            model.optimize(incumbent_callback)
+        if remaining > 0:
+            model.optimize()
         optimization_runtime = time.perf_counter() - optimize_started
         base = {"ok": False, "status_name": "DEADLINE_EXHAUSTED" if remaining <= 0 else _status_name(model.Status),
                 "runtime": time.perf_counter() - started, "model_build_runtime": build_runtime,
                 "optimization_runtime": optimization_runtime, "solution": None, "canonical_ub": None,
                 "repair_objective": None, "guide_start_used": bool(guide_result),
-                "time_to_first_repair_incumbent": first_incumbent_time[0],
                 **{key: context[key] for key in ("candidate_pair_count", "full_pair_count", "candidate_pair_ratio",
                                                   "restricted_variable_count", "estimated_full_variable_count",
                                                   "restricted_constraint_count")}}
@@ -81,7 +71,6 @@ def solve_restricted_monolithic_repair(data, weights, allowed_group_bays, *, tim
         oracle = GlobalRecourseOracle(data, weights)
         try:
             oracle.update_rhs(sparse_solution["x"], sparse_solution["alloc_boxes"])
-            oracle.model.Params.TimeLimit = max(0.0, deadline - time.perf_counter())
             oracle_status = oracle.solve()
             if oracle_status != GRB.OPTIMAL:
                 raise RuntimeError(f"restricted repair oracle status {_status_name(oracle_status)}")
