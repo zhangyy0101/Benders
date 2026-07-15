@@ -2,31 +2,36 @@
   "data": {
     "ActiveGroupsByShip": {
       "Ship_New_001": [
-        "Group_20_POD_01_STD_LIGHT",
-        "Group_20_POD_04_HIGH_HEAVY",
-        "Group_20_POD_04_HIGH_LIGHT",
-        "Group_20_POD_04_STD_HEAVY",
-        "Group_20_POD_07_HIGH_LIGHT",
-        "Group_40_POD_01_STD_HEAVY",
-        "Group_40_POD_01_STD_LIGHT",
-        "Group_40_POD_03_HIGH_LIGHT",
-        "Group_40_POD_03_STD_HEAVY",
-        "Group_40_POD_04_HIGH_HEAVY",
-        "Group_40_POD_04_STD_HEAVY",
-        "Group_40_POD_05_HIGH_HEAVY",
-        "Group_40_POD_05_STD_HEAVY",
-        "Group_40_POD_05_STD_LIGHT"
+        "Group_20_POD_01_STD",
+        "Group_20_POD_04_HIGH",
+        "Group_20_POD_04_STD",
+        "Group_20_POD_05_HIGH",
+        "Group_20_POD_05_STD",
+        "Group_20_POD_07_STD",
+        "Group_40_POD_01_HIGH",
+        "Group_40_POD_01_STD",
+        "Group_40_POD_03_HIGH",
+        "Group_40_POD_03_STD",
+        "Group_40_POD_04_HIGH",
+        "Group_40_POD_04_STD",
+        "Group_40_POD_05_HIGH",
+        "Group_40_POD_05_STD"
       ],
       "Ship_New_002": [
-        "Group_20_POD_01_HIGH_LIGHT",
-        "Group_20_POD_01_STD_LIGHT",
-        "Group_20_POD_03_STD_LIGHT",
-        "Group_20_POD_07_STD_HEAVY",
-        "Group_20_POD_07_STD_LIGHT",
-        "Group_40_POD_02_HIGH_LIGHT",
-        "Group_40_POD_05_HIGH_HEAVY",
-        "Group_40_POD_05_STD_HEAVY",
-        "Group_40_POD_05_STD_LIGHT"
+        "Group_20_POD_01_HIGH",
+        "Group_20_POD_01_STD",
+        "Group_20_POD_06_HIGH",
+        "Group_20_POD_06_STD",
+        "Group_20_POD_07_HIGH",
+        "Group_20_POD_07_STD",
+        "Group_20_POD_08_STD",
+        "Group_40_POD_01_HIGH",
+        "Group_40_POD_01_STD",
+        "Group_40_POD_04_HIGH",
+        "Group_40_POD_04_STD",
+        "Group_40_POD_07_STD",
+        "Group_40_POD_08_HIGH",
+        "Group_40_POD_08_STD"
       ]
     },
     "ActivePODsByShip": {
@@ -39,20 +44,20 @@
       ],
       "Ship_New_002": [
         "POD_01",
-        "POD_02",
-        "POD_03",
-        "POD_05",
-        "POD_07"
+        "POD_04",
+        "POD_06",
+        "POD_07",
+        "POD_08"
       ]
     },
     "ActualSizeShareByShip": {
       "Ship_New_001": {
-        "20": 0.36764705882352944,
-        "40": 0.6323529411764706
+        "20": 0.3968253968253968,
+        "40": 0.6031746031746031
       },
       "Ship_New_002": {
-        "20": 0.546875,
-        "40": 0.453125
+        "20": 0.4716981132075472,
+        "40": 0.5283018867924528
       }
     },
     "Alpha": 1.1,
@@ -67,1657 +72,2017 @@
       "records": [
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           0,
-          0.3333333333333333
+          0.41666666666666663
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           10,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           11,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           1,
-          0.6666666666666666
+          0.8333333333333333
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           2,
-          1.0
+          1.25
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           3,
-          1.0
+          1.25
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           4,
-          0.6666666666666666
+          0.8333333333333333
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           5,
-          0.3333333333333333
+          0.41666666666666663
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           6,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           7,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           8,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_STD",
           9,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          0,
-          0.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          1,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          2,
-          0.75
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          3,
-          0.75
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          4,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          5,
-          0.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           0,
           0.16666666666666666
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           10,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           11,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           1,
           0.3333333333333333
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           2,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           3,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           4,
           0.3333333333333333
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           5,
           0.16666666666666666
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           6,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           7,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           8,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_HIGH_LIGHT",
+          "Group_20_POD_04_HIGH",
           9,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          0,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          1,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          2,
-          1.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          3,
-          1.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          4,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          5,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_04_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          0,
-          0.9166666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          1,
-          1.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          2,
-          2.75
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          3,
-          2.75
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          4,
-          1.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          5,
-          0.9166666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_20_POD_07_HIGH_LIGHT",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          0,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          1,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          2,
-          2.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          3,
-          2.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          4,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          5,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          0,
-          0.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          1,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          2,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          3,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          4,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          5,
-          0.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_01_STD_LIGHT",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          0,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          1,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          2,
-          1.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          3,
-          1.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          4,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          5,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_HIGH_LIGHT",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          0,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          1,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          2,
-          1.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          3,
-          1.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          4,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          5,
-          0.5
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_03_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          0,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          1,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          2,
-          1.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          3,
-          1.25
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          4,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          5,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_HIGH_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           0,
           0.25
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           10,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           11,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           1,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           2,
           0.75
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           3,
           0.75
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           4,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           5,
           0.25
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           6,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           7,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           8,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_04_STD_HEAVY",
+          "Group_20_POD_04_STD",
           9,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_HIGH",
+          0,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          1,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          2,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          3,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          5,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_05_STD",
           0,
           0.25
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           10,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           11,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           1,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           2,
           0.75
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           3,
           0.75
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           4,
           0.5
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           5,
           0.25
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           6,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           7,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           8,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_20_POD_05_STD",
           9,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           0,
-          0.3333333333333333
+          0.6666666666666666
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           10,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           11,
           0.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           1,
-          0.6666666666666666
+          1.3333333333333333
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           2,
-          1.0
+          2.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_20_POD_07_STD",
           3,
-          1.0
+          2.0
         ],
         [
           "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          4,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          5,
-          0.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          0,
-          0.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          1,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          2,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          3,
-          1.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          4,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          5,
-          0.3333333333333333
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          6,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          7,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          8,
-          0.0
-        ],
-        [
-          "Ship_New_001",
-          "Group_40_POD_05_STD_LIGHT",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          0,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          1,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          2,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          3,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
+          "Group_20_POD_07_STD",
           4,
           1.3333333333333333
         ],
         [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
+          "Ship_New_001",
+          "Group_20_POD_07_STD",
           5,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          6,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          7,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
-          8,
           0.6666666666666666
         ],
         [
-          "Ship_New_002",
-          "Group_20_POD_01_HIGH_LIGHT",
+          "Ship_New_001",
+          "Group_20_POD_07_STD",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_07_STD",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_07_STD",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_20_POD_07_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          0,
+          0.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          1,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          2,
+          0.75
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          3,
+          0.75
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          4,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          5,
+          0.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          0,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          1,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          2,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          3,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          4,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          5,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_01_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          0,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          1,
+          1.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          2,
+          2.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          3,
+          2.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          4,
+          1.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          5,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          0,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          1,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          2,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          3,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          4,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          5,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_03_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          0,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          1,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          2,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          3,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          5,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          0,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          1,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          2,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          3,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          4,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          5,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_04_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          0,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          1,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          2,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          3,
+          1.25
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          4,
+          0.8333333333333333
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          5,
+          0.41666666666666663
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          0,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          1,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          2,
+          1.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          3,
+          1.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          4,
+          1.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          5,
+          0.5
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          6,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          7,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
+          8,
+          0.0
+        ],
+        [
+          "Ship_New_001",
+          "Group_40_POD_05_STD",
           9,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
           0,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
           10,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
           11,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
           1,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
           2,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_01_HIGH",
+          3,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          5,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          6,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          7,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          8,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          3,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          4,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          5,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          6,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          7,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          8,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_01_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          3,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          5,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          6,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          7,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          8,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          3,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          4,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          5,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          6,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          7,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          8,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_06_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_20_POD_07_HIGH",
           3,
           0.5833333333333333
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           4,
           1.1666666666666665
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           5,
           1.75
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           6,
           1.75
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           7,
           1.1666666666666665
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           8,
           0.5833333333333333
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_01_STD_LIGHT",
+          "Group_20_POD_07_HIGH",
           9,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
+          "Group_20_POD_07_STD",
           0,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
+          "Group_20_POD_07_STD",
           10,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
+          "Group_20_POD_07_STD",
           11,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
+          "Group_20_POD_07_STD",
           1,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
+          "Group_20_POD_07_STD",
           2,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          3,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          4,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          5,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          6,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          7,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          8,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_03_STD_LIGHT",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          0,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          1,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          2,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          3,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          4,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          5,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          6,
-          2.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          7,
-          1.3333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          8,
-          0.6666666666666666
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
-          0,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
-          1,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
-          2,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           3,
           0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           4,
           0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           5,
           1.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           6,
           1.0
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           7,
           0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           8,
           0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_20_POD_07_STD_LIGHT",
+          "Group_20_POD_07_STD",
           9,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           0,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           10,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           11,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           1,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           2,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           3,
-          1.25
+          0.16666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           4,
-          2.5
+          0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           5,
-          3.75
+          0.5
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           6,
-          3.75
+          0.5
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           7,
-          2.5
+          0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           8,
-          1.25
+          0.16666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_02_HIGH_LIGHT",
+          "Group_20_POD_08_STD",
           9,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           0,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           10,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           11,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           1,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           2,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           3,
-          0.41666666666666663
+          0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           4,
-          0.8333333333333333
+          1.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           5,
-          1.25
+          2.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           6,
-          1.25
+          2.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           7,
-          0.8333333333333333
+          1.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           8,
-          0.41666666666666663
+          0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_HIGH_HEAVY",
+          "Group_40_POD_01_HIGH",
           9,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_40_POD_01_STD",
           0,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_40_POD_01_STD",
           10,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_40_POD_01_STD",
           11,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_40_POD_01_STD",
           1,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
+          "Group_40_POD_01_STD",
           2,
           0.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          3,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          4,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          5,
-          1.25
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          6,
-          1.25
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          7,
-          0.8333333333333333
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          8,
-          0.41666666666666663
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_HEAVY",
-          9,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
-          0,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
-          10,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
-          11,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
-          1,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
-          2,
-          0.0
-        ],
-        [
-          "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           3,
           0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           4,
           0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           5,
           1.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           6,
           1.0
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           7,
           0.6666666666666666
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
           8,
           0.3333333333333333
         ],
         [
           "Ship_New_002",
-          "Group_40_POD_05_STD_LIGHT",
+          "Group_40_POD_01_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          3,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          5,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          6,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          7,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          8,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          3,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          5,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          6,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          7,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          8,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_04_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          3,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          4,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          5,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          6,
+          1.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          7,
+          0.6666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          8,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_07_STD",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          3,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          4,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          5,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          6,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          7,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          8,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_HIGH",
+          9,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          0,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          10,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          11,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          1,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          2,
+          0.0
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          3,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          4,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          5,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          6,
+          0.5
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          7,
+          0.3333333333333333
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
+          8,
+          0.16666666666666666
+        ],
+        [
+          "Ship_New_002",
+          "Group_40_POD_08_STD",
           9,
           0.0
         ]
@@ -1808,7 +2173,7 @@
           "Ship_New_001",
           40,
           0,
-          3.5833333333333335
+          3.1666666666666665
         ],
         [
           "Ship_New_001",
@@ -1826,31 +2191,31 @@
           "Ship_New_001",
           40,
           1,
-          7.166666666666667
+          6.333333333333333
         ],
         [
           "Ship_New_001",
           40,
           2,
-          10.75
+          9.5
         ],
         [
           "Ship_New_001",
           40,
           3,
-          10.75
+          9.5
         ],
         [
           "Ship_New_001",
           40,
           4,
-          7.166666666666667
+          6.333333333333333
         ],
         [
           "Ship_New_001",
           40,
           5,
-          3.5833333333333335
+          3.1666666666666665
         ],
         [
           "Ship_New_001",
@@ -1910,37 +2275,37 @@
           "Ship_New_002",
           20,
           3,
-          2.9166666666666665
+          2.083333333333333
         ],
         [
           "Ship_New_002",
           20,
           4,
-          5.833333333333333
+          4.166666666666666
         ],
         [
           "Ship_New_002",
           20,
           5,
-          8.75
+          6.25
         ],
         [
           "Ship_New_002",
           20,
           6,
-          8.75
+          6.25
         ],
         [
           "Ship_New_002",
           20,
           7,
-          5.833333333333333
+          4.166666666666666
         ],
         [
           "Ship_New_002",
           20,
           8,
-          2.9166666666666665
+          2.083333333333333
         ],
         [
           "Ship_New_002",
@@ -1982,37 +2347,37 @@
           "Ship_New_002",
           40,
           3,
-          2.4166666666666665
+          2.333333333333333
         ],
         [
           "Ship_New_002",
           40,
           4,
-          4.833333333333333
+          4.666666666666666
         ],
         [
           "Ship_New_002",
           40,
           5,
-          7.25
+          7.0
         ],
         [
           "Ship_New_002",
           40,
           6,
-          7.25
+          7.0
         ],
         [
           "Ship_New_002",
           40,
           7,
-          4.833333333333333
+          4.666666666666666
         ],
         [
           "Ship_New_002",
           40,
           8,
-          2.4166666666666665
+          2.333333333333333
         ],
         [
           "Ship_New_002",
@@ -2790,7 +3155,7 @@
           "Block_001",
           "Ship_Old_001",
           0,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
@@ -2808,19 +3173,19 @@
           "Block_001",
           "Ship_Old_001",
           1,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
           "Ship_Old_001",
           2,
-          2.531002662095753
+          2.7540017747305017
         ],
         [
           "Block_001",
           "Ship_Old_001",
           3,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
@@ -3108,25 +3473,25 @@
           "Block_002",
           "Ship_Old_002",
           3,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
           "Ship_Old_002",
           4,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
           "Ship_Old_002",
           5,
-          2.3545095635505464
+          2.6508382273165227
         ],
         [
           "Block_002",
           "Ship_Old_002",
           6,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
@@ -3414,25 +3779,25 @@
           "Block_003",
           "Ship_Old_003",
           6,
-          0.6145345913696675
+          0.6544769507039018
         ],
         [
           "Block_003",
           "Ship_Old_003",
           7,
-          0.6145345913696675
+          0.6544769507039018
         ],
         [
           "Block_003",
           "Ship_Old_003",
           8,
-          2.45813836547867
+          2.617907802815607
         ],
         [
           "Block_003",
           "Ship_Old_003",
           9,
-          0.6145345913696675
+          0.6544769507039018
         ]
       ]
     },
@@ -3447,7 +3812,7 @@
         [
           "Block_001",
           0,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
@@ -3462,17 +3827,17 @@
         [
           "Block_001",
           1,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
           2,
-          2.531002662095753
+          2.7540017747305017
         ],
         [
           "Block_001",
           3,
-          0.6327506655239382
+          0.6885004436826254
         ],
         [
           "Block_001",
@@ -3532,22 +3897,22 @@
         [
           "Block_002",
           3,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
           4,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
           5,
-          2.3545095635505464
+          2.6508382273165227
         ],
         [
           "Block_002",
           6,
-          0.5886273908876366
+          0.6627095568291307
         ],
         [
           "Block_002",
@@ -3607,22 +3972,22 @@
         [
           "Block_003",
           6,
-          0.6145345913696675
+          0.6544769507039018
         ],
         [
           "Block_003",
           7,
-          0.6145345913696675
+          0.6544769507039018
         ],
         [
           "Block_003",
           8,
-          2.45813836547867
+          2.617907802815607
         ],
         [
           "Block_003",
           9,
-          0.6145345913696675
+          0.6544769507039018
         ]
       ]
     },
@@ -3738,84 +4103,84 @@
           20,
           "Bay_001_001",
           0,
-          0.13597218151885143
+          0.13371373575379317
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           10,
-          0.1563680087466791
+          0.15377079611686212
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           11,
-          0.17676383597450684
+          0.17382785647993113
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           1,
-          0.1563680087466791
+          0.15377079611686212
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           2,
-          0.17676383597450684
+          0.17382785647993113
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           3,
-          0.13597218151885143
+          0.13371373575379317
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           4,
-          0.1563680087466791
+          0.15377079611686212
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           5,
-          0.17676383597450684
+          0.17382785647993113
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           6,
-          0.13597218151885143
+          0.13371373575379317
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           7,
-          0.1563680087466791
+          0.15377079611686212
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           8,
-          0.17676383597450684
+          0.17382785647993113
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_001",
           9,
-          0.13597218151885143
+          0.13371373575379317
         ],
         [
           "Ship_Old_001",
@@ -3990,84 +4355,84 @@
           20,
           "Bay_001_004",
           0,
-          0.18605912126067353
+          0.17692560417381722
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           10,
-          0.21396798944977455
+          0.2034644447998898
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           11,
-          0.2418768576388756
+          0.2300032854259624
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           1,
-          0.21396798944977455
+          0.2034644447998898
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           2,
-          0.2418768576388756
+          0.2300032854259624
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           3,
-          0.18605912126067353
+          0.17692560417381722
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           4,
-          0.21396798944977455
+          0.2034644447998898
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           5,
-          0.2418768576388756
+          0.2300032854259624
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           6,
-          0.18605912126067353
+          0.17692560417381722
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           7,
-          0.21396798944977455
+          0.2034644447998898
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           8,
-          0.2418768576388756
+          0.2300032854259624
         ],
         [
           "Ship_Old_001",
           20,
           "Bay_001_004",
           9,
-          0.18605912126067353
+          0.17692560417381722
         ],
         [
           "Ship_Old_001",
@@ -5250,84 +5615,84 @@
           40,
           "Bay_002_003",
           0,
-          0.19821734937514182
+          0.19528561762838
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           10,
-          0.2279499517814131
+          0.224578460272637
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           11,
-          0.25768255418768443
+          0.253871302916894
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           1,
-          0.2279499517814131
+          0.224578460272637
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           2,
-          0.25768255418768443
+          0.253871302916894
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           3,
-          0.19821734937514182
+          0.19528561762838
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           4,
-          0.2279499517814131
+          0.224578460272637
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           5,
-          0.25768255418768443
+          0.253871302916894
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           6,
-          0.19821734937514182
+          0.19528561762838
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           7,
-          0.2279499517814131
+          0.224578460272637
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           8,
-          0.25768255418768443
+          0.253871302916894
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_002_003",
           9,
-          0.19821734937514182
+          0.19528561762838
         ],
         [
           "Ship_Old_001",
@@ -5502,84 +5867,84 @@
           40,
           "Bay_003_002",
           0,
-          0.10368483198365316
+          0.09829328646322022
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           10,
-          0.11923755678120113
+          0.11303727943270324
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           11,
-          0.13479028157874912
+          0.12778127240218629
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           1,
-          0.11923755678120113
+          0.11303727943270324
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           2,
-          0.13479028157874912
+          0.12778127240218629
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           3,
-          0.10368483198365316
+          0.09829328646322022
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           4,
-          0.11923755678120113
+          0.11303727943270324
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           5,
-          0.13479028157874912
+          0.12778127240218629
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           6,
-          0.10368483198365316
+          0.09829328646322022
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           7,
-          0.11923755678120113
+          0.11303727943270324
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           8,
-          0.13479028157874912
+          0.12778127240218629
         ],
         [
           "Ship_Old_001",
           40,
           "Bay_003_002",
           9,
-          0.10368483198365316
+          0.09829328646322022
         ],
         [
           "Ship_Old_001",
@@ -6594,84 +6959,84 @@
           20,
           "Bay_003_003",
           0,
-          0.22209211111347985
+          0.20861459382057276
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           10,
-          0.2510606473456729
+          0.23582519301456054
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           11,
-          0.1931235748812868
+          0.18140399462658502
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           1,
-          0.2510606473456729
+          0.23582519301456054
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           2,
-          0.1931235748812868
+          0.18140399462658502
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           3,
-          0.22209211111347985
+          0.20861459382057276
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           4,
-          0.2510606473456729
+          0.23582519301456054
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           5,
-          0.1931235748812868
+          0.18140399462658502
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           6,
-          0.22209211111347985
+          0.20861459382057276
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           7,
-          0.2510606473456729
+          0.23582519301456054
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           8,
-          0.1931235748812868
+          0.18140399462658502
         ],
         [
           "Ship_Old_002",
           20,
           "Bay_003_003",
           9,
-          0.22209211111347985
+          0.20861459382057276
         ],
         [
           "Ship_Old_002",
@@ -6846,84 +7211,84 @@
           40,
           "Bay_001_002",
           0,
-          0.249903491662032
+          0.23638330281022607
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           10,
-          0.28249959927012314
+          0.2672159075246034
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           11,
-          0.2173073840539409
+          0.20555069809584875
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           1,
-          0.28249959927012314
+          0.2672159075246034
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           2,
-          0.2173073840539409
+          0.20555069809584875
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           3,
-          0.249903491662032
+          0.23638330281022607
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           4,
-          0.28249959927012314
+          0.2672159075246034
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           5,
-          0.2173073840539409
+          0.20555069809584875
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           6,
-          0.249903491662032
+          0.23638330281022607
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           7,
-          0.28249959927012314
+          0.2672159075246034
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           8,
-          0.2173073840539409
+          0.20555069809584875
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_001_002",
           9,
-          0.249903491662032
+          0.23638330281022607
         ],
         [
           "Ship_Old_002",
@@ -7098,84 +7463,84 @@
           40,
           "Bay_002_001",
           0,
-          0.14609885777027848
+          0.14070839557199213
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           10,
-          0.16515523052292352
+          0.1590616645596433
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           11,
-          0.1270424850176335
+          0.12235512658434099
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           1,
-          0.16515523052292352
+          0.1590616645596433
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           2,
-          0.1270424850176335
+          0.12235512658434099
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           3,
-          0.14609885777027848
+          0.14070839557199213
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           4,
-          0.16515523052292352
+          0.1590616645596433
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           5,
-          0.1270424850176335
+          0.12235512658434099
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           6,
-          0.14609885777027848
+          0.14070839557199213
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           7,
-          0.16515523052292352
+          0.1590616645596433
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           8,
-          0.1270424850176335
+          0.12235512658434099
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_001",
           9,
-          0.14609885777027848
+          0.14070839557199213
         ],
         [
           "Ship_Old_002",
@@ -7350,84 +7715,84 @@
           40,
           "Bay_002_004",
           0,
-          0.11734028049419508
+          0.11163710817671611
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           10,
-          0.1326455344716988
+          0.12619847011280955
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           11,
-          0.10203502651669139
+          0.09707574624062272
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           1,
-          0.1326455344716988
+          0.12619847011280955
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           2,
-          0.10203502651669139
+          0.09707574624062272
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           3,
-          0.11734028049419508
+          0.11163710817671611
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           4,
-          0.1326455344716988
+          0.12619847011280955
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           5,
-          0.10203502651669139
+          0.09707574624062272
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           6,
-          0.11734028049419508
+          0.11163710817671611
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           7,
-          0.1326455344716988
+          0.12619847011280955
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           8,
-          0.10203502651669139
+          0.09707574624062272
         ],
         [
           "Ship_Old_002",
           40,
           "Bay_002_004",
           9,
-          0.11734028049419508
+          0.11163710817671611
         ],
         [
           "Ship_Old_002",
@@ -8190,84 +8555,84 @@
           20,
           "Bay_002_002",
           0,
-          0.28610379319802653
+          0.2762145085830897
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           10,
-          0.22007984092155886
+          0.212472698910069
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           11,
-          0.25309181705979267
+          0.24434360374657935
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           1,
-          0.22007984092155886
+          0.212472698910069
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           2,
-          0.25309181705979267
+          0.24434360374657935
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           3,
-          0.28610379319802653
+          0.2762145085830897
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           4,
-          0.22007984092155886
+          0.212472698910069
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           5,
-          0.25309181705979267
+          0.24434360374657935
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           6,
-          0.28610379319802653
+          0.2762145085830897
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           7,
-          0.22007984092155886
+          0.212472698910069
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           8,
-          0.25309181705979267
+          0.24434360374657935
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_002_002",
           9,
-          0.28610379319802653
+          0.2762145085830897
         ],
         [
           "Ship_Old_003",
@@ -8442,84 +8807,84 @@
           20,
           "Bay_003_001",
           0,
-          0.24077522056935197
+          0.2397443107308984
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           10,
-          0.18521170813027074
+          0.18441870056222956
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           11,
-          0.21299346434981134
+          0.21208150564656397
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           1,
-          0.18521170813027074
+          0.18441870056222956
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           2,
-          0.21299346434981134
+          0.21208150564656397
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           3,
-          0.24077522056935197
+          0.2397443107308984
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           4,
-          0.18521170813027074
+          0.18441870056222956
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           5,
-          0.21299346434981134
+          0.21208150564656397
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           6,
-          0.24077522056935197
+          0.2397443107308984
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           7,
-          0.18521170813027074
+          0.18441870056222956
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           8,
-          0.21299346434981134
+          0.21208150564656397
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_001",
           9,
-          0.24077522056935197
+          0.2397443107308984
         ],
         [
           "Ship_Old_003",
@@ -8694,84 +9059,84 @@
           20,
           "Bay_003_004",
           0,
-          0.24304599777385125
+          0.23170860289418044
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           10,
-          0.18695845982603942
+          0.17823738684167725
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           11,
-          0.2150022287999453
+          0.20497299486792886
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           1,
-          0.18695845982603942
+          0.17823738684167725
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           2,
-          0.2150022287999453
+          0.20497299486792886
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           3,
-          0.24304599777385125
+          0.23170860289418044
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           4,
-          0.18695845982603942
+          0.17823738684167725
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           5,
-          0.2150022287999453
+          0.20497299486792886
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           6,
-          0.24304599777385125
+          0.23170860289418044
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           7,
-          0.18695845982603942
+          0.17823738684167725
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           8,
-          0.2150022287999453
+          0.20497299486792886
         ],
         [
           "Ship_Old_003",
           20,
           "Bay_003_004",
           9,
-          0.24304599777385125
+          0.23170860289418044
         ],
         [
           "Ship_Old_003",
@@ -8946,84 +9311,84 @@
           40,
           "Bay_001_003",
           0,
-          0.2510769386342869
+          0.2392528712096553
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           10,
-          0.19313610664175912
+          0.1840406701612733
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           11,
-          0.22210652263802297
+          0.21164677068546428
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           1,
-          0.19313610664175912
+          0.1840406701612733
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           2,
-          0.22210652263802297
+          0.21164677068546428
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           3,
-          0.2510769386342869
+          0.2392528712096553
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           4,
-          0.19313610664175912
+          0.1840406701612733
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           5,
-          0.22210652263802297
+          0.21164677068546428
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           6,
-          0.2510769386342869
+          0.2392528712096553
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           7,
-          0.19313610664175912
+          0.1840406701612733
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           8,
-          0.22210652263802297
+          0.21164677068546428
         ],
         [
           "Ship_Old_003",
           40,
           "Bay_001_003",
           9,
-          0.2510769386342869
+          0.2392528712096553
         ],
         [
           "Ship_Old_003",
@@ -10514,254 +10879,246 @@
       ]
     },
     "G": [
-      "Group_20_POD_01_HIGH_LIGHT",
-      "Group_20_POD_01_STD_LIGHT",
-      "Group_20_POD_03_STD_LIGHT",
-      "Group_20_POD_04_HIGH_HEAVY",
-      "Group_20_POD_04_HIGH_LIGHT",
-      "Group_20_POD_04_STD_HEAVY",
-      "Group_20_POD_07_HIGH_LIGHT",
-      "Group_20_POD_07_STD_HEAVY",
-      "Group_20_POD_07_STD_LIGHT",
-      "Group_40_POD_01_STD_HEAVY",
-      "Group_40_POD_01_STD_LIGHT",
-      "Group_40_POD_02_HIGH_LIGHT",
-      "Group_40_POD_03_HIGH_LIGHT",
-      "Group_40_POD_03_STD_HEAVY",
-      "Group_40_POD_04_HIGH_HEAVY",
-      "Group_40_POD_04_STD_HEAVY",
-      "Group_40_POD_05_HIGH_HEAVY",
-      "Group_40_POD_05_STD_HEAVY",
-      "Group_40_POD_05_STD_LIGHT"
+      "Group_20_POD_01_HIGH",
+      "Group_20_POD_01_STD",
+      "Group_20_POD_04_HIGH",
+      "Group_20_POD_04_STD",
+      "Group_20_POD_05_HIGH",
+      "Group_20_POD_05_STD",
+      "Group_20_POD_06_HIGH",
+      "Group_20_POD_06_STD",
+      "Group_20_POD_07_HIGH",
+      "Group_20_POD_07_STD",
+      "Group_20_POD_08_STD",
+      "Group_40_POD_01_HIGH",
+      "Group_40_POD_01_STD",
+      "Group_40_POD_03_HIGH",
+      "Group_40_POD_03_STD",
+      "Group_40_POD_04_HIGH",
+      "Group_40_POD_04_STD",
+      "Group_40_POD_05_HIGH",
+      "Group_40_POD_05_STD",
+      "Group_40_POD_07_STD",
+      "Group_40_POD_08_HIGH",
+      "Group_40_POD_08_STD"
     ],
     "GroupAttrs": {
-      "Group_20_POD_01_HIGH_LIGHT": {
+      "Group_20_POD_01_HIGH": {
         "height": "HIGH",
         "pod": "POD_01",
-        "size": 20,
-        "weight_class": "LIGHT"
+        "size": 20
       },
-      "Group_20_POD_01_STD_LIGHT": {
+      "Group_20_POD_01_STD": {
         "height": "STD",
         "pod": "POD_01",
-        "size": 20,
-        "weight_class": "LIGHT"
+        "size": 20
       },
-      "Group_20_POD_03_STD_LIGHT": {
-        "height": "STD",
-        "pod": "POD_03",
-        "size": 20,
-        "weight_class": "LIGHT"
-      },
-      "Group_20_POD_04_HIGH_HEAVY": {
+      "Group_20_POD_04_HIGH": {
         "height": "HIGH",
         "pod": "POD_04",
-        "size": 20,
-        "weight_class": "HEAVY"
+        "size": 20
       },
-      "Group_20_POD_04_HIGH_LIGHT": {
-        "height": "HIGH",
-        "pod": "POD_04",
-        "size": 20,
-        "weight_class": "LIGHT"
-      },
-      "Group_20_POD_04_STD_HEAVY": {
+      "Group_20_POD_04_STD": {
         "height": "STD",
         "pod": "POD_04",
-        "size": 20,
-        "weight_class": "HEAVY"
+        "size": 20
       },
-      "Group_20_POD_07_HIGH_LIGHT": {
-        "height": "HIGH",
-        "pod": "POD_07",
-        "size": 20,
-        "weight_class": "LIGHT"
-      },
-      "Group_20_POD_07_STD_HEAVY": {
-        "height": "STD",
-        "pod": "POD_07",
-        "size": 20,
-        "weight_class": "HEAVY"
-      },
-      "Group_20_POD_07_STD_LIGHT": {
-        "height": "STD",
-        "pod": "POD_07",
-        "size": 20,
-        "weight_class": "LIGHT"
-      },
-      "Group_40_POD_01_STD_HEAVY": {
-        "height": "STD",
-        "pod": "POD_01",
-        "size": 40,
-        "weight_class": "HEAVY"
-      },
-      "Group_40_POD_01_STD_LIGHT": {
-        "height": "STD",
-        "pod": "POD_01",
-        "size": 40,
-        "weight_class": "LIGHT"
-      },
-      "Group_40_POD_02_HIGH_LIGHT": {
-        "height": "HIGH",
-        "pod": "POD_02",
-        "size": 40,
-        "weight_class": "LIGHT"
-      },
-      "Group_40_POD_03_HIGH_LIGHT": {
-        "height": "HIGH",
-        "pod": "POD_03",
-        "size": 40,
-        "weight_class": "LIGHT"
-      },
-      "Group_40_POD_03_STD_HEAVY": {
-        "height": "STD",
-        "pod": "POD_03",
-        "size": 40,
-        "weight_class": "HEAVY"
-      },
-      "Group_40_POD_04_HIGH_HEAVY": {
-        "height": "HIGH",
-        "pod": "POD_04",
-        "size": 40,
-        "weight_class": "HEAVY"
-      },
-      "Group_40_POD_04_STD_HEAVY": {
-        "height": "STD",
-        "pod": "POD_04",
-        "size": 40,
-        "weight_class": "HEAVY"
-      },
-      "Group_40_POD_05_HIGH_HEAVY": {
+      "Group_20_POD_05_HIGH": {
         "height": "HIGH",
         "pod": "POD_05",
-        "size": 40,
-        "weight_class": "HEAVY"
+        "size": 20
       },
-      "Group_40_POD_05_STD_HEAVY": {
+      "Group_20_POD_05_STD": {
         "height": "STD",
         "pod": "POD_05",
-        "size": 40,
-        "weight_class": "HEAVY"
+        "size": 20
       },
-      "Group_40_POD_05_STD_LIGHT": {
+      "Group_20_POD_06_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_06",
+        "size": 20
+      },
+      "Group_20_POD_06_STD": {
+        "height": "STD",
+        "pod": "POD_06",
+        "size": 20
+      },
+      "Group_20_POD_07_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_07",
+        "size": 20
+      },
+      "Group_20_POD_07_STD": {
+        "height": "STD",
+        "pod": "POD_07",
+        "size": 20
+      },
+      "Group_20_POD_08_STD": {
+        "height": "STD",
+        "pod": "POD_08",
+        "size": 20
+      },
+      "Group_40_POD_01_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_01",
+        "size": 40
+      },
+      "Group_40_POD_01_STD": {
+        "height": "STD",
+        "pod": "POD_01",
+        "size": 40
+      },
+      "Group_40_POD_03_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_03",
+        "size": 40
+      },
+      "Group_40_POD_03_STD": {
+        "height": "STD",
+        "pod": "POD_03",
+        "size": 40
+      },
+      "Group_40_POD_04_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_04",
+        "size": 40
+      },
+      "Group_40_POD_04_STD": {
+        "height": "STD",
+        "pod": "POD_04",
+        "size": 40
+      },
+      "Group_40_POD_05_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_05",
+        "size": 40
+      },
+      "Group_40_POD_05_STD": {
         "height": "STD",
         "pod": "POD_05",
-        "size": 40,
-        "weight_class": "LIGHT"
+        "size": 40
+      },
+      "Group_40_POD_07_STD": {
+        "height": "STD",
+        "pod": "POD_07",
+        "size": 40
+      },
+      "Group_40_POD_08_HIGH": {
+        "height": "HIGH",
+        "pod": "POD_08",
+        "size": 40
+      },
+      "Group_40_POD_08_STD": {
+        "height": "STD",
+        "pod": "POD_08",
+        "size": 40
       }
     },
     "GroupHeight": {
-      "Group_20_POD_01_HIGH_LIGHT": "HIGH",
-      "Group_20_POD_01_STD_LIGHT": "STD",
-      "Group_20_POD_03_STD_LIGHT": "STD",
-      "Group_20_POD_04_HIGH_HEAVY": "HIGH",
-      "Group_20_POD_04_HIGH_LIGHT": "HIGH",
-      "Group_20_POD_04_STD_HEAVY": "STD",
-      "Group_20_POD_07_HIGH_LIGHT": "HIGH",
-      "Group_20_POD_07_STD_HEAVY": "STD",
-      "Group_20_POD_07_STD_LIGHT": "STD",
-      "Group_40_POD_01_STD_HEAVY": "STD",
-      "Group_40_POD_01_STD_LIGHT": "STD",
-      "Group_40_POD_02_HIGH_LIGHT": "HIGH",
-      "Group_40_POD_03_HIGH_LIGHT": "HIGH",
-      "Group_40_POD_03_STD_HEAVY": "STD",
-      "Group_40_POD_04_HIGH_HEAVY": "HIGH",
-      "Group_40_POD_04_STD_HEAVY": "STD",
-      "Group_40_POD_05_HIGH_HEAVY": "HIGH",
-      "Group_40_POD_05_STD_HEAVY": "STD",
-      "Group_40_POD_05_STD_LIGHT": "STD"
+      "Group_20_POD_01_HIGH": "HIGH",
+      "Group_20_POD_01_STD": "STD",
+      "Group_20_POD_04_HIGH": "HIGH",
+      "Group_20_POD_04_STD": "STD",
+      "Group_20_POD_05_HIGH": "HIGH",
+      "Group_20_POD_05_STD": "STD",
+      "Group_20_POD_06_HIGH": "HIGH",
+      "Group_20_POD_06_STD": "STD",
+      "Group_20_POD_07_HIGH": "HIGH",
+      "Group_20_POD_07_STD": "STD",
+      "Group_20_POD_08_STD": "STD",
+      "Group_40_POD_01_HIGH": "HIGH",
+      "Group_40_POD_01_STD": "STD",
+      "Group_40_POD_03_HIGH": "HIGH",
+      "Group_40_POD_03_STD": "STD",
+      "Group_40_POD_04_HIGH": "HIGH",
+      "Group_40_POD_04_STD": "STD",
+      "Group_40_POD_05_HIGH": "HIGH",
+      "Group_40_POD_05_STD": "STD",
+      "Group_40_POD_07_STD": "STD",
+      "Group_40_POD_08_HIGH": "HIGH",
+      "Group_40_POD_08_STD": "STD"
     },
     "GroupPOD": {
-      "Group_20_POD_01_HIGH_LIGHT": "POD_01",
-      "Group_20_POD_01_STD_LIGHT": "POD_01",
-      "Group_20_POD_03_STD_LIGHT": "POD_03",
-      "Group_20_POD_04_HIGH_HEAVY": "POD_04",
-      "Group_20_POD_04_HIGH_LIGHT": "POD_04",
-      "Group_20_POD_04_STD_HEAVY": "POD_04",
-      "Group_20_POD_07_HIGH_LIGHT": "POD_07",
-      "Group_20_POD_07_STD_HEAVY": "POD_07",
-      "Group_20_POD_07_STD_LIGHT": "POD_07",
-      "Group_40_POD_01_STD_HEAVY": "POD_01",
-      "Group_40_POD_01_STD_LIGHT": "POD_01",
-      "Group_40_POD_02_HIGH_LIGHT": "POD_02",
-      "Group_40_POD_03_HIGH_LIGHT": "POD_03",
-      "Group_40_POD_03_STD_HEAVY": "POD_03",
-      "Group_40_POD_04_HIGH_HEAVY": "POD_04",
-      "Group_40_POD_04_STD_HEAVY": "POD_04",
-      "Group_40_POD_05_HIGH_HEAVY": "POD_05",
-      "Group_40_POD_05_STD_HEAVY": "POD_05",
-      "Group_40_POD_05_STD_LIGHT": "POD_05"
+      "Group_20_POD_01_HIGH": "POD_01",
+      "Group_20_POD_01_STD": "POD_01",
+      "Group_20_POD_04_HIGH": "POD_04",
+      "Group_20_POD_04_STD": "POD_04",
+      "Group_20_POD_05_HIGH": "POD_05",
+      "Group_20_POD_05_STD": "POD_05",
+      "Group_20_POD_06_HIGH": "POD_06",
+      "Group_20_POD_06_STD": "POD_06",
+      "Group_20_POD_07_HIGH": "POD_07",
+      "Group_20_POD_07_STD": "POD_07",
+      "Group_20_POD_08_STD": "POD_08",
+      "Group_40_POD_01_HIGH": "POD_01",
+      "Group_40_POD_01_STD": "POD_01",
+      "Group_40_POD_03_HIGH": "POD_03",
+      "Group_40_POD_03_STD": "POD_03",
+      "Group_40_POD_04_HIGH": "POD_04",
+      "Group_40_POD_04_STD": "POD_04",
+      "Group_40_POD_05_HIGH": "POD_05",
+      "Group_40_POD_05_STD": "POD_05",
+      "Group_40_POD_07_STD": "POD_07",
+      "Group_40_POD_08_HIGH": "POD_08",
+      "Group_40_POD_08_STD": "POD_08"
     },
     "GroupSize": {
-      "Group_20_POD_01_HIGH_LIGHT": 20,
-      "Group_20_POD_01_STD_LIGHT": 20,
-      "Group_20_POD_03_STD_LIGHT": 20,
-      "Group_20_POD_04_HIGH_HEAVY": 20,
-      "Group_20_POD_04_HIGH_LIGHT": 20,
-      "Group_20_POD_04_STD_HEAVY": 20,
-      "Group_20_POD_07_HIGH_LIGHT": 20,
-      "Group_20_POD_07_STD_HEAVY": 20,
-      "Group_20_POD_07_STD_LIGHT": 20,
-      "Group_40_POD_01_STD_HEAVY": 40,
-      "Group_40_POD_01_STD_LIGHT": 40,
-      "Group_40_POD_02_HIGH_LIGHT": 40,
-      "Group_40_POD_03_HIGH_LIGHT": 40,
-      "Group_40_POD_03_STD_HEAVY": 40,
-      "Group_40_POD_04_HIGH_HEAVY": 40,
-      "Group_40_POD_04_STD_HEAVY": 40,
-      "Group_40_POD_05_HIGH_HEAVY": 40,
-      "Group_40_POD_05_STD_HEAVY": 40,
-      "Group_40_POD_05_STD_LIGHT": 40
+      "Group_20_POD_01_HIGH": 20,
+      "Group_20_POD_01_STD": 20,
+      "Group_20_POD_04_HIGH": 20,
+      "Group_20_POD_04_STD": 20,
+      "Group_20_POD_05_HIGH": 20,
+      "Group_20_POD_05_STD": 20,
+      "Group_20_POD_06_HIGH": 20,
+      "Group_20_POD_06_STD": 20,
+      "Group_20_POD_07_HIGH": 20,
+      "Group_20_POD_07_STD": 20,
+      "Group_20_POD_08_STD": 20,
+      "Group_40_POD_01_HIGH": 40,
+      "Group_40_POD_01_STD": 40,
+      "Group_40_POD_03_HIGH": 40,
+      "Group_40_POD_03_STD": 40,
+      "Group_40_POD_04_HIGH": 40,
+      "Group_40_POD_04_STD": 40,
+      "Group_40_POD_05_HIGH": 40,
+      "Group_40_POD_05_STD": 40,
+      "Group_40_POD_07_STD": 40,
+      "Group_40_POD_08_HIGH": 40,
+      "Group_40_POD_08_STD": 40
     },
     "GroupVolumeByShip": {
       "Ship_New_001": {
-        "Group_20_POD_01_STD_LIGHT": 4,
-        "Group_20_POD_04_HIGH_HEAVY": 3,
-        "Group_20_POD_04_HIGH_LIGHT": 2,
-        "Group_20_POD_04_STD_HEAVY": 5,
-        "Group_20_POD_07_HIGH_LIGHT": 11,
-        "Group_40_POD_01_STD_HEAVY": 8,
-        "Group_40_POD_01_STD_LIGHT": 4,
-        "Group_40_POD_03_HIGH_LIGHT": 6,
-        "Group_40_POD_03_STD_HEAVY": 6,
-        "Group_40_POD_04_HIGH_HEAVY": 5,
-        "Group_40_POD_04_STD_HEAVY": 3,
-        "Group_40_POD_05_HIGH_HEAVY": 3,
-        "Group_40_POD_05_STD_HEAVY": 4,
-        "Group_40_POD_05_STD_LIGHT": 4
+        "Group_20_POD_01_STD": 5,
+        "Group_20_POD_04_HIGH": 2,
+        "Group_20_POD_04_STD": 3,
+        "Group_20_POD_05_HIGH": 4,
+        "Group_20_POD_05_STD": 3,
+        "Group_20_POD_07_STD": 8,
+        "Group_40_POD_01_HIGH": 3,
+        "Group_40_POD_01_STD": 5,
+        "Group_40_POD_03_HIGH": 8,
+        "Group_40_POD_03_STD": 5,
+        "Group_40_POD_04_HIGH": 4,
+        "Group_40_POD_04_STD": 2,
+        "Group_40_POD_05_HIGH": 5,
+        "Group_40_POD_05_STD": 6
       },
       "Ship_New_002": {
-        "Group_20_POD_01_HIGH_LIGHT": 8,
-        "Group_20_POD_01_STD_LIGHT": 7,
-        "Group_20_POD_03_STD_LIGHT": 8,
-        "Group_20_POD_07_STD_HEAVY": 8,
-        "Group_20_POD_07_STD_LIGHT": 4,
-        "Group_40_POD_02_HIGH_LIGHT": 15,
-        "Group_40_POD_05_HIGH_HEAVY": 5,
-        "Group_40_POD_05_STD_HEAVY": 5,
-        "Group_40_POD_05_STD_LIGHT": 4
+        "Group_20_POD_01_HIGH": 4,
+        "Group_20_POD_01_STD": 2,
+        "Group_20_POD_06_HIGH": 4,
+        "Group_20_POD_06_STD": 2,
+        "Group_20_POD_07_HIGH": 7,
+        "Group_20_POD_07_STD": 4,
+        "Group_20_POD_08_STD": 2,
+        "Group_40_POD_01_HIGH": 8,
+        "Group_40_POD_01_STD": 4,
+        "Group_40_POD_04_HIGH": 4,
+        "Group_40_POD_04_STD": 4,
+        "Group_40_POD_07_STD": 4,
+        "Group_40_POD_08_HIGH": 2,
+        "Group_40_POD_08_STD": 2
       }
-    },
-    "GroupWeightClass": {
-      "Group_20_POD_01_HIGH_LIGHT": "LIGHT",
-      "Group_20_POD_01_STD_LIGHT": "LIGHT",
-      "Group_20_POD_03_STD_LIGHT": "LIGHT",
-      "Group_20_POD_04_HIGH_HEAVY": "HEAVY",
-      "Group_20_POD_04_HIGH_LIGHT": "LIGHT",
-      "Group_20_POD_04_STD_HEAVY": "HEAVY",
-      "Group_20_POD_07_HIGH_LIGHT": "LIGHT",
-      "Group_20_POD_07_STD_HEAVY": "HEAVY",
-      "Group_20_POD_07_STD_LIGHT": "LIGHT",
-      "Group_40_POD_01_STD_HEAVY": "HEAVY",
-      "Group_40_POD_01_STD_LIGHT": "LIGHT",
-      "Group_40_POD_02_HIGH_LIGHT": "LIGHT",
-      "Group_40_POD_03_HIGH_LIGHT": "LIGHT",
-      "Group_40_POD_03_STD_HEAVY": "HEAVY",
-      "Group_40_POD_04_HIGH_HEAVY": "HEAVY",
-      "Group_40_POD_04_STD_HEAVY": "HEAVY",
-      "Group_40_POD_05_HIGH_HEAVY": "HEAVY",
-      "Group_40_POD_05_STD_HEAVY": "HEAVY",
-      "Group_40_POD_05_STD_LIGHT": "LIGHT"
     },
     "I": {
       "Bay_001_001": {
@@ -10950,6 +11307,63 @@
     ],
     "New_Outbound_Req": {},
     "NumBerths": 3,
+    "OldBayHeight": {
+      "columns": [
+        "bay",
+        "value"
+      ],
+      "record_schema": "OldBayHeight",
+      "records": [
+        [
+          "Bay_001_001",
+          "STD"
+        ],
+        [
+          "Bay_001_002",
+          "HIGH"
+        ],
+        [
+          "Bay_001_003",
+          "STD"
+        ],
+        [
+          "Bay_001_004",
+          "HIGH"
+        ],
+        [
+          "Bay_002_001",
+          "STD"
+        ],
+        [
+          "Bay_002_002",
+          "HIGH"
+        ],
+        [
+          "Bay_002_003",
+          "STD"
+        ],
+        [
+          "Bay_002_004",
+          "HIGH"
+        ],
+        [
+          "Bay_003_001",
+          "STD"
+        ],
+        [
+          "Bay_003_002",
+          "HIGH"
+        ],
+        [
+          "Bay_003_003",
+          "STD"
+        ],
+        [
+          "Bay_003_004",
+          "HIGH"
+        ]
+      ]
+    },
     "OldShipType": {
       "fixed_only": [
         "Ship_Old_001",
@@ -10970,7 +11384,7 @@
         [
           "Bay_001_001",
           "Ship_Old_001",
-          17.672052012970767
+          18.209006825409425
         ],
         [
           "Bay_001_001",
@@ -10990,7 +11404,7 @@
         [
           "Bay_001_002",
           "Ship_Old_002",
-          14.201908710634356
+          16.138644174182694
         ],
         [
           "Bay_001_002",
@@ -11010,12 +11424,12 @@
         [
           "Bay_001_003",
           "Ship_Old_003",
-          14.818240941388417
+          16.475069694713667
         ],
         [
           "Bay_001_004",
           "Ship_Old_001",
-          14.454821582058976
+          16.199710476706464
         ],
         [
           "Bay_001_004",
@@ -11035,7 +11449,7 @@
         [
           "Bay_002_001",
           "Ship_Old_002",
-          15.208082824529393
+          16.491765101054607
         ],
         [
           "Bay_002_001",
@@ -11055,12 +11469,12 @@
         [
           "Bay_002_002",
           "Ship_Old_003",
-          16.777077946953018
+          17.925440673115954
         ],
         [
           "Bay_002_003",
           "Ship_Old_001",
-          18.726368724229584
+          19.188921058506725
         ],
         [
           "Bay_002_003",
@@ -11080,7 +11494,7 @@
         [
           "Bay_002_004",
           "Ship_Old_002",
-          13.360292634768907
+          15.141118144012971
         ],
         [
           "Bay_002_004",
@@ -11100,12 +11514,12 @@
         [
           "Bay_003_001",
           "Ship_Old_003",
-          19.633030896475272
+          19.763050950610463
         ],
         [
           "Bay_003_002",
           "Ship_Old_001",
-          12.92382846293322
+          14.851765874231642
         ],
         [
           "Bay_003_002",
@@ -11125,7 +11539,7 @@
         [
           "Bay_003_003",
           "Ship_Old_002",
-          12.931475891597687
+          15.18095549800416
         ],
         [
           "Bay_003_003",
@@ -11145,7 +11559,7 @@
         [
           "Bay_003_004",
           "Ship_Old_003",
-          14.791906205718753
+          16.43426224516142
         ]
       ]
     },
@@ -11222,55 +11636,59 @@
     "PODSizeVolumeByShip": {
       "Ship_New_001": {
         "POD_01": {
-          "20": 4,
-          "40": 12
-        },
-        "POD_03": {
-          "40": 12
-        },
-        "POD_04": {
-          "20": 10,
+          "20": 5,
           "40": 8
         },
+        "POD_03": {
+          "40": 13
+        },
+        "POD_04": {
+          "20": 5,
+          "40": 6
+        },
         "POD_05": {
+          "20": 7,
           "40": 11
         },
         "POD_07": {
-          "20": 11
+          "20": 8
         }
       },
       "Ship_New_002": {
         "POD_01": {
-          "20": 15
+          "20": 6,
+          "40": 12
         },
-        "POD_02": {
-          "40": 15
+        "POD_04": {
+          "40": 8
         },
-        "POD_03": {
-          "20": 8
-        },
-        "POD_05": {
-          "40": 14
+        "POD_06": {
+          "20": 6
         },
         "POD_07": {
-          "20": 12
+          "20": 11,
+          "40": 4
+        },
+        "POD_08": {
+          "20": 2,
+          "40": 4
         }
       }
     },
     "PODVolumeByShip": {
       "Ship_New_001": {
-        "POD_01": 16,
-        "POD_03": 12,
-        "POD_04": 18,
-        "POD_05": 11,
-        "POD_07": 11
+        "POD_01": 13,
+        "POD_03": 13,
+        "POD_04": 11,
+        "POD_05": 18,
+        "POD_07": 8
       },
       "Ship_New_002": {
-        "POD_01": 15,
-        "POD_02": 15,
-        "POD_03": 8,
-        "POD_05": 14,
-        "POD_07": 12
+        "POD_01": 18,
+        "POD_04": 8,
+        "POD_06": 6,
+        "POD_07": 15,
+        "POD_08": 6
       }
     },
     "S": [
@@ -11297,26 +11715,26 @@
           40
         ],
         "weight_coverage": [
-          "HEAVY",
-          "LIGHT"
+          "REMOVED",
+          "NOT_MODELED"
         ]
       },
       "Ship_New_002": {
-        "generation_attempts": 1,
+        "generation_attempts": 3,
         "height_coverage": [
           "HIGH",
           "STD"
         ],
         "pod_count": 5,
-        "positive_group_count": 9,
+        "positive_group_count": 14,
         "single_combination_pod_count": 2,
         "size_coverage": [
           20,
           40
         ],
         "weight_coverage": [
-          "HEAVY",
-          "LIGHT"
+          "REMOVED",
+          "NOT_MODELED"
         ]
       }
     },
@@ -11329,8 +11747,8 @@
         "alpha": 1.1,
         "arrival_boxes_per_ship_range": {
           "__tuple__": [
-            55,
-            70
+            50,
+            65
           ]
         },
         "arrival_overlap_level": 0.375,
@@ -11352,7 +11770,7 @@
         "handling_rate_boxes_per_hour": 50,
         "initial_utilization_range": {
           "__tuple__": [
-            0.2,
+            0.25,
             0.35
           ]
         },
@@ -11417,73 +11835,73 @@
           "Bay_001_001",
           "Ship_Old_001",
           20,
-          15.795635908010617
+          16.363757272007078
         ],
         [
           "Bay_001_002",
           "Ship_Old_002",
           40,
-          11.203066810689972
+          13.302044540459981
         ],
         [
           "Bay_001_003",
           "Ship_Old_003",
           40,
-          12.152962669732142
+          13.935308446488095
         ],
         [
           "Bay_001_004",
           "Ship_Old_001",
           20,
-          11.88720570866168
+          13.758137139107784
         ],
         [
           "Bay_002_001",
           "Ship_Old_002",
           40,
-          13.454896531286051
+          14.8032643541907
         ],
         [
           "Bay_002_002",
           "Ship_Old_003",
           20,
-          13.739976142235506
+          14.993317428157003
         ],
         [
           "Bay_002_003",
           "Ship_Old_001",
           40,
-          15.990969302852626
+          16.49397953523508
         ],
         [
           "Bay_002_004",
           "Ship_Old_002",
           40,
-          11.952209268838565
+          13.801472845892377
         ],
         [
           "Bay_003_001",
           "Ship_Old_003",
           20,
-          17.077109324277536
+          17.218072882851693
         ],
         [
           "Bay_003_002",
           "Ship_Old_001",
           40,
-          11.492977781558805
+          13.495318521039204
         ],
         [
           "Bay_003_003",
           "Ship_Old_002",
           20,
-          10.266370558235929
+          12.677580372157285
         ],
         [
           "Bay_003_004",
           "Ship_Old_003",
           20,
-          12.211879460119409
+          13.974586306746273
         ]
       ]
     },
@@ -11491,8 +11909,8 @@
       "Ship_New_001": {
         "active_duration": 6,
         "actual_size_share": {
-          "20": 0.36764705882352944,
-          "40": 0.6323529411764706
+          "20": 0.3968253968253968,
+          "40": 0.6031746031746031
         },
         "end_period": 6,
         "peak_period": 3,
@@ -11505,13 +11923,13 @@
           5
         ],
         "start_period": 0,
-        "total_boxes": 68
+        "total_boxes": 63
       },
       "Ship_New_002": {
         "active_duration": 6,
         "actual_size_share": {
-          "20": 0.546875,
-          "40": 0.453125
+          "20": 0.4716981132075472,
+          "40": 0.5283018867924528
         },
         "end_period": 9,
         "peak_period": 6,
@@ -11524,11 +11942,11 @@
           8
         ],
         "start_period": 3,
-        "total_boxes": 64
+        "total_boxes": 53
       }
     }
   },
-  "digest": "fd19401e9f00cab166a2e516526d6fefa931f5b1c4b7d5c879bb19dbe7aed8d0",
+  "digest": "71d0238192acc7f92ef841b2d609ccd4d5c8d7ffe3ce219b2baefae101aed22b",
   "instance_id": "S02",
   "instance_state": "raw",
   "problem_protocol": "paper-exp-v1",
