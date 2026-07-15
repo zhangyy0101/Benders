@@ -20,7 +20,7 @@ def test_direct_bay_usage_count():
 def test_extra_bay_increases_direct_count():
     d,s=allocations(True);assert evaluate_joint_group_concentration(d,s)["raw_used_bays"]==3
 def test_tight_big_m_is_bay_capacity_and_scale_positive():
-    d=fixture();c=concentration_metadata(d);g=d["G"][0];assert c["big_m"]["J1",g,"A20"]==4 and c["scale"]==len(c["positive_ship_groups"])
+    d=fixture();c=concentration_metadata(d);pod=d["GroupPOD"][d["G"][0]];assert c["big_m"]["J1",pod,"A20"]==4 and c["scale"]==len(c["positive_ship_pods"])
 def test_no_minimum_or_cover_constraints():
     d=fixture();m,_,_=build_master_model(d,Weights());assert not any("minimum" in x.ConstrName or "concentration_cover" in x.ConstrName for x in m.getConstrs())
 def test_evaluator_matches_monolithic_model():

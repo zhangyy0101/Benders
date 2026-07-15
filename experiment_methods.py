@@ -2,7 +2,7 @@
 from __future__ import annotations
 from solution_evaluation import evaluate_common_solution
 from solve_direct_gurobi import solve_direct_alns_pipeline,solve_direct_gurobi
-from solver_true_benders import solve_bbc_phase,solve_true_benders_pipeline
+from solver_true_benders import solve_bbc_phase
 from anytime import canonicalize
 
 METHODS=("direct","direct_alns","bbc_candidate","bbc_core_verification","classical_benders")
@@ -14,7 +14,8 @@ def run_method(method,data,weights,configuration,*,budget,threads,mip_gap,alloc_
         from solver_classical_benders import solve_classical_benders
         result=solve_classical_benders(data,weights,time_limit=budget,mip_gap=mip_gap,threads=threads,alloc_domain=alloc_domain,seed=seed)
     elif method=="bbc_candidate":
-        c=configuration;s=c["phase_shares"];result=solve_true_benders_pipeline(data,weights,total_core_time=budget,threads=threads,mip_gap=mip_gap,alloc_domain=alloc_domain,seed=seed,root_time_share=s["root"],warm_start_time_share=s["warm"],alns_time_share=s["alns"],main_bbc_time_share=s["main"],root_prepass=c["root_prepass"],warm_start=c["warm_start"],enable_alns=c["alns"],aggregate_recourse_lb=c["aggregate_recourse_lb"],analytic_recourse_lb=c["analytic_recourse_lb"],add_valid_inequalities=c["valid_inequalities"],node_cuts=c["node_cuts"],cut_strategy=c["cut_strategy"],lns_options=c["alns_parameters"])
+        from solver_partial_bbc import solve_partial_bbc
+        result=solve_partial_bbc(data,weights,time_limit=budget,threads=threads,mip_gap=mip_gap,alloc_domain=alloc_domain,seed=seed)
     else:raise KeyError(f"unknown method {method!r}")
     if not result.get("anytime_trace"):
         elapsed=0.0;points=[]

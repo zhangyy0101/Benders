@@ -16,10 +16,33 @@ TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
 
 def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_release_policy: str = "proportional") -> dict:
-    result=copy.deepcopy(data);scale=float(handling_rate_scale)
+    result=copy.deepcopy(data);scale=float(handling_rate_scale);_migrate_pod_size_height_groups(result);_ensure_old_bay_heights(result)
     if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
     if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative"}:raise ValueError("invalid old outbound release policy")
     raw_rates=result.get("Bay_Handling_Rate",{});result["Bay_Handling_Rate"]={(i,n):float(raw_rates.get((i,n),TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR))*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=None;result["handling_rate_scale"]=scale;result["handling_rate_source"]="instance_scaled";result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
+
+def _migrate_pod_size_height_groups(data):
+    """Remove weight class from the planning taxonomy while accepting legacy files."""
+    if not data.get("G") or not data.get("GroupAttrs") or any("pod" not in data["GroupAttrs"].get(g,{}) or "height" not in data["GroupAttrs"].get(g,{}) for g in data["G"]):return
+    mapping={};attrs={}
+    for g in data["G"]:
+        a=data["GroupAttrs"][g];size=int(a["size"]);pod=str(a.get("pod","ALL"));height=str(a.get("height","STD"));key=f"Group_{size}_{pod}_{height}";mapping[g]=key;attrs[key]={"size":size,"pod":pod,"height":height}
+    arrivals={}
+    active={j:set() for j in data["J_new"]}
+    legacy_active=data.get("ActiveGroupsByShip")
+    for j in data["J_new"]:
+        source=data["G"] if legacy_active is None else legacy_active.get(j,())
+        for old in source:
+            new=mapping[old];active[j].add(new)
+            for n in data["N"]:arrivals[j,new,n]=arrivals.get((j,new,n),0.0)+float(data.get("Arrivals_group_interval",{}).get((j,old,n),0.0))
+    data["G"]=sorted(attrs);data["GroupAttrs"]=attrs;data["GroupSize"]={g:a["size"] for g,a in attrs.items()};data["GroupPOD"]={g:a["pod"] for g,a in attrs.items()};data["GroupHeight"]={g:a["height"] for g,a in attrs.items()};data.pop("GroupWeightClass",None);data["Arrivals_group_interval"]=arrivals;data["ActiveGroupsByShip"]={j:sorted(v) for j,v in active.items()};data["LegacyGroupMap"]=mapping;data["group_taxonomy"]="pod_size_height"
+
+def _ensure_old_bay_heights(data):
+    heights=dict(data.get("OldBayHeight",{}));allowed=("STD","HIGH")
+    for pos,i in enumerate(data["I_list"]):
+        occupied=any(bay==i and float(v)>1e-9 for (bay,_j,_s),v in data.get("initial_inventory_data",{}).items()) or any(bay==i and float(v)>1e-9 for (_j,_s,bay,_n),v in data.get("Fixed_In_Flow",{}).items())
+        if occupied and i not in heights:heights[i]=allowed[pos%len(allowed)]
+    data["OldBayHeight"]=heights;data["HeightTypes"]=sorted(set(allowed)|set(heights.values()))
 def simulate_old_inventory(data,policy=None):
     policy=policy or data.get("old_outbound_release_policy","proportional");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
     for n in N:

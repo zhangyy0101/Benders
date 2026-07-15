@@ -84,15 +84,15 @@ def _validate_range(name, bounds, lower, upper):
 
 def _groups(profile):
     attrs = {
-        "Group_20_POD_A_STD_LIGHT": {"size": 20, "pod": "POD_A", "height": "STD", "weight_class": "LIGHT"},
-        "Group_20_POD_B_HIGH_HEAVY": {"size": 20, "pod": "POD_B", "height": "HIGH", "weight_class": "HEAVY"},
-        "Group_40_POD_A_STD_LIGHT": {"size": 40, "pod": "POD_A", "height": "STD", "weight_class": "LIGHT"},
-        "Group_40_POD_B_HIGH_HEAVY": {"size": 40, "pod": "POD_B", "height": "HIGH", "weight_class": "HEAVY"},
+        "Group_20_POD_A_STD": {"size": 20, "pod": "POD_A", "height": "STD"},
+        "Group_20_POD_B_HIGH": {"size": 20, "pod": "POD_B", "height": "HIGH"},
+        "Group_40_POD_A_STD": {"size": 40, "pod": "POD_A", "height": "STD"},
+        "Group_40_POD_B_HIGH": {"size": 40, "pod": "POD_B", "height": "HIGH"},
     }
     if profile == "standard6":
         attrs.update({
-            "Group_20_POD_C_STD_MEDIUM": {"size": 20, "pod": "POD_C", "height": "STD", "weight_class": "MEDIUM"},
-            "Group_40_POD_C_HIGH_MEDIUM": {"size": 40, "pod": "POD_C", "height": "HIGH", "weight_class": "MEDIUM"},
+            "Group_20_POD_C_STD": {"size": 20, "pod": "POD_C", "height": "STD"},
+            "Group_40_POD_C_HIGH": {"size": 40, "pod": "POD_C", "height": "HIGH"},
         })
     return list(attrs), attrs
 
@@ -140,10 +140,10 @@ def _pilot2_ship_groups(rng,spec,ship):
     pod_count=rng.randint(*spec.pod_count_range);pods=[f"POD_{i:02d}" for i in sorted(rng.sample(range(1,9),pod_count))]
     target=rng.randint(*spec.positive_group_count_range);lo,hi=spec.single_combination_pod_ratio_range;valid=[n for n in range(1,pod_count+1) if lo<=n/pod_count<=hi]
     if not valid:raise ValueError(f"no integer singleton POD count for pod_count={pod_count}, range={spec.single_combination_pod_ratio_range}")
-    singleton=set(rng.sample(pods,rng.choice(valid)));attrs={};by_pod={pod:[] for pod in pods};combos=[("STD","LIGHT"),("STD","HEAVY"),("HIGH","LIGHT"),("HIGH","HEAVY")]
+    singleton=set(rng.sample(pods,rng.choice(valid)));attrs={};by_pod={pod:[] for pod in pods};combos=["STD","HIGH"]
     def add(pod,size,chosen):
-        for height,weight in chosen:
-            g=f"Group_{size}_{pod}_{height}_{weight}";attrs[g]={"size":size,"pod":pod,"height":height,"weight_class":weight};by_pod[pod].append(g)
+        for height in chosen:
+            g=f"Group_{size}_{pod}_{height}";attrs[g]={"size":size,"pod":pod,"height":height};by_pod[pod].append(g)
     for pos,pod in enumerate(pods):
         size=20 if pos%2==0 else 40;chosen=rng.sample(combos,1 if pod in singleton else 2);add(pod,size,chosen)
     # Grow without ever creating an accidental singleton size on non-singleton PODs.
@@ -151,16 +151,16 @@ def _pilot2_ship_groups(rng,spec,ship):
         options=[]
         for pod in pods:
             for size in (20,40):
-                present=[g for g in by_pod[pod] if attrs[g]["size"]==size];missing=[c for c in combos if f"Group_{size}_{pod}_{c[0]}_{c[1]}" not in attrs]
+                present=[g for g in by_pod[pod] if attrs[g]["size"]==size];missing=[c for c in combos if f"Group_{size}_{pod}_{c}" not in attrs]
                 if present and missing and pod not in singleton:options.append((pod,size,[rng.choice(missing)]))
                 elif not present and len(attrs)+2<=target:options.append((pod,size,rng.sample(combos,2)))
         if not options:break
         add(*rng.choice(options))
     if len(attrs)!=target:raise ValueError(f"could not construct {target} active groups; created {len(attrs)}")
-    heights={a["height"] for a in attrs.values()};weights={a["weight_class"] for a in attrs.values()};sizes={a["size"] for a in attrs.values()}
+    heights={a["height"] for a in attrs.values()};sizes={a["size"] for a in attrs.values()}
     actual_single=sum(any(sum(attrs[g]["size"]==s for g in by_pod[p])==1 for s in (20,40)) for p in pods)
     if not lo<=actual_single/pod_count<=hi:raise ValueError(f"single-combination ratio {actual_single/pod_count} outside {lo,hi}")
-    return attrs,pods,{"pod_count":pod_count,"positive_group_count":len(attrs),"single_combination_pod_count":actual_single,"height_coverage":sorted(heights),"weight_coverage":sorted(weights),"size_coverage":sorted(sizes)}
+    return attrs,pods,{"pod_count":pod_count,"positive_group_count":len(attrs),"single_combination_pod_count":actual_single,"height_coverage":sorted(heights),"weight_coverage":["REMOVED","NOT_MODELED"],"size_coverage":sorted(sizes)}
 
 def _allocate_hierarchy(rng,total,attrs,pods,minimum_group):
     by_pod={p:[g for g,a in attrs.items() if a["pod"]==p] for p in pods};pod_min=[minimum_group*len(by_pod[p]) for p in pods];pod_extra=_split_integer(total-sum(pod_min),len(pods),rng,0);pod_vol={p:pod_min[i]+pod_extra[i] for i,p in enumerate(pods)}
@@ -302,7 +302,6 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
         "GroupSize": {g: value["size"] for g, value in GroupAttrs.items()},
         "GroupPOD": {g: value["pod"] for g, value in GroupAttrs.items()},
         "GroupHeight": {g: value["height"] for g, value in GroupAttrs.items()},
-        "GroupWeightClass": {g: value["weight_class"] for g, value in GroupAttrs.items()},
         "Alpha": float(spec.alpha), "Intervals": Intervals, "N": N,
         "TimeBucketHours": float(spec.time_bucket_hours), "NumBerths": spec.num_berths,
         "Berths": berths, "ShipBerth": ShipBerth, "Dist": Dist,
@@ -311,7 +310,7 @@ def generate_synthetic_instance(spec: SyntheticInstanceSpec, seed: int) -> dict:
         "Block_Outbound_Vol": Block_Outbound_Vol, "Block_Outbound_Req": Block_Outbound_Req,
         "Fixed_In_Flow": Fixed_In_Flow, "Fixed_Mode_Force": Fixed_Mode_Force,
         "Fixed_Bay_Mode": dict(modes), "Old_Box_Occupancy_Map": Old_Box_Occupancy_Map,
-        "Old_Ship_Size_Map": Old_Ship_Size_Map,
+        "Old_Ship_Size_Map": Old_Ship_Size_Map,"OldBayHeight":{i:("STD" if I_list.index(i)%2==0 else "HIGH") for i in I_list if any(initial.get((i,j,modes[i]),0)>0 or any(Fixed_In_Flow.get((j,modes[i],i,n),0)>0 for n in N) for j in J_old)},
         "OldShipType": {"in_only": [], "out_only": [], "fixed_only": list(J_old)},
         "ScenarioName": spec.name, "ships_config": ships_config,
         "Bay_Handling_Rate": {(i, n): float(spec.handling_rate_boxes_per_hour) for i in I_list for n in N},

@@ -41,4 +41,4 @@ def test_prepare_preserves_and_scales_instance_handling_rates():
     data = prepare_instance(raw, handling_rate_scale=1.5)
     assert data["Bay_Handling_Rate"][key] == pytest.approx(55.5)
     assert data["handling_rate_source"] == "instance_scaled"
-    assert PROBLEM_PROTOCOL == "paper-exp-v2-integer-allocation-no-alpha-no-open"
+    assert PROBLEM_PROTOCOL == "paper-exp-v3-pod-size-height-no-mix-partial-bbc"

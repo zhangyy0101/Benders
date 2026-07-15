@@ -1,6 +1,6 @@
 {
   "problem_protocol": {
-    "version": "paper-exp-v2-integer-allocation-no-alpha-no-open",
+    "version": "paper-exp-v3-pod-size-height-no-mix-partial-bbc",
     "status": "fixed",
     "weights": {
       "open": 0.0,
@@ -18,7 +18,7 @@
   },
   "candidate_algorithm_defaults": {
     "algorithm_family": "true_bbc_alns",
-    "problem_protocol_version": "paper-exp-v2-integer-allocation-no-alpha-no-open",
+    "problem_protocol_version": "paper-exp-v3-pod-size-height-no-mix-partial-bbc",
     "status": "frozen_candidate",
     "configuration_name": "algorithm-candidate-v1",
     "configuration_version": "1",

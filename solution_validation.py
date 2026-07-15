@@ -1,5 +1,5 @@
 """Independent feasibility checker for Route-B exact UB solutions."""
-from model_common import arrival,fixed_in_block,group_size,groups,remaining_capacity,required_reserve,ship_group_pairs,ship_groups
+from model_common import arrival,fixed_in_block,group_attr,group_size,groups,remaining_capacity,required_reserve,ship_group_pairs,ship_groups
 from model_concentration import evaluate_joint_group_concentration
 def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalities=True,concentration_enabled=True,tolerance=1e-5):
     I,J,G,N,K=data["I_list"],data["J_new"],groups(data),data["N"],data["K"];pairs=ship_group_pairs(data);rem=remaining_capacity(data);viol={}
@@ -16,6 +16,8 @@ def validate_solution(data,solution,*,alloc_domain="integer",add_valid_inequalit
        for n in N:rec("block_flow",abs(val("in_share",(j,k,g,n))-sum(val("din",(j,g,i,n)) for i in data["Bays_in_Block"][k])))
     fixed=fixed_in_block(data)
     for i in I:
+     used_heights={group_attr(data,g,"height") for j,g in pairs if any(val("alloc_boxes",(i,j,g,n))>tolerance for n in N)};old=data.get("OldBayHeight",{}).get(i)
+     rec("height_mixing",len(used_heights|({old} if old is not None else set()))-1)
      for n in N:rec("bay_capacity",sum(val("alloc_boxes",(i,j,g,n)) for j,g in pairs)-rem[i,n])
     for k in K:
      for n in N:rec("in_total",abs(val("in_total",(k,n))-fixed[k,n]-sum(val("in_share",(j,k,g,n)) for j,g in pairs)));rec("l1_pos",val("in_total",(k,n))-val("avg",n)-val("g_bal",(k,n)));rec("l1_neg",val("avg",n)-val("in_total",(k,n))-val("g_bal",(k,n)))

@@ -14,7 +14,8 @@ def tiny_solution():
     din = {(j, g, i, n): 0.0 for j in data["J_new"] for g in data["G"] for i in data["I_list"] for n in data["N"]}
     inv = dict(din)
     share = {(j, k, g, n): 0.0 for j in data["J_new"] for k in data["K"] for g in data["G"] for n in data["N"]}
-    for g, bay in (("G20", "A20"), ("G40", "A40")):
+    groups={data["GroupSize"][g]:g for g in data["G"]}
+    for g, bay in ((groups[20], "A20"), (groups[40], "A40")):
         for n in data["N"]:
             x[bay, "J1", n] = 1.0
             alloc[bay, "J1", g, n] = 2.0 * (n + 1)
@@ -55,7 +56,7 @@ def test_concentration_and_workload_statistics():
 def test_reserved_and_physical_utilization_are_distinct():
     data, solution = tiny_solution()
     changed = copy.deepcopy(solution)
-    changed["alloc_boxes"]["A20", "J1", "G20", 1] = 5.0
+    g=next(g for g in data["G"] if data["GroupSize"][g]==20);changed["alloc_boxes"]["A20", "J1", g, 1] = 5.0
     utilization = evaluate_common_solution(data, Weights(), changed)["kpis"]["utilization"]
     assert utilization["reserved"]["mean"] != utilization["physical"]["mean"]
     assert utilization["reserved"]["minimum_remaining_boxes"] < utilization["physical"]["minimum_remaining_boxes"]

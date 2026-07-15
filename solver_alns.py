@@ -2,7 +2,7 @@
 from __future__ import annotations
 import math,random,time
 from gurobipy import GRB
-from model_common import group_size,groups,outbound_pressure,remaining_capacity,required_reserve,ship_groups
+from model_common import group_attr,group_size,groups,outbound_pressure,remaining_capacity,required_reserve,ship_groups
 from model_concentration import evaluate_joint_group_concentration
 from model_monolithic import build_monolithic_model,extract_solution
 from solution_evaluation import evaluate_common_solution as evaluate_solution
@@ -17,9 +17,9 @@ def _period_pair_mass(data,solution,pair,periods):
 def concentration_destroy_pairs(data,solution,*,alloc_domain="integer"):
     c=evaluate_joint_group_concentration(data,solution,alloc_domain=alloc_domain,enabled=True)
     if not c["enabled"] or not c["positive_ship_groups"]:return [],{}
-    target=max(c["positive_ship_groups"],key=lambda p:len(c["used_bays"].get(p,[])));j,g=target;pairs=[(i,j) for i in c["used_bays"].get(target,[])];final=c["final_period"]
-    pairs.sort(key=lambda q:float(solution.get("alloc_boxes",{}).get((q[0],j,g,final),0)))
-    return pairs,{"target_ship":j,"target_group":g,"target_size":group_size(data,g)}
+    target=max(c["positive_ship_pods"],key=lambda p:len(c["used_bays"].get(p,[])));j,pod=target;pairs=[(i,j) for i in c["used_bays"].get(target,[])];final=c["final_period"];gs=[g for g in ship_groups(data,j) if group_attr(data,g,"pod")==pod]
+    pairs.sort(key=lambda q:sum(float(solution.get("alloc_boxes",{}).get((q[0],j,g,final),0)) for g in gs))
+    return pairs,{"target_ship":j,"target_pod":pod}
 def concentration_destroy_pool(data,solution,*,alloc_domain="integer"):
     pairs,_=concentration_destroy_pairs(data,solution,alloc_domain=alloc_domain);return pairs
 def build_source_pair_pool(data,solution,operator,rng,pressure,alloc_domain="integer"):

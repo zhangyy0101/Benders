@@ -12,16 +12,13 @@ def analytic_recourse_lower_bounds(data,weights):
 def add_aggregate_recourse_relaxation(model,data,weights,x,alloc,eta,*,enabled=True,analytic_enabled=True):
     analytic=analytic_recourse_lower_bounds(data,weights);analytic_constr=model.addConstr(eta>=analytic["total"],name="eta_analytic_lb") if analytic_enabled else None
     if not enabled:return {"analytic":analytic,"aggregate_objective":None,"variables":{},"constraint":None}
-    J,K,S,N=data["J_new"],data["K"],data["S"],data["N"];G=groups(data);modes={i:int(data["Fixed_Bay_Mode"][i]) for i in data["I_list"]};z=model.addVars(J,K,S,N,lb=0,name="agg_z");total=model.addVars(K,N,lb=0,name="agg_total");avg=model.addVars(N,lb=0,name="agg_avg");bal=model.addVars(K,N,lb=0,name="agg_bal")
-    for j in J:
-      for s in S:
-       gs=[g for g in ship_groups(data,j) if group_size(data,g)==int(s)]
-       for n in N:
-        model.addConstr(gp.quicksum(z[j,k,s,n] for k in K)==sum(arrival(data,j,g,n) for g in gs),name=f"agg_arrival_{j}_{s}_{n}")
-        for k in K:
-         bays=[i for i in data["Bays_in_Block"][k] if modes[i]==int(s)];model.addConstr(gp.quicksum(z[j,k,s,t] for t in N if t<=n)<=gp.quicksum(alloc[i,j,g,n] for i in bays for g in gs),name=f"agg_storage_{j}_{k}_{s}_{n}")
+    J,K,N=data["J_new"],data["K"],data["N"];pairs=ship_group_pairs(data);z=model.addVars([(j,k,g,n) for j,g in pairs for k in K for n in N],lb=0,name="agg_z");total=model.addVars(K,N,lb=0,name="agg_total");avg=model.addVars(N,lb=0,name="agg_avg");bal=model.addVars(K,N,lb=0,name="agg_bal")
+    for j,g in pairs:
+      for n in N:
+       model.addConstr(gp.quicksum(z[j,k,g,n] for k in K)==arrival(data,j,g,n),name=f"agg_arrival_{j}_{g}_{n}")
+       for k in K:model.addConstr(gp.quicksum(z[j,k,g,t] for t in N if t<=n)<=gp.quicksum(alloc[i,j,g,n] for i in data["Bays_in_Block"][k]),name=f"agg_storage_{j}_{k}_{g}_{n}")
     fixed=fixed_in_block(data);pressure=outbound_pressure(data)
     for k in K:
-      for n in N:model.addConstr(total[k,n]==fixed[k,n]+gp.quicksum(z[j,k,s,n] for j in J for s in S));model.addConstr(bal[k,n]>=total[k,n]-avg[n]);model.addConstr(bal[k,n]>=avg[n]-total[k,n])
+      for n in N:model.addConstr(total[k,n]==fixed[k,n]+gp.quicksum(z[j,k,g,n] for j,g in pairs));model.addConstr(bal[k,n]>=total[k,n]-avg[n]);model.addConstr(bal[k,n]>=avg[n]-total[k,n])
     for n in N:model.addConstr(len(K)*avg[n]==gp.quicksum(total[k,n] for k in K))
-    sc=objective_scales(data);factor=scale_factor(weights);distance=factor*weights.sub.dist*gp.quicksum(float(data["Dist"][j,k])*z[j,k,s,n] for j in J for k in K for s in S for n in N)/sc["distance"];balance=factor*weights.sub.balance*gp.quicksum(bal[k,n] for k in K for n in N)/sc["balance"];conflict=factor*weights.sub.conflict*gp.quicksum(float(pressure[k,n])*z[j,k,s,n] for j in J for k in K for s in S for n in N)/sc["conflict"];obj=distance+balance+conflict;constraint=model.addConstr(eta>=obj,name="eta_aggregate_lb");return {"analytic":analytic,"aggregate_objective":obj,"distance":distance,"balance":balance,"conflict":conflict,"variables":{"z":z,"total":total,"avg":avg,"bal":bal},"constraint":constraint}
+    sc=objective_scales(data);factor=scale_factor(weights);distance=factor*weights.sub.dist*gp.quicksum(float(data["Dist"][j,k])*z[j,k,g,n] for j,g in pairs for k in K for n in N)/sc["distance"];balance=factor*weights.sub.balance*gp.quicksum(bal[k,n] for k in K for n in N)/sc["balance"];conflict=factor*weights.sub.conflict*gp.quicksum(float(pressure[k,n])*z[j,k,g,n] for j,g in pairs for k in K for n in N)/sc["conflict"];obj=distance+balance+conflict;constraint=model.addConstr(eta>=obj,name="eta_aggregate_lb");return {"analytic":analytic,"aggregate_objective":obj,"distance":distance,"balance":balance,"conflict":conflict,"variables":{"z":z,"total":total,"avg":avg,"bal":bal},"constraint":constraint}

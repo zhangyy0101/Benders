@@ -19,6 +19,7 @@ RECORD_SCHEMAS = {
     "Old_Box_Occupancy_Map": ("bay", "old_ship"),
     "Old_Ship_Size_Map": ("bay", "old_ship"),
     "Bay_Handling_Rate": ("bay", "period"),
+    "OldBayHeight": ("bay",),
 }
 
 PREPARED_ONLY_FIELDS = {

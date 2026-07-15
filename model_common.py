@@ -12,6 +12,7 @@ def group_size(data,g):return int(data.get("GroupSize",{}).get(g,data.get("Group
 def group_attr(data,g,name,default="ALL"):
     maps={"pod":"GroupPOD","height":"GroupHeight","weight_class":"GroupWeightClass"};return str(data.get(maps[name],{}).get(g,data.get("GroupAttrs",{}).get(g,{}).get(name,default)))
 def arrival(data,j,g,n):
+    g=data.get("LegacyGroupMap",{}).get(g,g)
     grouped=data.get("Arrivals_group_interval",{})
     if data.get("ActiveGroupsByShip") is not None and g not in data["ActiveGroupsByShip"].get(j,()):return 0.0
     return float(grouped[j,g,n] if (j,g,n) in grouped else data["Arrivals_interval"].get((j,group_size(data,g),n),0))
