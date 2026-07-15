@@ -61,13 +61,13 @@ recourse 目标的下界。Global recourse LP 含 `din`、`inv`、`in_share`、`
   `x[i,j,n] <= sum_g alloc[i,j,g,n]`。
 - `alloc_mono`: `alloc[i,j,g,n] >= alloc[i,j,g,n-1]`。
 - `mode`: 与 `Fixed_Bay_Mode[i]` 箱型不兼容的组在该贝位 allocation 为 0。
-- `exact_reserve`: `sum_i alloc[i,j,g,n] = ceil(alpha * sum_(t<=n) A[j,g,t])`
-  （integer domain）；continuous domain 不取整。
+- `exact_reserve`: `sum_i alloc[i,j,g,n] = sum_(t<=n) A[j,g,t]`；V2 中
+  `alloc_boxes` 是整数箱位数，`Alpha` 不再进入模型。
 - `arrival`: `sum_i din[j,g,i,n] = A[j,g,n]`。
 - `inventory`: `inv[n] = inv[n-1] + din[n]`，初值来自
   `initial_inventory_data[(i,j,g)]`（新船通常为 0）。
-- `storage_link`: `alpha * inv[j,g,i,n] <= alloc[i,j,g,n]`。
-- `handling_link`: `alpha * sum_g din[j,g,i,n] <= rate[i,n] d[n] x[i,j,n]`。
+- `storage_link`: `inv[j,g,i,n] <= alloc[i,j,g,n]`。
+- `handling_link`: `sum_g din[j,g,i,n] <= rate[i,n] d[n] x[i,j,n]`。
 - `share`: `in_share[j,k,g,n] = sum_(i in k) din[j,g,i,n]`。
 - `total`: `in_total[k,n] = fixed_in_block[k,n] + sum_(j,g) in_share[j,k,g,n]`；
   `avg` 是箱区均值，`g_bal >= |in_total-avg|`，形成 L1 平衡项。

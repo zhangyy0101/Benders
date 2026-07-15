@@ -34,7 +34,7 @@ def validate_result(data,result,method):
   if not evaluation["feasibility"]["feasible"]:errors.append("independent checker failed")
   if result.get("ub") is None or abs(result["ub"]-evaluation["core_cost"])>TOL:errors.append("UB/evaluator mismatch")
   if method=="direct" and abs(result["solver_objective"]-evaluation["core_cost"])>TOL:errors.append("solver/evaluator mismatch")
-  point={"x":result["solution"]["x"],"alloc_boxes":result["solution"]["alloc_boxes"],"eta":evaluation["recourse_cost"]};oracle=GlobalRecourseOracle(data,Weights());oracle.update_rhs(point["x"],point["alloc_boxes"]);status=oracle.solve();details["oracle_status"]=int(status)
+  point={"alloc_boxes":result["solution"]["alloc_boxes"],"eta":evaluation["recourse_cost"]};oracle=GlobalRecourseOracle(data,Weights());oracle.update_rhs(point["alloc_boxes"]);status=oracle.solve();details["oracle_status"]=int(status)
   if status!=GRB.OPTIMAL:errors.append("oracle not optimal")
   else:
    q=oracle.objective_value();details["oracle_recourse"]=q

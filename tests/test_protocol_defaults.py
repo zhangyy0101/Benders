@@ -8,7 +8,7 @@ import main
 import run_experiments
 import solve_direct_gurobi
 from algorithm_configuration import configuration_hash
-from config import Weights
+from config import PROBLEM_PROTOCOL,Weights
 from data import TIME_BUCKET_HOURS
 from solver_alns import adaptive_lns
 from solver_true_benders import solve_true_benders_pipeline
@@ -34,7 +34,7 @@ def test_protocol_identity_and_objective_defaults(defaults):
     weights = Weights()
     fixed = defaults["problem_protocol"]
     candidate = defaults["candidate_algorithm_defaults"]
-    assert fixed["version"] == "paper-exp-v1" and fixed["status"] == "fixed"
+    assert fixed["version"] == PROBLEM_PROTOCOL and fixed["status"] == "fixed"
     assert candidate["status"] == "frozen_candidate"
     assert candidate["algorithm_family"] == "true_bbc_alns"
     assert candidate["problem_protocol_version"] == fixed["version"]

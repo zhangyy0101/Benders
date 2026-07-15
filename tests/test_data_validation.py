@@ -3,7 +3,7 @@ from instance_registry import build_builtin_instance,list_builtin_instances
 from model_common import groups,group_size,remaining_capacity
 
 def test_handling_rate_units_and_metadata():
- d=prepare_instance(build_builtin_instance("tiny"));assert set(d['Bay_Handling_Rate'].values())=={TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR} and d['handling_rate_source']=='model_calibration'
+ d=prepare_instance(build_builtin_instance("tiny"));assert set(d['Bay_Handling_Rate'].values())=={TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR} and d['handling_rate_source']=='instance_scaled'
 
 def test_all_builtins_pass_pure_data_checks():
  for name in list_builtin_instances():

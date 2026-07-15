@@ -74,21 +74,18 @@ def adaptive_lns(data,weights,start_solution,*,time_limit=10,repair_time=2,repai
     deadline=beg+time_limit;terminated_by_deadline=False
     while time.perf_counter()<deadline:
         iteration+=1;op=rng.choices(OPERATORS,weights=[stats[o]["weight"] for o in OPERATORS])[0];used_fraction=fraction;source_pool,context=build_source_pair_pool(data,current,op,rng,pressure,alloc_domain);source=select_source_pairs(source_pool,fraction,rng,context.get("ranked",False),context.get("preferred_pool"),context.get("fallback_pool"));dest_count=math.ceil(len(source)*max(0,destination_ratio));destination=select_destination_pairs(data,current,source,op,dest_count,rng,context);released_pairs=set(source)|set(destination);free_periods=context.get("free_periods",set(data["N"]));released_x,released_alloc=build_released_variable_keys(data,released_pairs,free_periods)
-        for var in v["x"].values():var.LB=0;var.UB=1
         for var in v["alloc_boxes"].values():var.LB=0;var.UB=GRB.INFINITY
         _start(v,current)
-        for key,var in v["x"].items():
-            if key not in released_x:var.LB=var.UB=round(current["x"][key])
         for key,var in v["alloc_boxes"].items():
             if key not in released_alloc:
                 value=round(current["alloc_boxes"][key]) if alloc_domain=="integer" else current["alloc_boxes"][key]
                 if alloc_domain=="integer" and abs(value-current["alloc_boxes"][key])>1e-5:raise AssertionError("unsafe integer allocation fixing")
                 var.LB=var.UB=value
-        xratio=len(released_x)/max(1,len(v["x"]));aratio=len(released_alloc)/max(1,len(v["alloc_boxes"]));ratio=.5*(xratio+aratio);adaptive=min(max_rt,max(min_rt,repair_time*(.5+2.5*math.sqrt(max(0,ratio)))));remaining=deadline-time.perf_counter()
+        ratio=len(released_alloc)/max(1,len(v["alloc_boxes"]));adaptive=min(max_rt,max(min_rt,repair_time*(.5+2.5*math.sqrt(max(0,ratio)))));remaining=deadline-time.perf_counter()
         if remaining<=0:terminated_by_deadline=True;break
         repair_limit=min(adaptive,remaining);m.Params.OutputFlag=0;m.Params.TimeLimit=repair_limit;m.Params.MIPGap=repair_gap;m.Params.Seed=seed+iteration;t=time.perf_counter();m.optimize();runtime=time.perf_counter()-t;accepted=False;candidate=None;evaluation=None;candidate_cost=None;improved_current=False;improved_best=False;previous_current_cost=current_cost;previous_best_cost=best_cost
         if m.SolCount:
-            candidate=extract_solution(v);evaluation=evaluate_solution(data,weights,candidate,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);candidate_cost=evaluation["core_cost"]
+            candidate=extract_solution(v,data);evaluation=evaluate_solution(data,weights,candidate,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);candidate_cost=evaluation["core_cost"]
             if abs(m.ObjVal-candidate_cost)>1e-5:raise AssertionError("ALNS repair objective mismatch")
             delta=candidate_cost-previous_current_cost;temp=max(1e-9,.02*best_cost*(.98**iteration));accepted=delta<-1e-6 or rng.random()<math.exp(-max(0,delta)/temp);improved_current=candidate_cost<previous_current_cost-1e-6;improved_best=candidate_cost<previous_best_cost-1e-6
             if improved_current:stats[op]["improved"]+=1

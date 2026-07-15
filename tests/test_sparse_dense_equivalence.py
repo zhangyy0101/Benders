@@ -14,7 +14,7 @@ def equivalent_pair():
  dense=prepare_instance(copy.deepcopy(raw));sparse_raw=copy.deepcopy(raw);sparse_raw["ActiveGroupsByShip"]={j:[g for g in raw["G"] if g!=fake]};sparse=prepare_instance(sparse_raw);return sparse,dense,fake
 
 def test_inactive_groups_create_no_sparse_variables():
- sparse,dense,fake=equivalent_pair();sm,sv,_=build_monolithic_model(sparse,Weights());dm,dv,_=build_monolithic_model(dense,Weights());assert not any(fake in key for name in ("alloc_boxes","din","inv","in_share") for key in sv[name]);assert len(sv["alloc_boxes"])<len(dv["alloc_boxes"]);so=GlobalRecourseOracle(sparse,Weights());do=GlobalRecourseOracle(dense,Weights());assert so.model.NumVars<do.model.NumVars;sm.dispose();dm.dispose();so.model.dispose();do.model.dispose()
+ sparse,dense,fake=equivalent_pair();sm,sv,_=build_monolithic_model(sparse,Weights());dm,dv,_=build_monolithic_model(dense,Weights());assert not any(fake in key for name in ("alloc_boxes","din","in_share") for key in sv[name]);assert "inv" not in sv and len(sv["alloc_boxes"])<len(dv["alloc_boxes"]);so=GlobalRecourseOracle(sparse,Weights());do=GlobalRecourseOracle(dense,Weights());assert so.model.NumVars<do.model.NumVars;sm.dispose();dm.dispose();so.model.dispose();do.model.dispose()
 
 def test_sparse_dense_direct_optimum_equal():
  sparse,dense,_=equivalent_pair();a=solve_direct_gurobi(sparse,Weights(),time_limit=10,mip_gap=0);b=solve_direct_gurobi(dense,Weights(),time_limit=10,mip_gap=0);assert a["status_name"]==b["status_name"]=="OPTIMAL";assert a["ub"]==pytest.approx(b["ub"],abs=1e-6)

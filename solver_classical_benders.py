@@ -2,7 +2,7 @@
 from __future__ import annotations
 import time
 from gurobipy import GRB
-from model_common import first_stage_cost
+from model_common import derive_activation,first_stage_cost
 from model_master import build_master_model,extract_master_point
 from model_recourse import BendersCutPool,GlobalRecourseOracle
 from solution_evaluation import evaluate_common_solution
@@ -23,10 +23,10 @@ def solve_classical_benders(data,weights,*,time_limit,mip_gap=0.0,alloc_domain="
         item={"iteration":iteration,"master_status":master_name,"master_obj":float(model.ObjVal) if model.SolCount else None,"master_bound":bound,"master_runtime":master_runtime,"point_eta":None,"sp_status":None,"sp_value":None,"sp_runtime":0.0,"cut_type":None,"cut_violation":None,"cut_added":False,"ub":None if best_ub==float("inf") else best_ub,"lb":global_lb,"gap":relative_gap(None if best_ub==float("inf") else best_ub,global_lb)}
         if not model.SolCount:
             trace.append(item);termination="master_infeasible" if model.Status in (GRB.INFEASIBLE,GRB.INF_OR_UNBD) else "master_no_incumbent";break
-        point=extract_master_point(variables);item["point_eta"]=point["eta"];key=(tuple(sorted(k for k,v in point["x"].items() if v>.5)),tuple(sorted((k,round(v,9)) for k,v in point["alloc_boxes"].items() if abs(v)>1e-9)))
+        point=extract_master_point(variables);item["point_eta"]=point["eta"];key=tuple(sorted((k,round(v,9)) for k,v in point["alloc_boxes"].items() if abs(v)>1e-9))
         entry=cache.get(key)
         if entry is None:
-            sp_started=time.perf_counter();oracle.update_rhs(point["x"],point["alloc_boxes"]);sp_status=oracle.solve();sp_runtime=time.perf_counter()-sp_started
+            sp_started=time.perf_counter();oracle.update_rhs(point["alloc_boxes"]);sp_status=oracle.solve();sp_runtime=time.perf_counter()-sp_started
             if sp_status==GRB.OPTIMAL:entry={"status":sp_status,"q":oracle.objective_value(),"recourse":oracle.solution(),"cut":oracle.build_optimality_cut(point,"classical")}
             elif sp_status==GRB.INFEASIBLE:entry={"status":sp_status,"q":None,"recourse":None,"cut":oracle.build_feasibility_cut(point,"classical")}
             else:trace.append(item);termination=f"recourse_status_{sp_status}";break
@@ -39,7 +39,7 @@ def solve_classical_benders(data,weights,*,time_limit,mip_gap=0.0,alloc_domain="
             if not pool.add(record):trace.append(item);termination="duplicate_violated_cut";break
             model.addConstr(record.as_expression(variables)>=0,name=f"classical_feas_{feasibility_cuts}");feasibility_cuts+=1;item["cut_added"]=True
         else:
-            q=entry["q"];first=first_stage_cost(data,weights,point["x"],point["alloc_boxes"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);exact=first["total"]+q;solution={"x":point["x"],"alloc_boxes":point["alloc_boxes"],**entry["recourse"]}
+            q=entry["q"];first=first_stage_cost(data,weights,point["alloc_boxes"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);exact=first["total"]+q;solution={"x":derive_activation(data,point["alloc_boxes"]),"alloc_boxes":point["alloc_boxes"],**entry["recourse"]}
             if "concentration_use" in point:solution["concentration_use"]=point["concentration_use"]
             evaluation=evaluate_common_solution(data,weights,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled,tolerance=tolerance)
             if not evaluation["feasibility"]["feasible"]:raise RuntimeError(f"classical incumbent failed checker: {evaluation['feasibility']}")

@@ -13,7 +13,7 @@ def tiny(): return prepare_instance(get_data_tiny_benders())
 
 def test_aggregate_relaxation_is_not_above_exact_recourse():
     d=tiny();m,v,c=build_master_model(d,Weights(),relax=True);m.Params.OutputFlag=0;m.optimize();p=extract_master_point(v)
-    oracle=GlobalRecourseOracle(d,Weights());oracle.update_rhs(p["x"],p["alloc_boxes"]);oracle.solve()
+    oracle=GlobalRecourseOracle(d,Weights());oracle.update_rhs(p["alloc_boxes"]);oracle.solve()
     assert oracle.model.Status==2;assert c["aggregate"]["aggregate_objective"].getValue()<=oracle.objective_value()+1e-6
 
 def test_aggregate_and_analytic_lbs_strengthen_weak_master():
@@ -25,7 +25,7 @@ def test_aggregate_master_preserves_tiny_optimum():
 
 def test_exact_reserve_integer_and_continuous():
     d=tiny();g=d["G"][0];assert required_reserve(d,"J1",g,0,"integer")==2 and required_reserve(d,"J1",g,0,"continuous")==2.0
-    d["Alpha"]=.6;assert required_reserve(d,"J1",g,0,"integer")==2 and abs(required_reserve(d,"J1",g,0,"continuous")-1.2)<1e-9
+    d["Alpha"]=.6;assert required_reserve(d,"J1",g,0,"integer")==2 and required_reserve(d,"J1",g,0,"continuous")==2.0
 
 def test_master_and_monolithic_share_reserve_equalities():
     d=tiny();a,_,_=build_master_model(d,Weights());b,_,_=build_monolithic_model(d,Weights());

@@ -5,7 +5,7 @@ from pathlib import Path
 from gurobipy import gurobi
 from algorithm_configuration import configuration_hash,resolved_algorithm_label,validate_algorithm_configuration
 from benchmark_io import instance_digest,load_instance
-from config import Weights
+from config import PROBLEM_PROTOCOL,Weights
 from data import prepare_instance
 from experiment_methods import run_method
 from experiment_schema import SCHEMA_VERSION,stable_run_id,validate_result
@@ -52,7 +52,7 @@ def execute_run(*,instance_id,instance_path,expected_digest,method,configuration
         validate_algorithm_configuration(configuration)
     raw_instance=load_instance(instance_path);digest=instance_digest(raw_instance)
     if digest!=expected_digest:raise ValueError(f"fatal benchmark digest mismatch for {instance_id}")
-    weights=Weights();config_hash=configuration.get("configuration_hash") or configuration_hash({k:v for k,v in configuration.items() if k!="configuration_hash"});identity=identity_payload(protocol="paper-exp-v1",instance_digest_value=digest,method=method,configuration_hash_value=config_hash,seed=seed,budget=budget,threads=threads,mip_gap=mip_gap,alloc_domain=alloc_domain,weights=weights,handling_rate_scale=handling_rate_scale,outbound_policy=outbound_policy);run_id=stable_run_id(identity);started=time.perf_counter();solution=None;evaluation=None
+    weights=Weights();config_hash=configuration.get("configuration_hash") or configuration_hash({k:v for k,v in configuration.items() if k!="configuration_hash"});identity=identity_payload(protocol=PROBLEM_PROTOCOL,instance_digest_value=digest,method=method,configuration_hash_value=config_hash,seed=seed,budget=budget,threads=threads,mip_gap=mip_gap,alloc_domain=alloc_domain,weights=weights,handling_rate_scale=handling_rate_scale,outbound_policy=outbound_policy);run_id=stable_run_id(identity);started=time.perf_counter();solution=None;evaluation=None
     try:
         data=prepare_instance(raw_instance,handling_rate_scale=handling_rate_scale,old_outbound_release_policy=outbound_policy);solver,solution,evaluation=method_runner(method,data,weights,configuration,budget=budget,threads=threads,mip_gap=mip_gap,alloc_domain=alloc_domain,seed=seed);wall=time.perf_counter()-started;reported_status=solver.get("status_name",solver.get("phase3_bbc",{}).get("status_name"));status={"ok":bool(solution),"status":reported_status,"termination_reason":solver.get("termination_reason") or solver.get("reason") or (reported_status.lower() if isinstance(reported_status,str) else None),"exception_type":None,"exception_message":None,"feasible_incumbent_found":bool(solution),"solution_source":solver.get("core_best",{}).get("solution_source")};timing=_timing(solver,wall);optimization=_optimization(solver)
     except Exception as exc:
@@ -86,7 +86,7 @@ def run_jobs(jobs,output,*,resume=False,rerun_failed=False,save_solutions=False,
         if require_clean_git:raise RuntimeError("clean git worktree required")
     root=Path(output);source=root/source_filename;existing=read_jsonl(source);by_id={row["run_id"]:row for row in existing}
     for job in jobs:
-        probe_identity=identity_payload(protocol="paper-exp-v1",instance_digest_value=job["expected_digest"],method=job["method"],configuration_hash_value=job["configuration"]["configuration_hash"],seed=job["seed"],budget=job["budget"],threads=job["threads"],mip_gap=job["mip_gap"],alloc_domain=job["alloc_domain"],weights=Weights(),handling_rate_scale=job["handling_rate_scale"],outbound_policy=job["outbound_policy"]);rid=stable_run_id(probe_identity);old=by_id.get(rid)
+        probe_identity=identity_payload(protocol=PROBLEM_PROTOCOL,instance_digest_value=job["expected_digest"],method=job["method"],configuration_hash_value=job["configuration"]["configuration_hash"],seed=job["seed"],budget=job["budget"],threads=job["threads"],mip_gap=job["mip_gap"],alloc_domain=job["alloc_domain"],weights=Weights(),handling_rate_scale=job["handling_rate_scale"],outbound_policy=job["outbound_policy"]);rid=stable_run_id(probe_identity);old=by_id.get(rid)
         if resume and old and (old["status"]["ok"] or not rerun_failed):continue
         result=execute_run(**job,output=output,save_solutions=save_solutions,method_runner=method_runner,command=command)
         if old:existing=[row for row in existing if row["run_id"]!=rid];_atomic_write(source,"".join(json.dumps(row,separators=(",",":"),ensure_ascii=False)+"\n" for row in existing))

@@ -34,7 +34,7 @@ def test_classical_s01_is_feasible_and_matches_direct_if_optimal():
     if direct["status_name"]==classical["status_name"]=="OPTIMAL":assert classical["ub"]==pytest.approx(direct["ub"],abs=1e-5)
 
 def test_generated_optimality_cut_is_valid_and_tight():
-    data=prepare_instance(build_builtin_instance("tiny"));master,variables,_=build_master_model(data,Weights(),add_valid_inequalities=False,aggregate_recourse_lb=False,analytic_recourse_lb=False);master.optimize();point=extract_master_point(variables);oracle=GlobalRecourseOracle(data,Weights());oracle.update_rhs(point["x"],point["alloc_boxes"]);oracle.solve();cut=oracle.build_optimality_cut(point,"classical_test");point["eta"]=oracle.objective_value();assert abs(cut.value_at(point))<1e-6 and validate_optimality_cut(data,Weights(),cut,[point])["valid"]
+    data=prepare_instance(build_builtin_instance("tiny"));master,variables,_=build_master_model(data,Weights(),add_valid_inequalities=False,aggregate_recourse_lb=False,analytic_recourse_lb=False);master.optimize();point=extract_master_point(variables);oracle=GlobalRecourseOracle(data,Weights());oracle.update_rhs(point["alloc_boxes"]);oracle.solve();cut=oracle.build_optimality_cut(point,"classical_test");point["eta"]=oracle.objective_value();assert abs(cut.value_at(point))<1e-6 and validate_optimality_cut(data,Weights(),cut,[point])["valid"]
 
 def test_iteration_limit_is_not_reported_optimal():
     data=prepare_instance(build_builtin_instance("tiny"));result=solve_classical_benders(data,Weights(),time_limit=10,max_iterations=1)

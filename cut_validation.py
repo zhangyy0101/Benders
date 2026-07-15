@@ -4,7 +4,7 @@ from model_recourse import GlobalRecourseOracle
 def validate_optimality_cut(data,weights,cut,points,tolerance=1e-5):
     oracle=GlobalRecourseOracle(data,weights);worst=0
     for p in points:
-        oracle.update_rhs(p["x"],p["alloc_boxes"]);status=oracle.solve()
+        oracle.update_rhs(p["alloc_boxes"]);status=oracle.solve()
         if status==GRB.OPTIMAL:worst=max(worst,-cut.value_at({**p,"eta":oracle.objective_value()}))
     return {"valid":worst<=tolerance,"max_violation":worst}
 def validate_feasibility_cut(cut,feasible_points,tolerance=1e-5):

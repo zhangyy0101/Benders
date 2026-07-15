@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 
+PROBLEM_PROTOCOL = "paper-exp-v2-integer-allocation-no-alpha-no-open"
+
 @dataclass(frozen=True)
 class MasterWeights:
     """Weights for Master Problem objective terms."""
-    x: float = 8.0          # normalized open-bay-time penalty
+    x: float = 0.0          # legacy compatibility; activation is derived, not optimized
     concentration: float = 10.0  # normalized joint ship-group bay usage
 
 @dataclass(frozen=True)

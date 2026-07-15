@@ -19,7 +19,7 @@ def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_
     result=copy.deepcopy(data);scale=float(handling_rate_scale)
     if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
     if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative"}:raise ValueError("invalid old outbound release policy")
-    result["Bay_Handling_Rate"]={(i,n):TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR;result["handling_rate_scale"]=scale;result["handling_rate_source"]="model_calibration";result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
+    raw_rates=result.get("Bay_Handling_Rate",{});result["Bay_Handling_Rate"]={(i,n):float(raw_rates.get((i,n),TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR))*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=None;result["handling_rate_scale"]=scale;result["handling_rate_source"]="instance_scaled";result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
 def simulate_old_inventory(data,policy=None):
     policy=policy or data.get("old_outbound_release_policy","proportional");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
     for n in N:
@@ -40,7 +40,7 @@ def simulate_old_inventory(data,policy=None):
     return {"occupancy":occ,"unserved_outbound":unserved,"max_capacity_violation":max(0,max_violation)}
 
 def validate_instance_units(data: dict) -> None:
-    required=("K","I","I_list","Bays_in_Block","J_new","J_old","S","N","Intervals","Dist","Alpha","Arrivals_interval","initial_inventory_data","Fixed_In_Flow","Block_Outbound_Vol","Block_Outbound_Req","Fixed_Bay_Mode","Fixed_Mode_Force","Bay_Handling_Rate")
+    required=("K","I","I_list","Bays_in_Block","J_new","J_old","S","N","Intervals","Dist","Arrivals_interval","initial_inventory_data","Fixed_In_Flow","Block_Outbound_Vol","Block_Outbound_Req","Fixed_Bay_Mode","Fixed_Mode_Force")
     missing=[k for k in required if k not in data]
     if missing:raise ValueError(f"missing model keys: {missing}")
     def finite(v,label):
@@ -57,7 +57,7 @@ def validate_instance_units(data: dict) -> None:
         initial=sum(float(v) for (bay,_j,_s),v in data["initial_inventory_data"].items() if bay==i)
         if initial>cap+1e-6:raise ValueError(f"initial occupancy exceeds {i}")
         for n in data["N"]:
-            if finite(data["Bay_Handling_Rate"][i,n],"handling rate")<0:raise ValueError("negative handling rate")
+            if "Bay_Handling_Rate" in data and finite(data["Bay_Handling_Rate"][i,n],"handling rate")<0:raise ValueError("negative handling rate")
     for j in data["J_new"]:
         for k in data["K"]:finite(data["Dist"][j,k],"distance")
         for s in data["S"]:

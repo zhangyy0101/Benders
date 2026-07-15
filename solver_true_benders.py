@@ -16,13 +16,13 @@ def _add_cut(model,vars,record):return model.addConstr(record.as_expression(vars
 def remaining_time(deadline):return max(0.0,deadline-time.perf_counter())
 def master_point_cache_key(point,alloc_domain):
     if alloc_domain=="integer":
-        active=tuple(sorted(k for k,v in point["x"].items() if v>.5));positive=[]
+        positive=[]
         for k,v in point["alloc_boxes"].items():
             if abs(v)>1e-9:
                 if abs(v-round(v))>1e-5:raise AssertionError("noninteger allocation at integer MIPSOL")
                 positive.append((k,int(round(v))))
-        return ("integer",active,tuple(sorted(positive)))
-    xvalues=tuple(sorted((k,float(v).hex()) for k,v in point["x"].items() if abs(v)>1e-15));allocvalues=tuple(sorted((k,float(v).hex()) for k,v in point["alloc_boxes"].items() if abs(v)>1e-15));return ("continuous",xvalues,allocvalues)
+        return ("integer",tuple(sorted(positive)))
+    allocvalues=tuple(sorted((k,float(v).hex()) for k,v in point["alloc_boxes"].items() if abs(v)>1e-15));return ("continuous",allocvalues)
 def root_lp_prepass(data,weights,pool,*,alloc_domain="integer",add_valid_inequalities=True,aggregate_recourse_lb=True,analytic_recourse_lb=True,concentration_enabled=True,max_iters=100,time_limit=10,relative_improvement_tol=1e-4,violation_tol=1e-6,stall_iters=5):
     started=time.perf_counter();m,v,ctx=build_master_model(data,weights,alloc_domain=alloc_domain,relax=True,add_valid_inequalities=add_valid_inequalities,cut_pool=pool,aggregate_recourse_lb=aggregate_recourse_lb,analytic_recourse_lb=analytic_recourse_lb,concentration_enabled=concentration_enabled);oracle=GlobalRecourseOracle(data,weights);initial=final=None;count=opt_count=feas_count=0;last_solved_cut_count=0;trace=[];stall=0;previous=None
     for iteration in range(max_iters):
@@ -33,7 +33,7 @@ def root_lp_prepass(data,weights,pool,*,alloc_domain="integer",add_valid_inequal
         if m.Status not in (GRB.OPTIMAL,GRB.TIME_LIMIT) or m.SolCount==0:break
         if initial is None:initial=float(m.ObjVal)
         final=float(m.ObjVal)
-        point=extract_master_point(v);sp_before=oracle.total_time;oracle.update_rhs(point["x"],point["alloc_boxes"]);status=oracle.solve();sp_time=oracle.total_time-sp_before;cut_type=None;violation=0
+        point=extract_master_point(v);sp_before=oracle.total_time;oracle.update_rhs(point["alloc_boxes"]);status=oracle.solve();sp_time=oracle.total_time-sp_before;cut_type=None;violation=0
         if status==GRB.OPTIMAL:
             record=oracle.build_optimality_cut(point,"root");violation=-record.value_at(point)
             cut_type="optimality"
@@ -54,7 +54,7 @@ def _warm_start(data,weights,alloc_domain,time_limit,add_valid_inequalities,conc
     if remaining<=0:return None
     m.Params.OutputFlag=0;m.Params.TimeLimit=remaining;m.Params.MIPGap=.10;m.optimize()
     if not m.SolCount:return None
-    solution=extract_solution(v);report=validate_solution(data,solution,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,concentration_enabled=concentration_enabled)
+    solution=extract_solution(v,data);report=validate_solution(data,solution,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,concentration_enabled=concentration_enabled)
     if not report["feasible"]:raise RuntimeError(f"warm solution failed checker: {report}")
     evaluation=evaluate_solution(data,weights,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);return {"solution":solution,"evaluation":evaluation,"ub":evaluation["core_cost"],"model_build_runtime":build_runtime,"optimization_runtime":time.perf_counter()-started-build_runtime,"runtime":time.perf_counter()-started}
 
@@ -68,16 +68,15 @@ def solve_bbc_phase(data,weights,*,time_limit,mip_gap=.03,alloc_domain="integer"
     warm_runtime=max(0,time.perf_counter()-phase_started-model_build_runtime-oracle_build_runtime);phase_remaining=remaining_time(phase_deadline);model.Params.TimeLimit=phase_remaining
     core_point=None
     if warm:
-        point={"x":warm["solution"]["x"],"alloc_boxes":warm["solution"]["alloc_boxes"],"eta":warm["evaluation"]["recourse_cost"]};oracle.update_rhs(point["x"],point["alloc_boxes"])
+        point={"alloc_boxes":warm["solution"]["alloc_boxes"],"eta":warm["evaluation"]["recourse_cost"]};oracle.update_rhs(point["alloc_boxes"])
         status=oracle.solve()
         if status!=GRB.OPTIMAL:raise RuntimeError("The supplied start solution is monolithic-feasible but its global recourse is not optimal/feasible.")
-        if abs(oracle.objective_value()-warm["evaluation"]["recourse_cost"])>1e-5:raise RuntimeError("initial recourse objective consistency error")
+        q=oracle.objective_value();recourse=oracle.solution();warm["solution"]={**warm["solution"],**recourse};warm["evaluation"]=evaluate_solution(data,weights,warm["solution"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);warm["ub"]=warm["evaluation"]["core_cost"]
         if status==GRB.OPTIMAL:
-            record=oracle.build_optimality_cut(point,"initial");recourse_cache[master_point_cache_key(point,alloc_domain)]={"status":status,"q":oracle.objective_value(),"record":record,"recourse":oracle.solution()};stats["cache_seeded_entries"]=1
+            point["eta"]=q;record=oracle.build_optimality_cut(point,"initial");recourse_cache[master_point_cache_key(point,alloc_domain)]={"status":status,"q":q,"record":record,"recourse":recourse};stats["cache_seeded_entries"]=1
             if pool.add(record):_add_cut(model,vars,record);stats["initial_optimality_cuts"]+=1
             best={"ub":warm["ub"],"point":point,"recourse":{k:warm["solution"][k] for k in ("din","inv","in_share","in_total","avg","g_bal")}}
             anytime.append({"time":time.perf_counter()-phase_started,"phase":"warm","source":"warm_incumbent","ub":warm["ub"],"lb":None})
-            for k,val in point["x"].items():vars["x"][k].Start=val
             for k,val in point["alloc_boxes"].items():vars["alloc_boxes"][k].Start=val
             for (j,g,i),var in vars.get("concentration_use",{}).items():var.Start=float(point["alloc_boxes"].get((i,j,g,max(data["N"])),0)>1e-6)
             vars["eta"].Start=point["eta"]
@@ -90,7 +89,7 @@ def solve_bbc_phase(data,weights,*,time_limit,mip_gap=.03,alloc_domain="integer"
             if where==GRB.Callback.MIPSOL:
                 stats["evaluated_incumbents"]+=1;point=extract_master_point(vars,lambda var:m.cbGetSolution(var));origin="incumbent";key=master_point_cache_key(point,alloc_domain);entry=recourse_cache.get(key)
                 if entry is None:
-                    stats["cache_misses"]+=1;oracle.update_rhs(point["x"],point["alloc_boxes"]);status=oracle.solve()
+                    stats["cache_misses"]+=1;oracle.update_rhs(point["alloc_boxes"]);status=oracle.solve()
                     if status==GRB.OPTIMAL:entry={"status":status,"q":oracle.objective_value(),"record":oracle.build_optimality_cut(point,origin),"recourse":oracle.solution()}
                     elif status==GRB.INFEASIBLE:entry={"status":status,"q":None,"record":oracle.build_feasibility_cut(point,origin),"recourse":None}
                     else:raise RuntimeError(f"recourse status {status}")
@@ -99,14 +98,14 @@ def solve_bbc_phase(data,weights,*,time_limit,mip_gap=.03,alloc_domain="integer"
                 if status==GRB.OPTIMAL:
                     q=entry["q"];record=entry["record"];violation=-record.value_at(point);stats["optimality_checks"]+=1;stats["optimality_violation_sum"]+=max(0,violation);stats["max_optimality_violation"]=max(stats["max_optimality_violation"],violation)
                     if violation>1e-6:
-                        if pool.add(record):m.cbLazy(record.as_expression(vars)>=0);stats["incumbent_optimality_cuts"]+=1;stats["cut_efficacies"].append(violation/max(1e-12,sum(v*v for v in [record.eta_coeff,*record.x_coefficients.values(),*record.alloc_coefficients.values()])**.5));stats["cut_coefficient_metrics"].append(record.coefficient_metrics())
-                    first=first_stage_cost(data,weights,point["x"],point["alloc_boxes"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);exact=first["total"]+q
-                    recourse=entry["recourse"];candidate={"x":point["x"],"alloc_boxes":point["alloc_boxes"],**recourse};feasibility=validate_solution(data,candidate,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,concentration_enabled=concentration_enabled)
+                        if pool.add(record):m.cbLazy(record.as_expression(vars)>=0);stats["incumbent_optimality_cuts"]+=1;stats["cut_efficacies"].append(violation/max(1e-12,sum(v*v for v in [record.eta_coeff,*record.alloc_coefficients.values()])**.5));stats["cut_coefficient_metrics"].append(record.coefficient_metrics())
+                    first=first_stage_cost(data,weights,point["alloc_boxes"],alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);exact=first["total"]+q
+                    from model_common import derive_activation
+                    recourse=entry["recourse"];candidate={"x":derive_activation(data,point["alloc_boxes"]),"alloc_boxes":point["alloc_boxes"],**recourse};feasibility=validate_solution(data,candidate,alloc_domain=alloc_domain,add_valid_inequalities=add_valid_inequalities,concentration_enabled=concentration_enabled)
                     if not feasibility["feasible"]:raise RuntimeError(f"exact incumbent failed checker: {feasibility}")
                     if exact<best["ub"]-1e-7:
                         best.update({"ub":exact,"point":{**point,"eta":q},"recourse":recourse});anytime.append({"time":time.perf_counter()-phase_started,"phase":"main","source":"exact_recourse_mipsol","ub":exact,"lb":None})
                     try:
-                        for var in vars["x"].values():m.cbSetSolution(var,m.cbGetSolution(var))
                         for var in vars["alloc_boxes"].values():m.cbSetSolution(var,m.cbGetSolution(var))
                         for (j,g,i),var in vars.get("concentration_use",{}).items():m.cbSetSolution(var,float(point["alloc_boxes"].get((i,j,g,max(data["N"])),0)>1e-6))
                         m.cbSetSolution(vars["eta"],q);stats["exact_incumbents_submitted"]+=1
@@ -131,11 +130,11 @@ def solve_bbc_phase(data,weights,*,time_limit,mip_gap=.03,alloc_domain="integer"
                 point=extract_master_point(vars,lambda var:m.cbGetNodeRel(var));predicted=max([-record.value_at(point) for record in pool.records]+[0])
                 if node_separation_policy=="adaptive" and predicted<1e-5:stats["mipnode_skips_low_predicted_violation"]+=1;return
                 separation_point=point
-                if cut_strategy=="stabilized" and core_point is not None:separation_point={"x":{k:.5*point["x"][k]+.5*core_point["x"][k] for k in point["x"]},"alloc_boxes":{k:.5*point["alloc_boxes"][k]+.5*core_point["alloc_boxes"][k] for k in point["alloc_boxes"]},"eta":point["eta"]}
-                stats["mipnode_sp_solves"]+=1;oracle.update_rhs(separation_point["x"],separation_point["alloc_boxes"]);status=oracle.solve();origin="node_stabilized" if cut_strategy=="stabilized" else "node"
+                if cut_strategy=="stabilized" and core_point is not None:separation_point={"alloc_boxes":{k:.5*point["alloc_boxes"][k]+.5*core_point["alloc_boxes"][k] for k in point["alloc_boxes"]},"eta":point["eta"]}
+                stats["mipnode_sp_solves"]+=1;oracle.update_rhs(separation_point["alloc_boxes"]);status=oracle.solve();origin="node_stabilized" if cut_strategy=="stabilized" else "node"
                 if status==GRB.OPTIMAL:
                     record=oracle.build_optimality_cut(separation_point,origin);violation=-record.value_at(point);stats["optimality_checks"]+=1;stats["optimality_violation_sum"]+=max(0,violation);stats["max_optimality_violation"]=max(stats["max_optimality_violation"],violation)
-                    if violation>1e-6 and pool.add(record):m.cbCut(record.as_expression(vars)>=0);stats["node_optimality_cuts"]+=1;stats["cut_efficacies"].append(violation/max(1e-12,sum(v*v for v in [record.eta_coeff,*record.x_coefficients.values(),*record.alloc_coefficients.values()])**.5));stats["cut_coefficient_metrics"].append(record.coefficient_metrics())
+                    if violation>1e-6 and pool.add(record):m.cbCut(record.as_expression(vars)>=0);stats["node_optimality_cuts"]+=1;stats["cut_efficacies"].append(violation/max(1e-12,sum(v*v for v in [record.eta_coeff,*record.alloc_coefficients.values()])**.5));stats["cut_coefficient_metrics"].append(record.coefficient_metrics())
                 elif status==GRB.INFEASIBLE:
                     try:record=oracle.build_feasibility_cut(separation_point,origin)
                     except Exception:
@@ -152,7 +151,8 @@ def solve_bbc_phase(data,weights,*,time_limit,mip_gap=.03,alloc_domain="integer"
     if ub is not None and lb is not None and lb>ub+1e-5:raise AssertionError("BBC LB exceeds exact UB")
     full_solution=None
     if best["point"]:
-        block_use={(j,k,n):float(any(best["point"]["x"].get((i,j,n),0)>.5 for i in data["Bays_in_Block"][k])) for j in data["J_new"] for k in data["K"] for n in data["N"]};full_solution={"x":best["point"]["x"],"alloc_boxes":best["point"]["alloc_boxes"],"block_use":block_use,**best["recourse"]}
+        from model_common import derive_activation
+        derived_x=derive_activation(data,best["point"]["alloc_boxes"]);block_use={(j,k,n):float(any(derived_x.get((i,j,n),0)>.5 for i in data["Bays_in_Block"][k])) for j in data["J_new"] for k in data["K"] for n in data["N"]};full_solution={"x":derived_x,"alloc_boxes":best["point"]["alloc_boxes"],"block_use":block_use,**best["recourse"]}
         if "concentration_use" in best["point"]:full_solution["concentration_use"]=best["point"]["concentration_use"]
     stats["avg_optimality_violation"]=stats["optimality_violation_sum"]/max(1,stats["optimality_checks"]);stats["duplicate_optimality_cut_skips"]=pool.duplicate_skips;stats["callback_time_share"]=stats["callback_time"]/max(runtime,1e-9);stats["cache_size"]=len(recourse_cache);stats["cache_hit_rate"]=stats["cache_hits"]/max(1,stats["cache_hits"]+stats["cache_misses"])
     point=extract_master_point(vars) if model.SolCount else None;diagnostics={"master_open_bound":None if point is None else ctx["open_expression"].getValue(),"master_concentration_bound":None if point is None else (ctx["concentration_expression"].getValue() if hasattr(ctx["concentration_expression"],"getValue") else 0.0),"master_eta_bound":None if point is None else point["eta"],"aggregate_recourse_bound":None if point is None or ctx["aggregate"]["aggregate_objective"] is None else ctx["aggregate"]["aggregate_objective"].getValue(),"aggregate_distance_bound":None if point is None or ctx["aggregate"].get("distance") is None else ctx["aggregate"]["distance"].getValue(),"aggregate_balance_bound":None if point is None or ctx["aggregate"].get("balance") is None else ctx["aggregate"]["balance"].getValue(),"aggregate_conflict_bound":None if point is None or ctx["aggregate"].get("conflict") is None else ctx["aggregate"]["conflict"].getValue()}

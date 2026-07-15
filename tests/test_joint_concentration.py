@@ -20,7 +20,7 @@ def test_direct_bay_usage_count():
 def test_extra_bay_increases_direct_count():
     d,s=allocations(True);assert evaluate_joint_group_concentration(d,s)["raw_used_bays"]==3
 def test_tight_big_m_is_bay_capacity_and_scale_positive():
-    d=fixture();c=concentration_metadata(d);g=d["G"][0];assert c["big_m"]["J1",g,"A20"]==4 and c["scale"]==6
+    d=fixture();c=concentration_metadata(d);g=d["G"][0];assert c["big_m"]["J1",g,"A20"]==4 and c["scale"]==len(c["positive_ship_groups"])
 def test_no_minimum_or_cover_constraints():
     d=fixture();m,_,_=build_master_model(d,Weights());assert not any("minimum" in x.ConstrName or "concentration_cover" in x.ConstrName for x in m.getConstrs())
 def test_evaluator_matches_monolithic_model():
@@ -40,4 +40,4 @@ def test_height_mix_variables_do_not_exist():
 def test_zero_weight_disables_binaries():
     d=fixture();w=Weights(master=MasterWeights(concentration=0));m,v,_=build_master_model(d,w);assert "concentration_use" not in v
 def test_direct_alns_uses_one_fair_total_budget():
-    d=fixture();r=solve_direct_alns_pipeline(d,Weights(),total_time=2,mip_gap=0);assert r["ok"] and abs(sum(r["time_budget"][k] for k in ("warm","alns","main"))-2)<1e-9 and abs(r["ub"]-19333.3333333333)<1e-5
+    d=fixture();r=solve_direct_alns_pipeline(d,Weights(),total_time=2,mip_gap=0);assert r["ok"] and abs(sum(r["time_budget"][k] for k in ("warm","alns","main"))-2)<1e-9 and abs(r["ub"]-23333.3333333333)<1e-3

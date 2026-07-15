@@ -20,7 +20,9 @@ def concentration_metadata(data,alloc_domain="integer"):
          if int(data["Fixed_Bay_Mode"][i])==group_size(data,g):
           value=max(0,min(required,rem[i,final]));M[j,g,i]=value
           if value>TOL:feasible[j,g].append(i)
-    scale=max(1,sum(len(feasible[p]) for p in positive))
+    # Normalize as average used bays per positive ship-group.  The numerator
+    # remains the original total number of used joint-group bays.
+    scale=max(1,len(positive))
     return {"available":available,"final_period":final,"positive_ship_groups":positive,"big_m":M,"feasible_bays":feasible,"scale":scale}
 
 def build_joint_group_concentration(model,data,alloc_vars,*,alloc_domain="integer",enabled=True,x_vars=None,relax=False):
