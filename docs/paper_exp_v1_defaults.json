@@ -13,7 +13,7 @@
     "allocation_domain": "integer",
     "time_bucket_hours": 6.0,
     "handling_rate_scale": 1.0,
-    "old_outbound_release_policy": "proportional",
+    "old_outbound_release_policy": "conservative",
     "concentration_mode": "joint-group-bay"
   },
   "candidate_algorithm_defaults": {

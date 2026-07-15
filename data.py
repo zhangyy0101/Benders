@@ -15,7 +15,7 @@ TOS_BAY_CAPACITY_BOXES = 50.0
 TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
 
-def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_release_policy: str = "proportional") -> dict:
+def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_release_policy: str = "conservative") -> dict:
     result=copy.deepcopy(data);scale=float(handling_rate_scale);_migrate_pod_size_height_groups(result);_ensure_old_bay_heights(result)
     if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
     if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative"}:raise ValueError("invalid old outbound release policy")
@@ -44,7 +44,7 @@ def _ensure_old_bay_heights(data):
         if occupied and i not in heights:heights[i]=allowed[pos%len(allowed)]
     data["OldBayHeight"]=heights;data["HeightTypes"]=sorted(set(allowed)|set(heights.values()))
 def simulate_old_inventory(data,policy=None):
-    policy=policy or data.get("old_outbound_release_policy","proportional");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
+    policy=policy or data.get("old_outbound_release_policy","conservative");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
     for n in N:
       for i in I:
        for j in J:

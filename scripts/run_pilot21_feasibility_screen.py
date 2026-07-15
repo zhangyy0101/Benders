@@ -18,7 +18,7 @@ def summarize(rows,output,planned,quick):
 def main():
  p=argparse.ArgumentParser();p.add_argument("--quick",action="store_true");p.add_argument("--suite",default="benchmarks/paper_exp_v1_pilot21");p.add_argument("--output",default="experiments/pilot21_feasibility_screen");p.add_argument("--resume",action=argparse.BooleanOptionalAction,default=True);a=p.parse_args();budgets={"S01":10 if a.quick else 15,"M01":30 if a.quick else 45,"L01":60 if a.quick else 120};root=Path(a.suite);manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"));selected={r["instance_id"]:r for r in manifest["instances"] if r["instance_id"] in budgets};jobs=[]
  for iid,row in selected.items():
-  base={"instance_id":iid,"instance_path":root/row["relative_path"],"expected_digest":row["digest"],"seed":0,"budget":budgets[iid],"threads":1,"mip_gap":.10,"alloc_domain":"integer","handling_rate_scale":1.0,"outbound_policy":"proportional"}
+  base={"instance_id":iid,"instance_path":root/row["relative_path"],"expected_digest":row["digest"],"seed":0,"budget":budgets[iid],"threads":1,"mip_gap":.10,"alloc_domain":"integer","handling_rate_scale":1.0,"outbound_policy":"conservative"}
   jobs.extend(({**base,"method":m,"configuration":_simple_configuration(m)} for m in ("direct","classical_benders")));jobs.extend({**base,"method":"bbc_candidate","configuration":get_algorithm_configuration(c)} for c in BBC)
  out=Path(a.output);out.mkdir(parents=True,exist_ok=True);planned=sum(x["budget"] for x in jobs)
  for job in jobs:

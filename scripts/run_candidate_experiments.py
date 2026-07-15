@@ -55,7 +55,7 @@ def build_jobs(args):
             jobs.append({"instance_id": row["instance_id"], "instance_path": path, "expected_digest": digest,
                          "method": "bbc_candidate", "configuration": configuration, "seed": seed,
                          "budget": args.budget, "threads": args.threads, "mip_gap": args.mip_gap,
-                         "alloc_domain": "integer", "handling_rate_scale": 1.0, "outbound_policy": "proportional"})
+                         "alloc_domain": "integer", "handling_rate_scale": 1.0, "outbound_policy": "conservative"})
     return jobs
 
 

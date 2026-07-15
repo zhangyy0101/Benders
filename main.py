@@ -45,7 +45,7 @@ def parser(*, include_historical=False):
     value.add_argument("--concentration", action=argparse.BooleanOptionalAction, default=True)
     value.add_argument("--concentration-mode", choices=("joint-group-bay",), default="joint-group-bay")
     value.add_argument("--concentration-weight", type=float, default=10)
-    value.add_argument("--old-outbound-release-policy", choices=("proportional", "legacy_sorted", "conservative"), default="proportional")
+    value.add_argument("--old-outbound-release-policy", choices=("proportional", "legacy_sorted", "conservative"), default="conservative")
     value.add_argument("--handling-rate-scale", type=float, default=1)
     value.add_argument("--alloc-domain", choices=("integer", "continuous"), default="integer")
     value.add_argument("--mip-gap", type=float, default=.03)
