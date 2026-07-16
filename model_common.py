@@ -8,6 +8,13 @@ def ship_groups(data,ship):
     active=data.get("ActiveGroupsByShip")
     return groups(data) if active is None else list(active.get(ship,()))
 def ship_group_pairs(data):return [(j,g) for j in data["J_new"] for g in ship_groups(data,j)]
+def demand_types(data):
+    """Sparse positive demand types as (ship, POD, size, height)."""
+    return sorted({(j,group_attr(data,g,"pod"),group_size(data,g),group_attr(data,g,"height")) for j,g in ship_group_pairs(data) if sum(arrival(data,j,g,n) for n in data["N"])>1e-9})
+def groups_of_type(data,j,p,s,h):return [g for jj,g in ship_group_pairs(data) if jj==j and group_attr(data,g,"pod")==p and group_size(data,g)==int(s) and group_attr(data,g,"height")==h]
+def type_arrival(data,j,p,s,h,n):return sum(arrival(data,j,g,n) for g in groups_of_type(data,j,p,s,h))
+def type_reserve(data,j,p,s,h,n,alloc_domain):
+    value=sum(type_arrival(data,j,p,s,h,t) for t in data["N"] if t<=n);return float(math.ceil(value-1e-9)) if alloc_domain=="integer" else float(value)
 def group_size(data,g):return int(data.get("GroupSize",{}).get(g,data.get("GroupAttrs",{}).get(g,{}).get("size",g)))
 def group_attr(data,g,name,default="ALL"):
     maps={"pod":"GroupPOD","height":"GroupHeight","weight_class":"GroupWeightClass"};return str(data.get(maps[name],{}).get(g,data.get("GroupAttrs",{}).get(g,{}).get(name,default)))

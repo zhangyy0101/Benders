@@ -1,4 +1,4 @@
-"""Complete sparse monolithic formulation shared by direct solve and ALNS."""
+"""Complete sparse monolithic formulation for the Direct Gurobi baseline."""
 from __future__ import annotations
 import gurobipy as gp
 from gurobipy import GRB

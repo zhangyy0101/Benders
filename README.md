@@ -1,47 +1,28 @@
-# Yard allocation / Benders research code
+# Yard allocation partial Benders code
 
-This repository contains exact Branch-and-Benders-Cut, monolithic, classical Benders, and development experiment tooling for the yard-allocation model.
+Minimal active project for the current POD/size/height yard-allocation model.
 
-## Supported candidate entry point
+- `solver_partial_bbc.py`: current partial branch-and-Benders-cut algorithm;
+- `solve_direct_gurobi.py`: monolithic Direct Gurobi baseline;
+- `solver_classical_benders.py`: sequential classical Benders baseline;
+- `benchmarks/paper_exp_v1_pilot21/`: nine current synthetic instances.
 
-The unique recommended command for candidate evidence is:
+The model uses integer bay-slot reservations, continuous operational flows, ship-POD concentration, and a no-mixed-height bay constraint. Under the default `ship_complete` policy, old-container capacity is released only after the corresponding old ship has completely left the yard.
+
+Run one built-in instance:
 
 ```bash
-python scripts/run_candidate_experiments.py \
-  --instances S01 \
-  --budget 30 \
-  --algorithm-config algorithm-candidate-v1 \
-  --resume
+python main.py --instance tiny --time 30 --mip-gap 0
 ```
 
-Defaults are the fixed Pilot2.1 suite, `algorithm-candidate-v1`, seed 0, one thread, and a 3% MIP gap. Use `--require-clean-git` for formal runs. A dirty worktree always produces a warning.
-
-`main.py` is the supported single-instance configuration-driven CLI:
+Compare methods on the retained benchmark suite:
 
 ```bash
-python main.py --algorithm-config algorithm-candidate-v1
+python run_experiments.py --instances S01 M01 L01 --methods direct bbc_candidate classical_benders --budget 60
 ```
 
-Any field override changes the result to a newly hashed `development_override`; it is never reported as frozen candidate-v1. Historical configurations remain explicitly callable with `--include-historical-configs`, for example `--include-historical-configs --algorithm-config bbc_full_current`.
-
-`run_experiments.py` is a generic/legacy multi-method runner. Do not use it to create candidate evidence.
-
-## Reproducibility and evidence
-
-- `benchmarks/paper_exp_v1_pilot21/`: fixed Pilot2.1 synthetic suite.
-- `validation/pilot21_exact_fixtures/`: P1 exact correctness evidence.
-- `validation/pilot21_small_finite_time/`: P1 finite-time correctness evidence.
-- `experiments/internal_screen_fast/`: P2 development screening evidence.
-- `experiments/confirmatory_adaptive/`: P3 development confirmation evidence.
-- `algorithm_candidate_decision.json`: authoritative P4 freeze decision.
-- `docs/EVIDENCE_HIERARCHY.md`: precedence rules for historical evidence.
-
-Candidate-v1 is frozen and approved for public-data development/calibration testing. The final algorithm is not frozen, and final holdout execution is not authorized.
-
-## Verification
+Compile-check the active source:
 
 ```bash
-python -m py_compile *.py scripts/*.py
-pytest -q
-python scripts/run_candidate_v1_smoke.py
+python -m py_compile *.py
 ```

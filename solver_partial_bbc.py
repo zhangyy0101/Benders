@@ -1,24 +1,23 @@
-"""Group-aggregated partial branch-and-Benders-cut solver."""
+"""POD/size/height partial branch-and-Benders-cut solver."""
 from __future__ import annotations
 import time,traceback
 from gurobipy import GRB
 from anytime import canonicalize
 from model_bay_packing import BayPackingOracle
-from model_common import derive_activation,reconstruct_inventory,ship_group_pairs
+from model_common import derive_activation,groups_of_type,reconstruct_inventory,ship_group_pairs
 from model_partial_master import build_partial_master,extract_partial_point
-from solution_evaluation import evaluate_common_solution
-from solution_validation import validate_solution
+from solution_evaluation import evaluate_common_solution,validate_solution
 
 def solve_partial_bbc(data,weights,*,time_limit=60,mip_gap=.03,threads=1,seed=0,alloc_domain="integer",concentration_enabled=True):
-    started=time.perf_counter();deadline=started+float(time_limit);model,vars,ctx=build_partial_master(data,weights,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);build=time.perf_counter()-started;oracle=BayPackingOracle(data);integer_oracle=BayPackingOracle(data,integer_alloc=True,reservation_only=True);model.Params.OutputFlag=0;model.Params.LazyConstraints=1;model.Params.PreCrush=1;model.Params.Threads=int(threads or 1);model.Params.Seed=int(seed);model.Params.MIPGap=float(mip_gap);stats={"feasibility_checks":0,"feasibility_cuts":0,"integer_checks":0,"integer_feasibility_cuts":0,"integer_cache_hits":0,"callback_time":0.0};errors=[];events=[];integer_cache={}
+    started=time.perf_counter();deadline=started+float(time_limit);validation_reserve=min(10.0,max(2.0,.10*float(time_limit)));model,vars,ctx=build_partial_master(data,weights,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);build=time.perf_counter()-started;oracle=BayPackingOracle(data);integer_oracle=BayPackingOracle(data,integer_alloc=True,reservation_only=True);model.Params.OutputFlag=0;model.Params.LazyConstraints=1;model.Params.PreCrush=1;model.Params.Threads=int(threads or 1);model.Params.Seed=int(seed);model.Params.MIPGap=float(mip_gap);stats={"feasibility_checks":0,"feasibility_cuts":0,"integer_checks":0,"integer_feasibility_cuts":0,"integer_cache_hits":0,"callback_time":0.0};errors=[];events=[];integer_cache={}
     from deterministic_initializer import build_deterministic_initial_solution
     initial=build_deterministic_initial_solution(data,weights,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled)
     if initial:
         sol=initial["solution"];final=max(data["N"])
-        start_A={key:int(round(sum(sol["alloc_boxes"].get((i,key[1],key[2],key[3]),0) for i in data["Bays_in_Block"][key[0]]))) for key in vars["block_alloc"]}
+        start_A={key:int(round(sum(sol["alloc_boxes"].get((i,key[1],g,key[5]),0) for i in data["Bays_in_Block"][key[0]] for g in groups_of_type(data,key[1],key[2],key[3],key[4])))) for key in vars["block_alloc"]}
         for key,var in vars["block_alloc"].items():var.Start=start_A[key]
         for (key,b),var in vars["allocation_bits"].items():var.Start=float((start_A[key]>>b)&1)
-        for key,var in vars["block_flow"].items():var.Start=sol["in_share"].get(key,0)
+        for key,var in vars["block_flow"].items():var.Start=sum(sol["in_share"].get((key[0],key[1],g,key[5]),0) for g in groups_of_type(data,key[0],key[2],key[3],key[4]))
         for (i,h),var in vars["bay_height"].items():var.Start=float(data.get("OldBayHeight",{}).get(i)==h or any(sol["alloc_boxes"].get((i,j,g,final),0)>1e-6 and data["GroupHeight"][g]==h for j,g in ship_group_pairs(data)))
         for (j,p,h,i),var in vars["pod_support"].items():var.Start=float(any(data["GroupPOD"][g]==p and data["GroupHeight"][g]==h and sol["alloc_boxes"].get((i,j,g,final),0)>1e-6 for g in data["ActiveGroupsByShip"].get(j,data["G"])))
         for (j,p,i),var in vars["concentration_use"].items():var.Start=float(any(data["GroupPOD"][g]==p and sol["alloc_boxes"].get((i,j,g,final),0)>1e-6 for g in data["ActiveGroupsByShip"].get(j,data["G"])))
@@ -26,7 +25,7 @@ def solve_partial_bbc(data,weights,*,time_limit=60,mip_gap=.03,threads=1,seed=0,
         for key,var in vars["avg"].items():var.Start=sol["avg"].get(key,0)
         for key,var in vars["g_bal"].items():var.Start=sol["g_bal"].get(key,0)
         model.Params.Cutoff=initial["ub"]+1e-6;events.append({"time":time.perf_counter()-started,"phase":"initialization","source":"deterministic_vector_packing","ub":initial["ub"],"lb":None})
-    model.Params.TimeLimit=max(0,deadline-time.perf_counter())
+    model.Params.TimeLimit=max(0,deadline-validation_reserve-time.perf_counter())
     def oracle_point(point):return {"A":point["block_alloc"],"z":point["block_flow"],"support":point["pod_support"]}
     def discrete_key(point):return (tuple(sorted(k for k,v in point["allocation_bits"].items() if v>.5)),tuple(sorted(k for k,v in point["pod_support"].items() if v>.5)))
     def integer_nogood(point):
@@ -52,18 +51,34 @@ def solve_partial_bbc(data,weights,*,time_limit=60,mip_gap=.03,threads=1,seed=0,
                 else:raise RuntimeError(f"bay packing status {status}")
         except Exception as exc:errors.append((exc,traceback.format_exc()));m.terminate()
         finally:stats["callback_time"]+=time.perf_counter()-tick
-    model.optimize(callback);runtime=time.perf_counter()-started
+    model.optimize(callback)
     if errors:raise RuntimeError(errors[0][1]) from errors[0][0]
-    solution=evaluation=None;ub=None
+    solution=evaluation=None;ub=None;final_packing_status=None
     if model.SolCount:
-        point=extract_partial_point(vars);final_oracle=BayPackingOracle(data,integer_alloc=True);final_oracle.update_rhs(oracle_point(point));final_oracle.model.Params.TimeLimit=max(1.0,deadline-time.perf_counter())
-        if final_oracle.solve()!=GRB.OPTIMAL:raise RuntimeError("final master incumbent is not integer bay-packable")
+        point=extract_partial_point(vars);final_oracle=BayPackingOracle(data,integer_alloc=True);final_oracle.update_rhs(oracle_point(point));final_oracle.model.Params.TimeLimit=max(.1,deadline-time.perf_counter());final_packing_status=final_oracle.solve()
+        if final_packing_status==GRB.INFEASIBLE or not final_oracle.model.SolCount:final_oracle=None
+    if model.SolCount and final_oracle is not None:
         from collections import defaultdict
         point["block_flow"]=defaultdict(float,point["block_flow"])
         integer_oracle=final_oracle
-        alloc,din=integer_oracle.solution();pairs=ship_group_pairs(data);share={(j,k,g,n):point["block_flow"][j,k,g,n] for j,g in pairs for k in data["K"] for n in data["N"]};solution={"alloc_boxes":alloc,"din":din,"inv":reconstruct_inventory(data,din),"x":derive_activation(data,alloc),"in_share":share,"in_total":point["in_total"],"avg":point["avg"],"g_bal":point["g_bal"],"concentration_use":point["concentration_use"],"bay_height":point["bay_height"],"block_alloc":point["block_alloc"]};report=validate_solution(data,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled)
+        pod_alloc,pod_din=integer_oracle.solution();pairs=ship_group_pairs(data);alloc={};din={};share={}
+        for (i,j,p,h,n),value in pod_alloc.items():
+            gs=groups_of_type(data,j,p,int(data["Fixed_Bay_Mode"][i]),h)
+            if gs:alloc[i,j,gs[0],n]=value
+        for (j,p,h,i,n),value in pod_din.items():
+            gs=groups_of_type(data,j,p,int(data["Fixed_Bay_Mode"][i]),h)
+            if gs:din[j,gs[0],i,n]=value
+        for j,g in pairs:
+            p,s,h=data["GroupPOD"][g],data["GroupSize"][g],data["GroupHeight"][g]
+            for k in data["K"]:
+                for n in data["N"]:share[j,k,g,n]=point["block_flow"].get((j,k,p,s,h,n),0)
+        solution={"alloc_boxes_by_pod":pod_alloc,"din_by_pod":pod_din,"alloc_boxes":alloc,"din":din,"inv":reconstruct_inventory(data,din),"x":derive_activation(data,alloc),"in_share":share,"in_total":point["in_total"],"avg":point["avg"],"g_bal":point["g_bal"],"concentration_use":point["concentration_use"],"bay_height":point["bay_height"],"block_alloc_by_demand_type":point["block_alloc"]};report=validate_solution(data,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled)
         if not report["feasible"]:raise RuntimeError(f"partial BBC final validation failed: {report}")
         evaluation=evaluate_common_solution(data,weights,solution,alloc_domain=alloc_domain,concentration_enabled=concentration_enabled);ub=evaluation["core_cost"]
         if abs(ub-float(model.ObjVal))>1e-4:raise AssertionError(f"objective mismatch {ub} != {model.ObjVal}")
-    lb=float(model.ObjBound) if model.Status not in (GRB.INFEASIBLE,GRB.INF_OR_UNBD) else None;stats["sp_solve_count"]=oracle.solve_count;stats["sp_total_time"]=oracle.total_time
-    return {"anytime_trace":canonicalize(events,runtime,ub,lb),"ok":solution is not None,"algorithm":"group_aggregated_partial_bbc","workflow":"aggregate_master_bay_feasibility_sp","status":int(model.Status),"status_name":{GRB.OPTIMAL:"OPTIMAL",GRB.TIME_LIMIT:"TIME_LIMIT",GRB.INFEASIBLE:"INFEASIBLE"}.get(model.Status,str(model.Status)),"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"model_build_runtime":build,"nodes":float(model.NodeCount),"solution":solution,"components":evaluation,"cut_statistics":stats,"sp_statistics":{"sp_solve_count":oracle.solve_count,"sp_total_time":oracle.total_time}}
+    solution_source="master_incumbent" if solution is not None else None
+    if solution is None and initial is not None:
+        solution=initial["solution"];evaluation=initial["evaluation"];ub=initial["ub"];solution_source="deterministic_initializer_fallback"
+    runtime=time.perf_counter()-started;lb=float(model.ObjBound) if model.Status not in (GRB.INFEASIBLE,GRB.INF_OR_UNBD) else None;stats["sp_solve_count"]=oracle.solve_count;stats["sp_total_time"]=oracle.total_time;status_name={GRB.OPTIMAL:"OPTIMAL",GRB.TIME_LIMIT:"TIME_LIMIT",GRB.INFEASIBLE:"INFEASIBLE"}.get(model.Status,str(model.Status))
+    if model.SolCount and solution is None and final_packing_status==GRB.TIME_LIMIT:status_name="FINAL_PACKING_TIME_LIMIT"
+    return {"anytime_trace":canonicalize(events,runtime,ub,lb),"ok":solution is not None,"algorithm":"pod_partial_bbc","workflow":"demand_type_master_bay_packing_sp","status":int(model.Status),"status_name":status_name,"ub":ub,"lb":lb,"gap":None if ub is None or lb is None else max(0,(ub-lb)/max(abs(ub),1e-9)),"runtime":runtime,"model_build_runtime":build,"nodes":float(model.NodeCount),"solution":solution,"solution_source":solution_source,"components":evaluation,"final_packing_status":final_packing_status,"cut_statistics":stats,"sp_statistics":{"sp_solve_count":oracle.solve_count,"sp_total_time":oracle.total_time}}

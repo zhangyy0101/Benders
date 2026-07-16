@@ -12,14 +12,24 @@ _FIXED_3N6O_CACHE = None
 TOS_NUM_YARD_BLOCKS = 10
 TOS_YARD_BAYS = 10
 TOS_BAY_CAPACITY_BOXES = 50.0
-TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR = 50.0
 TOS_NUM_BERTHS = 3
 
-def prepare_instance(data: dict, handling_rate_scale: float = 1.0, old_outbound_release_policy: str = "conservative") -> dict:
-    result=copy.deepcopy(data);scale=float(handling_rate_scale);_migrate_pod_size_height_groups(result);_ensure_old_bay_heights(result)
-    if not math.isfinite(scale) or scale<0:raise ValueError("handling rate scale must be finite and nonnegative")
-    if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative"}:raise ValueError("invalid old outbound release policy")
-    raw_rates=result.get("Bay_Handling_Rate",{});result["Bay_Handling_Rate"]={(i,n):float(raw_rates.get((i,n),TOS_BAY_HANDLING_RATE_BOXES_PER_HOUR))*scale for i in result["I_list"] for n in result["N"]};result["handling_rate_base"]=None;result["handling_rate_scale"]=scale;result["handling_rate_source"]="instance_scaled";result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
+def list_builtin_instances():return ("tiny","tiny_concentration","3new6old")
+def build_builtin_instance(name):
+    factories={"tiny":get_data_tiny_benders,"tiny_concentration":get_data_tiny_concentration,"3new6old":get_data_3new6old_fixed}
+    if name not in factories:raise KeyError(f"unknown built-in instance {name!r}")
+    return factories[name]()
+def resolve_instance(*,builtin_name=None,instance_file=None):
+    if (builtin_name is None)==(instance_file is None):raise ValueError("provide exactly one instance source")
+    if instance_file is not None:
+        from benchmark_io import load_instance
+        return load_instance(instance_file)
+    return build_builtin_instance(builtin_name)
+
+def prepare_instance(data: dict, old_outbound_release_policy: str = "ship_complete") -> dict:
+    result=copy.deepcopy(data);_migrate_pod_size_height_groups(result);_ensure_old_bay_heights(result)
+    if old_outbound_release_policy not in {"legacy_sorted","proportional","conservative","ship_complete"}:raise ValueError("invalid old outbound release policy")
+    result["old_outbound_release_policy"]=old_outbound_release_policy;validate_instance_units(result);return result
 
 def _migrate_pod_size_height_groups(data):
     """Remove weight class from the planning taxonomy while accepting legacy files."""
@@ -44,7 +54,7 @@ def _ensure_old_bay_heights(data):
         if occupied and i not in heights:heights[i]=allowed[pos%len(allowed)]
     data["OldBayHeight"]=heights;data["HeightTypes"]=sorted(set(allowed)|set(heights.values()))
 def simulate_old_inventory(data,policy=None):
-    policy=policy or data.get("old_outbound_release_policy","conservative");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
+    policy=policy or data.get("old_outbound_release_policy","ship_complete");I,J,S,N=data["I_list"],data["J_old"],data["S"],data["N"];logical={(i,j,s):float(data["initial_inventory_data"].get((i,j,s),0)) for i in I for j in J for s in S};capacity=dict(logical);occ={};unserved={};max_violation=0
     for n in N:
       for i in I:
        for j in J:
@@ -52,13 +62,18 @@ def simulate_old_inventory(data,policy=None):
       for k,bays in data["Bays_in_Block"].items():
        for j in J:
         req=float(data["Block_Outbound_Req"].get((k,j,n),0));available=sum(logical[i,j,s] for i in bays for s in S);unserved[k,j,n]=max(0,req-available);take_total=min(req,available)
-        if policy=="proportional" and available>1e-9:
+        if policy in {"proportional","ship_complete"} and available>1e-9:
          snapshot={(i,s):logical[i,j,s] for i in bays for s in S}
-         for (i,s),q in snapshot.items():take=take_total*q/available;logical[i,j,s]-=take;capacity[i,j,s]-=take
+         for (i,s),q in snapshot.items():take=take_total*q/available;logical[i,j,s]-=take;capacity[i,j,s]-=take if policy=="proportional" else 0
         else:
          left=take_total
          for i in sorted(bays):
           for s in S:take=min(left,logical[i,j,s]);logical[i,j,s]-=take;capacity[i,j,s]-=take if policy=="legacy_sorted" else 0;left-=take
+      if policy=="ship_complete":
+       for j in J:
+        if sum(logical[i,j,s] for i in I for s in S)<=1e-9:
+         for i in I:
+          for s in S:capacity[i,j,s]=0.0
       for i in I:occ[i,n]=sum(capacity[i,j,s] for j in J for s in S);max_violation=max(max_violation,occ[i,n]-float(data["I"][i]["cap"]))
     return {"occupancy":occ,"unserved_outbound":unserved,"max_capacity_violation":max(0,max_violation)}
 
@@ -79,8 +94,6 @@ def validate_instance_units(data: dict) -> None:
         if cap<0 or int(data["Fixed_Bay_Mode"][i]) not in modes:raise ValueError(f"invalid bay {i}")
         initial=sum(float(v) for (bay,_j,_s),v in data["initial_inventory_data"].items() if bay==i)
         if initial>cap+1e-6:raise ValueError(f"initial occupancy exceeds {i}")
-        for n in data["N"]:
-            if "Bay_Handling_Rate" in data and finite(data["Bay_Handling_Rate"][i,n],"handling rate")<0:raise ValueError("negative handling rate")
     for j in data["J_new"]:
         for k in data["K"]:finite(data["Dist"][j,k],"distance")
         for s in data["S"]:

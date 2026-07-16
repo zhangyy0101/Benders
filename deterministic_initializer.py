@@ -4,8 +4,7 @@ import time
 from model_common import group_attr,group_size,outbound_pressure,remaining_capacity,required_reserve,ship_group_pairs
 from model_recourse import GlobalRecourseOracle
 from model_common import derive_activation
-from solution_evaluation import evaluate_common_solution
-from solution_validation import validate_solution
+from solution_evaluation import evaluate_common_solution,validate_solution
 from gurobipy import GRB
 
 def build_deterministic_initial_solution(data,weights,*,alloc_domain="integer",concentration_enabled=True,add_valid_inequalities=True):
