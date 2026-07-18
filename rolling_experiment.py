@@ -108,6 +108,27 @@ def run_rolling_case(
         + (row.get("model_build_time", 0) or 0)
         for row in cycles
     )
+    ship_pod_bay_count_sum = total(
+        "execution_metrics", "realized_ship_pod_bay_count_sum"
+    )
+    ship_pod_observation_count = total(
+        "execution_metrics", "realized_ship_pod_observation_count"
+    )
+    cycle_first = [
+        row["cycle_first_incumbent_wall_time"]
+        for row in cycles
+        if row.get("cycle_first_incumbent_wall_time") is not None
+    ]
+    final_stage_gaps = [
+        row["final_stage_mip_gap"]
+        for row in cycles
+        if row.get("final_stage_mip_gap") is not None
+    ]
+    stage_nodes = [
+        stage.get("nodes", 0.0)
+        for row in cycles
+        for stage in row.get("stages", [])
+    ]
     return {
         "ok": all(row.get("ok", True) for row in cycles),
         "configuration": configuration,
@@ -135,14 +156,17 @@ def run_rolling_case(
         "total_realized_in_out_conflict": total(
             "execution_metrics", "realized_in_out_conflict"
         ),
-        "mean_realized_bays_per_ship_pod": mean(
-            "execution_metrics", "realized_average_bays_per_ship_pod"
+        "realized_ship_pod_bay_count_sum": ship_pod_bay_count_sum,
+        "realized_ship_pod_observation_count": ship_pod_observation_count,
+        "mean_realized_bays_per_ship_pod": (
+            ship_pod_bay_count_sum / ship_pod_observation_count
+            if ship_pod_observation_count else 0.0
         ),
         "max_realized_bays_per_ship_pod": maximum(
             "execution_metrics", "realized_max_bays_per_ship_pod"
         ),
-        "total_realized_new_support_count": total(
-            "execution_metrics", "realized_new_support_count"
+        "total_realized_support_activation_count": total(
+            "execution_metrics", "realized_support_activation_count"
         ),
         "max_realized_peak_block_utilization": maximum(
             "execution_metrics", "realized_peak_block_utilization"
@@ -167,4 +191,14 @@ def run_rolling_case(
         "total_stability_cost": total("plan_revision_metrics", "stability_cost"),
         "previous_reservation_basis": previous_basis,
         "revision_rate": discretionary / previous_basis if previous_basis else 0.0,
+        "mean_cycle_first_incumbent_wall_time": (
+            sum(cycle_first) / len(cycle_first) if cycle_first else None
+        ),
+        "max_cycle_first_incumbent_wall_time": max(cycle_first, default=None),
+        "mean_final_stage_mip_gap": (
+            sum(final_stage_gaps) / len(final_stage_gaps)
+            if final_stage_gaps else None
+        ),
+        "max_final_stage_mip_gap": max(final_stage_gaps, default=None),
+        "mean_nodes": sum(stage_nodes) / len(stage_nodes) if stage_nodes else 0.0,
     }

@@ -4,11 +4,12 @@
 
 The optimizer receives current realized inventory, the unexecuted previous
 reservation, external arrival/outbound forecasts, and external planned release
-times. Hidden future arrivals and realized release delays are available only to
-the execution simulator. Planned vessel completion is generated independently
-of hidden realized container totals. Synthetic forecasts and hidden arrivals
-are generated as independent draws from a public booking baseline; only the
-forecast draw enters the optimization snapshot.
+times. Hidden future arrivals, truth-based forecast-error diagnostics, and
+realized release delays are available only to the execution simulator. Planned
+vessel completion uses public ship class and booking volume. Synthetic data
+draw one hidden truth and then generate a correlated noisy information
+trajectory that approaches truth as lead time shrinks; only the current
+forecast enters the optimization snapshot.
 
 ## Plan baseline and existing support
 
@@ -43,8 +44,11 @@ max(0, pair_cancellation[p]
 The stability allowance limits the sum of these pair values. Thus shortage in
 one pair cannot offset cancellation in another. Block reallocation uses the
 same pair-local subtraction after aggregating historical block withdrawals.
-The MIP uses exact linear max formulations, and validation recomputes all values
-from the plans.
+By default, the MIP uses epigraph lower bounds for positive-part stability
+variables. Their positive objective weights and the discretionary budget drive
+them to the minimum relevant values. `USE_EXACT_STABILITY_BIG_M=True` retains
+four exact binary families for diagnostics. In both modes, validation
+recomputes canonical stability values directly from reservation and shortage.
 
 ## Fixed objective scales and occupancy balance
 
@@ -61,10 +65,16 @@ which remains meaningful when block capacities differ.
 
 ## Time-dependent capacity and block scores
 
-Base residual capacity is calculated for every bay and period after accounting
-for locked old inventory, actual inventory, and their release times. For each
-ship-group and block, compatible capacity is calculated only from bays with the
-correct size and a compatible live height type.
+Physical residual capacity is calculated for every bay and period after locked
+old inventory, actual inventory, and their release times. The initial dependency
+graph uses this physical capacity. After direct and propagated pairs are known,
+positive-demand unaffected pairs are frozen. Baseline residual capacity deducts
+their inherited, time-dependent reservation commitments. Final candidate
+ranking and allowed-region construction use this baseline capacity. Affected
+pairs remain adjustable and are not deducted as frozen commitments.
+
+For each ship-group and block, compatible capacity is calculated only from bays
+with the correct size and a compatible live height type.
 
 For arrival weights `w[p,n]`, the effective block capacity is
 
@@ -121,9 +131,18 @@ period in test mode and at every cycle boundary.
 
 Each non-overlapping 24-hour window reports planned, infeasible, fallback, and
 unplaced quantities; rates; distance; realized inbound/outbound overlap;
-ship/POD bay support; new support; and block utilization statistics. Forecast
-diagnostics and plan revision metrics remain separate and are never interpreted
-as realized totals.
+ship/POD bay support; support activation; and block utilization statistics.
+These space states are sampled after every executed 6-hour period. Peak
+utilization and maximum spread are within-cycle maxima, deviation is averaged
+over periods, and bay concentration is weighted by its number of ship/POD
+period observations. Forecast diagnostics and plan revision metrics remain
+separate and are never interpreted as realized totals.
+
+Quality polish uses the same utilization concept as the MIP. Horizon-end
+occupancy includes locked, actual, and planned inventory that remains present,
+then divides by block capacity. Its normalized contribution combines support,
+distance, overlap, and positive utilization overload using weights from
+`config.py`.
 
 ## Wall-clock and ablation contract
 
@@ -132,3 +151,9 @@ model construction, solving, extraction, and validation are timed explicitly.
 `core` configurations do not pay for impact scoring they do not use. The sole
 difference between `full_direct` and `full` is dependency propagation, including
 the graph construction and propagation time that mechanism requires.
+
+Stage diagnostics include binary/total variables, constraints, nodes, solution
+count, stage first-incumbent time, and reliable Gurobi bound/gap attributes.
+Cycle first-incumbent time starts before preprocessing. Because multiobjective
+attributes are version-dependent, unavailable bound, gap, and root-relaxation
+values are reported as `None` rather than inferred.

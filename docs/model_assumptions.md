@@ -18,7 +18,22 @@
     workload.
 12. Realized release delays can be simulated, while planning continues to use
     the external planned release schedule.
-13. In synthetic experiments, forecasts and hidden realized arrivals are
-    separate reproducible draws from a public booking baseline; a zero-error
-    scenario may make them equal by design, but forecast construction never
-    reads the hidden realization.
+13. Synthetic experiments create a public booking baseline, one hidden final
+    truth, and a temporally correlated noisy forecast trajectory around that
+    truth. Forecast uncertainty declines with lead time.
+14. Using hidden truth to generate offline simulated observations is permitted;
+    the optimization snapshot contains only the current forecast and never
+    contains truth or truth-based error diagnostics.
+15. Current actual inventory is observed operational state and is visible to
+    optimization; future realized arrivals and realized release delays are not.
+16. A continuing vessel's outbound forecast uses visible actual inventory plus
+    its remaining current arrival forecast. The nominal outbound rate is a
+    public per-vessel, per-6-hour planning parameter.
+17. Planned operation duration is the maximum of a public class duration and a
+    public-booking-volume duration. Planned release remains external to hidden
+    realization volume.
+18. Initial synthetic inventory may fill each bay up to 95%. If the rounded
+    requested total exceeds that physical limit, generation fails explicitly.
+19. Realized peak utilization, utilization deviation, support activation, and
+    bay concentration are sampled after every executed 6-hour period rather
+    than inferred only from the cycle-end state.

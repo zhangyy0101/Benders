@@ -29,12 +29,17 @@ from config import (
     IMPACT_SCORE_STABILITY_WEIGHT,
     QUALITY_POLISH_BLOCKS_PER_PAIR,
     QUALITY_POLISH_PAIR_RATIO,
+    QUALITY_POLISH_WEIGHT_DISTANCE,
+    QUALITY_POLISH_WEIGHT_OVERLAP,
+    QUALITY_POLISH_WEIGHT_SUPPORT,
+    QUALITY_POLISH_WEIGHT_UTILIZATION,
     STABILITY_BASE_RATIO,
     STABILITY_BLOCK_REALLOCATION_WEIGHT,
     STABILITY_CANCEL_WEIGHT,
     STABILITY_CHANGE_RATIO,
     STABILITY_NEW_BAY_WEIGHT,
     TIME_CAPACITY_WEIGHT,
+    USE_EXACT_STABILITY_BIG_M,
     MINIMUM_PERIOD_CAPACITY_WEIGHT,
     WALL_TIME_TOLERANCE_SECONDS,
 )
@@ -147,8 +152,10 @@ def _dependency_pairs(d: dict) -> set[Pair]:
     }
 
 
-def residual_capacity_by_bay_period(d: dict) -> dict[tuple[str, int], float]:
-    """Return base residual capacity before any new planning decisions."""
+def physical_residual_capacity_by_bay_period(
+    d: dict,
+) -> dict[tuple[str, int], float]:
+    """Return physical capacity after locked and currently realized inventory."""
     residual: dict[tuple[str, int], float] = {}
     for bay in d["bays"]:
         for period in d["periods"]:
@@ -165,6 +172,47 @@ def residual_capacity_by_bay_period(d: dict) -> dict[tuple[str, int], float]:
             )
             residual[bay, period] = max(0.0, d["capacity"][bay] - locked - actual)
     return residual
+
+
+def residual_capacity_by_bay_period(d: dict) -> dict[tuple[str, int], float]:
+    """Backward-compatible alias for physical residual capacity."""
+    return physical_residual_capacity_by_bay_period(d)
+
+
+def baseline_residual_capacity_by_bay_period(
+    d: dict,
+    frozen_pairs: set[Pair],
+    physical: dict[tuple[str, int], float] | None = None,
+) -> dict[tuple[str, int], float]:
+    """Deduct time-dependent commitments of inherited, unaffected plans."""
+    physical = physical or physical_residual_capacity_by_bay_period(d)
+    previous_din = d.get("previous_din", {})
+    result: dict[tuple[str, int], float] = {}
+    for bay in d["bays"]:
+        for period in d["periods"]:
+            committed = 0.0
+            for ship, group in frozen_pairs:
+                if not ship_present_at(d, ship, period):
+                    continue
+                scheduled = sum(
+                    quantity
+                    for (i, j, g, arrival), quantity in previous_din.items()
+                    if i == bay
+                    and j == ship
+                    and g == group
+                    and arrival <= period
+                )
+                has_schedule = any(
+                    i == bay and j == ship and g == group
+                    for i, j, g, _arrival in previous_din
+                )
+                committed += (
+                    scheduled
+                    if has_schedule
+                    else d["previous_reservation"].get((bay, ship, group), 0)
+                )
+            result[bay, period] = max(0.0, physical[bay, period] - committed)
+    return result
 
 
 def _base_heights(d: dict, bay: str, period: int) -> set[str]:
@@ -209,11 +257,16 @@ def _pair_time_profile(d: dict, pair: Pair) -> tuple[dict[int, float], dict[int,
     return profile, weights
 
 
-def _block_scores(d: dict) -> dict:
+def _block_scores(
+    d: dict,
+    residual: dict[tuple[str, int], float] | None = None,
+    *,
+    capacity_basis: str = "physical",
+) -> dict:
     """Rank blocks using arrival-weighted residual capacity and height feasibility."""
     scores: dict = {}
     periods, attrs = d["periods"], d["group_attrs"]
-    residual = residual_capacity_by_bay_period(d)
+    residual = residual or physical_residual_capacity_by_bay_period(d)
     max_dist = max(d["distance"].values(), default=1)
     max_out = max(d["forecast_outbound"].values(), default=1)
     block_capacity = {
@@ -322,6 +375,7 @@ def _block_scores(d: dict) -> dict:
                 "time_weighted_height_conflict": weighted_height_conflict,
                 "stability_loss": stability_loss,
                 "released_quantity": released_quantity,
+                "residual_capacity_basis": capacity_basis,
             }
     return scores
 
@@ -533,6 +587,32 @@ def _allowed(
     return result
 
 
+def _horizon_end_block_utilization(d: dict, reservation: dict) -> dict[str, float]:
+    """Return end-of-horizon occupancy utilization on the model's definition."""
+    last = d["periods"][-1]
+    result: dict[str, float] = {}
+    for block in d["blocks"]:
+        occupancy = sum(
+            quantity
+            for (bay, old_ship), quantity in d["locked_inventory"].items()
+            if d["bay_block"][bay] == block
+            and d["locked_release_local"].get((bay, old_ship), INF) > last
+        ) + sum(
+            quantity
+            for (bay, ship, _group), quantity in d["actual_inventory"].items()
+            if d["bay_block"][bay] == block and ship_present_at(d, ship, last)
+        ) + sum(
+            quantity
+            for (bay, ship, _group), quantity in reservation.items()
+            if d["bay_block"][bay] == block and ship_present_at(d, ship, last)
+        )
+        block_capacity = sum(
+            d["capacity"][bay] for bay in d["bays_in_block"][block]
+        )
+        result[block] = occupancy / max(1, block_capacity)
+    return result
+
+
 def _quality_polish_allowed(
     d: dict,
     affected_pairs: set[Pair],
@@ -553,21 +633,10 @@ def _quality_polish_allowed(
     reserve, din, attrs = solution["reservation"], solution["din"], d["group_attrs"]
     max_dist = max(d["distance"].values(), default=1)
     max_out = max(d["forecast_outbound"].values(), default=1)
-    last = d["periods"][-1]
-    final_load = {
-        k: sum(
-            q
-            for (i, j, _g), q in d["actual_inventory"].items()
-            if d["bay_block"][i] == k and ship_present_at(d, j, last)
-        )
-        + sum(
-            q
-            for (i, j, _g), q in reserve.items()
-            if d["bay_block"][i] == k and ship_present_at(d, j, last)
-        )
-        for k in d["blocks"]
-    }
-    average = sum(final_load.values()) / max(1, len(final_load))
+    final_utilization = _horizon_end_block_utilization(d, reserve)
+    average_utilization = sum(final_utilization.values()) / max(
+        1, len(final_utilization)
+    )
     contribution = {}
     support_baseline = existing_support(d, period=0)
     for j, g in sorted(affected_pairs & set(d["remaining_demand"])):
@@ -582,7 +651,7 @@ def _quality_polish_allowed(
             for (bay, ship, group), quantity in reserve.items()
             if ship == j and attrs[group]["pod"] == pod and quantity > 1e-6
         }
-        support = len(support_bays)
+        support = len(support_bays) / max(1, len(d["bays"]))
         distance = sum(
             d["distance"][j, d["bay_block"][i]] * q
             for (i, jj, gg, _n), q in din.items() if jj == j and gg == g
@@ -592,10 +661,18 @@ def _quality_polish_allowed(
             for (i, jj, gg, n), q in din.items() if jj == j and gg == g
         ) / (demand * max_out)
         overload = sum(
-            max(0, final_load[d["bay_block"][i]] - average) * q
+            max(
+                0,
+                final_utilization[d["bay_block"][i]] - average_utilization,
+            ) * q
             for (i, jj, gg), q in reserve.items() if jj == j and gg == g
-        ) / (demand * max(1, average))
-        contribution[j, g] = 2 * support + distance + 2 * overlap + overload
+        ) / demand
+        contribution[j, g] = (
+            QUALITY_POLISH_WEIGHT_SUPPORT * support
+            + QUALITY_POLISH_WEIGHT_DISTANCE * distance
+            + QUALITY_POLISH_WEIGHT_OVERLAP * overlap
+            + QUALITY_POLISH_WEIGHT_UTILIZATION * overload
+        )
     count = max(1, math.ceil(QUALITY_POLISH_PAIR_RATIO * len(contribution))) if contribution else 0
     selected = set(sorted(contribution, key=lambda pair: (-contribution[pair], pair))[:count])
     expanded = {}
@@ -616,6 +693,13 @@ def _quality_polish_allowed(
         "expanded_blocks": {f"{j}|{g}": blocks for (j, g), blocks in sorted(expanded.items())},
         "selection_ratio": QUALITY_POLISH_PAIR_RATIO,
         "blocks_per_selected_pair": QUALITY_POLISH_BLOCKS_PER_PAIR,
+        "utilization_definition": "horizon_end_occupancy_over_block_capacity",
+        "contribution_weights": {
+            "support": QUALITY_POLISH_WEIGHT_SUPPORT,
+            "distance": QUALITY_POLISH_WEIGHT_DISTANCE,
+            "overlap": QUALITY_POLISH_WEIGHT_OVERLAP,
+            "utilization": QUALITY_POLISH_WEIGHT_UTILIZATION,
+        },
     }
 
 
@@ -841,16 +925,21 @@ def solve_rolling_snapshot(
         timing["objective_scale_time"] = time.perf_counter() - started
 
     scores: dict = {}
+    physical_scores: dict = {}
     if settings["impact_region"] and time.perf_counter() < deadline:
         started = time.perf_counter()
-        scores = _block_scores(d)
+        physical_scores = _block_scores(d, capacity_basis="physical")
+        scores = physical_scores
         timing["block_score_time"] = time.perf_counter() - started
 
     dependency_graph: dict = {}
     dependency_edges: list[dict] = []
     if settings["dependency_propagation"] and time.perf_counter() < deadline:
         started = time.perf_counter()
-        dependency_graph, dependency_edges, _resource = _build_dependency_graph(d, scores)
+        dependency_graph, dependency_edges, _resource = _build_dependency_graph(
+            d,
+            physical_scores,
+        )
         timing["dependency_graph_time"] = time.perf_counter() - started
 
     started = time.perf_counter()
@@ -871,6 +960,21 @@ def solve_rolling_snapshot(
 
     propagated_pairs = set(propagation["propagated_pairs"])
     affected_pairs = set(propagation["affected_pairs"])
+    frozen_pairs = set(d["remaining_demand"]) - affected_pairs
+    if settings["impact_region"] and time.perf_counter() < deadline:
+        started = time.perf_counter()
+        physical_residual = physical_residual_capacity_by_bay_period(d)
+        baseline_residual = baseline_residual_capacity_by_bay_period(
+            d,
+            frozen_pairs,
+            physical_residual,
+        )
+        scores = _block_scores(
+            d,
+            baseline_residual,
+            capacity_basis="frozen_plan_baseline",
+        )
+        timing["block_score_time"] += time.perf_counter() - started
     diagnostic_path_scores = dict(propagation["best_path_score"])
     diagnostic_depths = dict(propagation["propagation_depth"])
     propagation_types = dict(propagation["propagation_type"])
@@ -901,6 +1005,7 @@ def solve_rolling_snapshot(
     )
     incumbent = None
     best_key = None
+    cycle_first_incumbent = [None]
     trace: list[dict] = []
     repair_expansions = 0
     quality_triggered = False
@@ -975,10 +1080,20 @@ def solve_rolling_snapshot(
                 "solver_runtime": 0.0,
                 "stage_wall_time": time.perf_counter() - stage_wall_start,
                 "variables": int(model.NumVars),
+                "binary_variables": int(model.NumBinVars),
                 "constraints": int(model.NumConstrs),
                 "has_solution": False,
+                "solution_count": 0,
+                "objective_bound": None,
+                "mip_gap": None,
+                "root_relaxation": None,
+                "stage_first_incumbent_time": None,
+                "first_incumbent_time": None,
                 "stability_budget": budget,
                 "stability_budget_disabled": budget is None,
+                "stability_formulation": (
+                    "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
+                ),
             })
             break
 
@@ -993,6 +1108,8 @@ def solve_rolling_snapshot(
         def callback(_model, where):
             if where == GRB.Callback.MIPSOL and first[0] is None:
                 first[0] = time.perf_counter() - stage_wall_start
+            if where == GRB.Callback.MIPSOL and cycle_first_incumbent[0] is None:
+                cycle_first_incumbent[0] = time.perf_counter() - wall_start
 
         diagnostic_pairs = repair_pairs or affected_pairs
         ranking = {}
@@ -1014,11 +1131,26 @@ def solve_rolling_snapshot(
         model.optimize(callback)
         solver_runtime = float(model.Runtime)
         timing["solver_time"] += solver_runtime
+        try:
+            objective_bound = float(model.ObjBound)
+            if not math.isfinite(objective_bound):
+                objective_bound = None
+        except (AttributeError, ValueError):
+            objective_bound = None
+        try:
+            stage_gap = float(model.MIPGap) if model.SolCount else None
+            if stage_gap is not None and not math.isfinite(stage_gap):
+                stage_gap = None
+        except (AttributeError, ValueError):
+            stage_gap = None
         record = {
             "stage": name,
             "neighborhood_level": level,
             "stability_budget": budget,
             "stability_budget_disabled": budget is None,
+            "stability_formulation": (
+                "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
+            ),
             "allocated_solver_time": solver_budget,
             "expanded_shortage_pairs": [list(pair) for pair in sorted(repair_pairs)],
             "top_block_scores": ranking,
@@ -1042,22 +1174,47 @@ def solve_rolling_snapshot(
             "model_build_time": build_time,
             "nodes": float(model.NodeCount),
             "variables": int(model.NumVars),
+            "binary_variables": int(model.NumBinVars),
             "constraints": int(model.NumConstrs),
             "has_solution": bool(model.SolCount),
+            "solution_count": int(model.SolCount),
+            "objective_bound": objective_bound,
+            "mip_gap": stage_gap,
+            "root_relaxation": None,
+            "stage_first_incumbent_time": first[0],
             "first_incumbent_time": first[0],
             "mip_start": start_stats,
         }
         previous_key = best_key
         if model.SolCount:
+            if cycle_first_incumbent[0] is None:
+                cycle_first_incumbent[0] = time.perf_counter() - wall_start
             extract_started = time.perf_counter()
             candidate = extract_rolling_solution(variables, expressions)
-            candidate["components"].update(
-                canonical_stability_metrics(
-                    d,
-                    candidate["reservation"],
-                    candidate["shortage"],
-                )
+            canonical = canonical_stability_metrics(
+                d,
+                candidate["reservation"],
+                candidate["shortage"],
             )
+            auxiliary_mapping = {
+                "pair_cancellation": canonical["pair_cancellation"],
+                "pair_discretionary_cancel": canonical[
+                    "pair_discretionary_cancel"
+                ],
+                "block_reallocation": canonical["pair_block_reallocation"],
+            }
+            record["stability_epigraph_max_slack"] = max(
+                (
+                    abs(candidate[name].get(pair, 0) - expected.get(pair, 0))
+                    for name, expected in auxiliary_mapping.items()
+                    for pair in set(candidate[name]) | set(expected)
+                ),
+                default=0.0,
+            )
+            candidate["components"].update(canonical)
+            if not USE_EXACT_STABILITY_BIG_M:
+                for name, expected in auxiliary_mapping.items():
+                    candidate[name] = dict(expected)
             timing["solution_extract_time"] += time.perf_counter() - extract_started
             components = candidate["components"]
             key = (
@@ -1190,6 +1347,9 @@ def solve_rolling_snapshot(
             if propagation_types.get(pair) == "release_opportunity"
         ],
         "affected_pairs": [list(pair) for pair in sorted(affected_pairs)],
+        "frozen_pairs": [list(pair) for pair in sorted(frozen_pairs)],
+        "dependency_capacity_basis": "physical_residual_capacity",
+        "candidate_ranking_capacity_basis": "frozen_plan_baseline_residual_capacity",
         "propagation_enabled": settings["dependency_propagation"],
         "max_depth_reached": max(diagnostic_depths.values(), default=0),
         "dependency_edge_count": len(dependency_edges),
@@ -1210,6 +1370,8 @@ def solve_rolling_snapshot(
         failure_status = "no_incumbent"
     elif report and not report["feasible"]:
         failure_status = "solution_validation_failed"
+    final_trace = trace[-1] if trace else {}
+    final_components = (incumbent or {}).get("components", {})
     return {
         "ok": bool(
             incumbent
@@ -1238,4 +1400,13 @@ def solve_rolling_snapshot(
         "wall_time_tolerance": WALL_TIME_TOLERANCE_SECONDS,
         "postprocessing_time_reserve": postprocessing_reserve,
         "final_stage": trace[-1]["stage"] if trace else None,
+        "cycle_first_incumbent_wall_time": cycle_first_incumbent[0],
+        "final_predicted_shortage": final_components.get("predicted_shortage"),
+        "final_stability_cost": final_components.get("stability_cost"),
+        "final_operations_cost": final_components.get("operations_cost"),
+        "final_stage_objective_bound": final_trace.get("objective_bound"),
+        "final_stage_mip_gap": final_trace.get("mip_gap"),
+        "stability_formulation": (
+            "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
+        ),
     }

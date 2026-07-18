@@ -10,6 +10,24 @@ from rolling_experiment import run_rolling_case
 from rolling_solver import CONFIGURATIONS
 
 PRESETS = {
+    "pilot_small": dict(
+        num_blocks=3,
+        bays_per_block=4,
+        num_ships=3,
+        cycles=3,
+        containers_per_ship_range=(40, 80),
+        active_ship_overlap=2,
+        pod_count=2,
+    ),
+    "pilot_medium": dict(
+        num_blocks=5,
+        bays_per_block=5,
+        num_ships=6,
+        cycles=4,
+        containers_per_ship_range=(80, 160),
+        active_ship_overlap=2,
+        pod_count=4,
+    ),
     "small": dict(
         num_blocks=4,
         bays_per_block=6,
@@ -98,7 +116,7 @@ def main() -> int:
             forecast_error=args.forecast_error,
             forecast_error_mode=args.forecast_error_mode,
             initial_utilization=args.initial_utilization,
-            outbound_boxes_per_period=args.outbound_rate,
+            nominal_outbound_rate_per_ship_period=args.outbound_rate,
             release_delay_periods=args.release_delay_periods,
             **PRESETS[args.size],
         )

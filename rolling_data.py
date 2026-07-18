@@ -12,7 +12,11 @@ from typing import Iterable
 
 from config import (
     DEFAULT_OUTBOUND_BOXES_PER_6H,
+    FORECAST_ERROR_CORRELATION,
     FORECAST_ERROR_MODES,
+    FORECAST_MIN_SIGMA_RATIO,
+    INITIAL_BAY_MAX_FILL_RATIO,
+    INITIAL_UTILIZATION_TOLERANCE,
     LOOKAHEAD_HOURS,
     RECEIVING_WINDOW_HOURS,
     ROLLING_CYCLE_HOURS,
@@ -48,6 +52,97 @@ def _integer_profile(total: int, weights: Iterable[float]) -> list[int]:
     return base
 
 
+def build_initial_locked_inventory(
+    *,
+    bays: Iterable[str],
+    capacity: dict[str, int],
+    bay_size: dict[str, int],
+    heights: Iterable[str],
+    target_utilization: float,
+    seed: int,
+    max_fill_ratio: float = INITIAL_BAY_MAX_FILL_RATIO,
+) -> tuple[dict, dict, dict]:
+    """Build an exact, heterogeneous initial inventory at the requested utilization."""
+    ordered_bays = sorted(bays)
+    height_values = tuple(heights)
+    if not ordered_bays or not height_values:
+        raise ValueError("bays and heights must be nonempty")
+    if set(ordered_bays) != set(bay_size):
+        raise ValueError("bay_size must be defined for every bay")
+    if not 0 <= target_utilization <= 1:
+        raise ValueError("target_utilization must be between zero and one")
+    if not 0 < max_fill_ratio <= 1:
+        raise ValueError("max_fill_ratio must be in (0, 1]")
+
+    total_capacity = sum(capacity[bay] for bay in ordered_bays)
+    target_quantity = round(total_capacity * target_utilization)
+    fill_limit = {
+        bay: math.floor(capacity[bay] * max_fill_ratio) for bay in ordered_bays
+    }
+    reachable = sum(fill_limit.values())
+    if target_quantity > reachable:
+        raise ValueError(
+            "requested initial utilization is physically unreachable under "
+            f"max_fill_ratio={max_fill_ratio}: target={target_quantity}, "
+            f"reachable={reachable}"
+        )
+
+    rng = random.Random(seed + 31_337)
+    weights = {
+        bay: fill_limit[bay] * rng.uniform(.55, 1.45) for bay in ordered_bays
+    }
+    denominator = sum(weights.values()) or 1.0
+    raw = {bay: target_quantity * weights[bay] / denominator for bay in ordered_bays}
+    allocation = {
+        bay: min(fill_limit[bay], math.floor(raw[bay])) for bay in ordered_bays
+    }
+    remaining = target_quantity - sum(allocation.values())
+    priority = sorted(
+        ordered_bays,
+        key=lambda bay: (-(raw[bay] - math.floor(raw[bay])), rng.random(), bay),
+    )
+    while remaining:
+        progressed = False
+        for bay in priority:
+            spare = fill_limit[bay] - allocation[bay]
+            if spare <= 0:
+                continue
+            take = min(spare, max(1, math.ceil(remaining / len(priority))))
+            allocation[bay] += take
+            remaining -= take
+            progressed = True
+            if remaining == 0:
+                break
+        if not progressed:
+            raise RuntimeError("initial inventory allocation stalled unexpectedly")
+
+    used_bays = [bay for bay in ordered_bays if allocation[bay] > 0]
+    old_count = max(2, min(8, math.ceil(max(1, len(used_bays)) / 8)))
+    old_ships = [f"OLD{index + 1:02d}" for index in range(old_count)]
+    rng.shuffle(used_bays)
+    locked: dict[tuple[str, str], int] = {}
+    locked_height: dict[tuple[str, str], str] = {}
+    for index, bay in enumerate(used_bays):
+        old_ship = old_ships[index % old_count]
+        key = (bay, old_ship)
+        locked[key] = allocation[bay]
+        locked_height[key] = height_values[rng.randrange(len(height_values))]
+
+    realized_quantity = sum(locked.values())
+    diagnostics = {
+        "requested_initial_utilization": float(target_utilization),
+        "realized_initial_utilization": (
+            realized_quantity / total_capacity if total_capacity else 0.0
+        ),
+        "initial_locked_quantity": realized_quantity,
+        "initial_total_capacity": total_capacity,
+        "initialization_shortfall": target_quantity - realized_quantity,
+    }
+    if abs(realized_quantity - target_quantity) > INITIAL_UTILIZATION_TOLERANCE:
+        raise RuntimeError(f"initial inventory target was not reached: {diagnostics}")
+    return locked, locked_height, diagnostics
+
+
 def _operation_duration(
     schedule_rng: random.Random,
     ship_index: int,
@@ -61,75 +156,232 @@ def _operation_duration(
     return ship_class, schedule_rng.randint(max(1, low), max(1, high))
 
 
-def _forecast_cycle(
+def generate_hidden_truth(
     *,
+    booking_flow: dict[tuple[str, str, int], int],
+    forecast_error_mode: str,
+    error_level: float,
     seed: int,
-    cycle: int,
-    mode: str,
-    error: float,
-    ships: list[str],
-    groups: list[str],
-    booking_flow: dict,
     receiving_start: dict[str, int],
     eta_period: dict[str, int],
+    groups: Iterable[str] | None = None,
 ) -> dict[tuple[str, str, int], int]:
-    """Create a forecast from a public booking baseline, never from hidden truth."""
-    rng = random.Random(seed * 100_003 + cycle * 9_973 + 17)
-    now = cycle * EXECUTION_PERIODS
+    """Draw one final hidden realization from the public booking baseline."""
+    if forecast_error_mode not in FORECAST_ERROR_MODES:
+        raise ValueError(f"unsupported forecast error mode: {forecast_error_mode}")
+    rng = random.Random(seed + 91_919)
+    ships = sorted(receiving_start)
+    group_values = sorted(groups or {group for _ship, group, _t in booking_flow})
     result: dict[tuple[str, str, int], int] = {}
     ship_factor = {
-        ship: max(0.0, 1.0 + rng.gauss(0, error)) for ship in ships
+        ship: max(0.0, 1.0 + rng.gauss(0, error_level)) for ship in ships
     }
-    booking_factor: dict[tuple[str, str], float] = {}
-    if mode in ("booking_add_cancel", "mixed"):
-        for ship in ships:
-            for group in groups:
-                draw = rng.random()
-                if draw < error * 0.20:
-                    booking_factor[ship, group] = 0.0
-                else:
-                    booking_factor[ship, group] = max(0.0, 1.0 + rng.gauss(0, error))
+    pair_cancel: set[tuple[str, str]] = set()
+    if forecast_error_mode in ("booking_add_cancel", "mixed"):
+        pairs = sorted({(ship, group) for ship, group, _period in booking_flow})
+        pair_cancel = {
+            pair for pair in pairs if rng.random() < min(.40, error_level * .35)
+        }
 
     for (ship, group, absolute), booked in sorted(booking_flow.items()):
-        if absolute < now:
-            continue
         target_period = absolute
-        if mode in ("timing_shift", "mixed") and rng.random() < error:
+        timing_probability = error_level * (
+            .55 if forecast_error_mode == "mixed" else 1.0
+        )
+        if (
+            forecast_error_mode in ("timing_shift", "mixed")
+            and rng.random() < timing_probability
+        ):
             target_period += -1 if rng.random() < 0.5 else 1
             target_period = min(
                 eta_period[ship] - 1,
                 max(receiving_start[ship], target_period),
             )
         factor = 1.0
-        if mode in ("multiplicative", "mixed"):
-            lead = max(1, absolute - now)
-            sigma = error * min(1.0, lead / RECEIVING_PERIODS)
-            factor *= max(0.0, 1.0 + rng.gauss(0, sigma))
-        if mode in ("ship_correlated", "mixed"):
+        if forecast_error_mode in ("multiplicative", "mixed"):
+            factor *= max(
+                0.0,
+                1.0 + rng.gauss(0, error_level * (.55 if forecast_error_mode == "mixed" else 1.0)),
+            )
+        if forecast_error_mode in ("ship_correlated", "mixed"):
             factor *= ship_factor[ship]
-        if mode in ("booking_add_cancel", "mixed"):
-            factor *= booking_factor[ship, group]
+            factor *= max(0.0, 1.0 + rng.gauss(0, error_level * .25))
+        if (ship, group) in pair_cancel:
+            factor = 0.0
         quantity = max(0, int(round(booked * factor)))
-        if quantity and target_period >= now:
+        if quantity:
             key = (ship, group, target_period)
             result[key] = result.get(key, 0) + quantity
 
-    if mode in ("booking_add_cancel", "mixed") and error > 0:
+    if forecast_error_mode in ("booking_add_cancel", "mixed") and error_level > 0:
         positive_pairs = {(ship, group) for ship, group, _period in booking_flow}
         for ship in ships:
-            zero_groups = [group for group in groups if (ship, group) not in positive_pairs]
-            if not zero_groups or rng.random() >= min(0.75, error * 2):
+            zero_groups = [
+                group for group in group_values if (ship, group) not in positive_pairs
+            ]
+            if not zero_groups or rng.random() >= min(.75, error_level * 1.5):
                 continue
             group = zero_groups[rng.randrange(len(zero_groups))]
-            added = max(1, int(round(20 * error)))
+            booked_total = sum(
+                quantity
+                for (j, _g, _period), quantity in booking_flow.items()
+                if j == ship
+            )
+            added = max(1, int(round(booked_total * error_level * .10)))
             profile = _integer_profile(added, [1, 2, 3, 3, 2, 1])
             start = receiving_start[ship] + 3
             for offset, quantity in enumerate(profile):
                 absolute = min(eta_period[ship] - 1, start + offset)
-                if quantity and absolute >= now:
+                if quantity:
                     key = (ship, group, absolute)
                     result[key] = result.get(key, 0) + quantity
     return result
+
+
+def generate_forecast_trajectory(
+    *,
+    true_flow: dict[tuple[str, str, int], int],
+    booking_flow: dict[tuple[str, str, int], int],
+    cycles: int,
+    forecast_error_mode: str,
+    error_level: float,
+    seed: int,
+    receiving_start: dict[str, int],
+    eta_period: dict[str, int],
+) -> dict[tuple[int, str, str, int], int]:
+    """Generate correlated forecasts whose uncertainty shrinks with lead time."""
+    rng = random.Random(seed + 204_811)
+    rho = FORECAST_ERROR_CORRELATION
+    innovation_scale = math.sqrt(max(0.0, 1.0 - rho * rho))
+    items = sorted(set(true_flow) | set(booking_flow))
+    pairs = sorted({(ship, group) for ship, group, _period in items})
+    ships = sorted({ship for ship, _group in pairs})
+    item_error = {item: rng.gauss(0, 1) for item in items}
+    pair_error = {pair: rng.gauss(0, 1) for pair in pairs}
+    ship_error = {ship: rng.gauss(0, 1) for ship in ships}
+    shift_draw = {item: rng.random() for item in items}
+    shift_direction = {item: (-1 if rng.random() < .5 else 1) for item in items}
+    forecasts: dict[tuple[int, str, str, int], int] = {}
+
+    for cycle in range(cycles):
+        now = cycle * EXECUTION_PERIODS
+        for item in items:
+            item_error[item] = (
+                rho * item_error[item] + innovation_scale * rng.gauss(0, 1)
+            )
+        for pair in pairs:
+            pair_error[pair] = (
+                rho * pair_error[pair] + innovation_scale * rng.gauss(0, 1)
+            )
+        for ship in ships:
+            ship_error[ship] = (
+                rho * ship_error[ship] + innovation_scale * rng.gauss(0, 1)
+            )
+
+        for item in items:
+            ship, group, absolute = item
+            if absolute < now:
+                continue
+            truth = true_flow.get(item, 0)
+            booked = booking_flow.get(item, 0)
+            lead_ratio = min(1.0, max(0.0, (absolute - now) / RECEIVING_PERIODS))
+            sigma_ratio = max(FORECAST_MIN_SIGMA_RATIO, lead_ratio)
+            reveal = 1.0 - lead_ratio
+            if forecast_error_mode in ("booking_add_cancel", "mixed"):
+                center = booked + reveal * (truth - booked)
+            else:
+                center = float(truth)
+
+            multiplier = 1.0
+            if forecast_error_mode == "multiplicative":
+                multiplier += error_level * sigma_ratio * item_error[item]
+            elif forecast_error_mode == "ship_correlated":
+                combined = .80 * ship_error[ship] + .20 * pair_error[ship, group]
+                multiplier += error_level * sigma_ratio * combined
+            elif forecast_error_mode == "mixed":
+                combined = .60 * ship_error[ship] + .25 * pair_error[ship, group]
+                combined += .15 * item_error[item]
+                multiplier += .55 * error_level * sigma_ratio * combined
+            quantity = max(0, int(round(center * max(0.0, multiplier))))
+            target_period = absolute
+            if forecast_error_mode in ("timing_shift", "mixed"):
+                probability = error_level * sigma_ratio
+                if forecast_error_mode == "mixed":
+                    probability *= .55
+                if shift_draw[item] < probability:
+                    target_period += shift_direction[item]
+                    target_period = min(
+                        eta_period[ship] - 1,
+                        max(receiving_start[ship], target_period),
+                    )
+            if quantity and target_period >= now:
+                key = (cycle, ship, group, target_period)
+                forecasts[key] = forecasts.get(key, 0) + quantity
+    return forecasts
+
+
+def forecast_trajectory_diagnostics(
+    *,
+    forecasts: dict[tuple[int, str, str, int], int],
+    true_flow: dict[tuple[str, str, int], int],
+    cycles: int,
+) -> dict[str, dict[int, float]]:
+    """Measure forecast quality by cycle without exposing diagnostics to the model."""
+    mae: dict[int, float] = {}
+    mape: dict[int, float] = {}
+    total_error: dict[int, float] = {}
+    timing_error: dict[int, float] = {}
+    for cycle in range(cycles):
+        now = cycle * EXECUTION_PERIODS
+        truth = {
+            key: quantity for key, quantity in true_flow.items() if key[2] >= now
+        }
+        predicted = {
+            (ship, group, period): quantity
+            for (r, ship, group, period), quantity in forecasts.items()
+            if r == cycle and period >= now
+        }
+        keys = sorted(set(truth) | set(predicted))
+        errors = [abs(predicted.get(key, 0) - truth.get(key, 0)) for key in keys]
+        mae[cycle] = sum(errors) / max(1, len(errors))
+        positive = [key for key in keys if truth.get(key, 0) > 0]
+        mape[cycle] = sum(
+            abs(predicted.get(key, 0) - truth[key]) / truth[key] for key in positive
+        ) / max(1, len(positive))
+        total_error[cycle] = abs(sum(predicted.values()) - sum(truth.values()))
+        pair_values = sorted({(ship, group) for ship, group, _period in keys})
+        centroid_errors = []
+        for ship, group in pair_values:
+            truth_total = sum(
+                quantity for (j, g, _t), quantity in truth.items()
+                if j == ship and g == group
+            )
+            predicted_total = sum(
+                quantity for (j, g, _t), quantity in predicted.items()
+                if j == ship and g == group
+            )
+            if not truth_total or not predicted_total:
+                continue
+            truth_center = sum(
+                period * quantity
+                for (j, g, period), quantity in truth.items()
+                if j == ship and g == group
+            ) / truth_total
+            predicted_center = sum(
+                period * quantity
+                for (j, g, period), quantity in predicted.items()
+                if j == ship and g == group
+            ) / predicted_total
+            centroid_errors.append(abs(predicted_center - truth_center))
+        timing_error[cycle] = (
+            sum(centroid_errors) / len(centroid_errors) if centroid_errors else 0.0
+        )
+    return {
+        "forecast_mae_by_cycle": mae,
+        "forecast_mape_by_cycle": mape,
+        "forecast_total_error_by_cycle": total_error,
+        "forecast_timing_error_by_cycle": timing_error,
+    }
 
 
 def build_synthetic_rolling_case(
@@ -143,7 +395,8 @@ def build_synthetic_rolling_case(
     initial_utilization: float = .25,
     forecast_error: float = .10,
     forecast_error_mode: str = "multiplicative",
-    outbound_boxes_per_period: int = DEFAULT_OUTBOUND_BOXES_PER_6H,
+    nominal_outbound_rate_per_ship_period: int = DEFAULT_OUTBOUND_BOXES_PER_6H,
+    outbound_boxes_per_period: int | None = None,
     containers_per_ship_range: tuple[int, int] = (60, 160),
     active_ship_overlap: int = 2,
     pod_count: int = 3,
@@ -151,8 +404,16 @@ def build_synthetic_rolling_case(
     release_delay_periods: int | dict[str, int] = 0,
 ) -> dict:
     """Build a reproducible case with external ship schedules and hidden truth."""
-    if outbound_boxes_per_period <= 0:
-        raise ValueError("outbound_boxes_per_period must be positive")
+    if outbound_boxes_per_period is not None:
+        if (
+            nominal_outbound_rate_per_ship_period
+            != DEFAULT_OUTBOUND_BOXES_PER_6H
+            and nominal_outbound_rate_per_ship_period != outbound_boxes_per_period
+        ):
+            raise ValueError("conflicting nominal and legacy outbound rates")
+        nominal_outbound_rate_per_ship_period = outbound_boxes_per_period
+    if nominal_outbound_rate_per_ship_period <= 0:
+        raise ValueError("nominal_outbound_rate_per_ship_period must be positive")
     if forecast_error_mode not in FORECAST_ERROR_MODES:
         raise ValueError(f"forecast_error_mode must be one of {FORECAST_ERROR_MODES}")
     if not 0 <= initial_utilization <= 1:
@@ -203,14 +464,6 @@ def build_synthetic_rolling_case(
             schedule_rng, index, ship_operation_duration_periods
         )
         ship_class[ship] = category
-        operation_duration[ship] = duration
-        planned_release[ship] = eta_period[ship] + duration
-        delay = (
-            release_delay_periods.get(ship, 0)
-            if isinstance(release_delay_periods, dict)
-            else release_delay_periods
-        )
-        realized_release[ship] = planned_release[ship] + max(0, int(delay))
         berth = index % max(1, min(4, num_blocks))
         for block_index, block in enumerate(blocks):
             distance[ship, block] = 100 + 120 * abs(block_index - berth)
@@ -224,6 +477,18 @@ def build_synthetic_rolling_case(
         if not selected:
             selected = [eligible_groups[0]]
         ship_total = rng.randint(low_boxes, high_boxes)
+        volume_duration = math.ceil(
+            ship_total / nominal_outbound_rate_per_ship_period
+        )
+        duration = max(duration, volume_duration)
+        operation_duration[ship] = duration
+        planned_release[ship] = eta_period[ship] + duration
+        delay = (
+            release_delay_periods.get(ship, 0)
+            if isinstance(release_delay_periods, dict)
+            else release_delay_periods
+        )
+        realized_release[ship] = planned_release[ship] + max(0, int(delay))
         group_quantities = _integer_profile(
             ship_total, [rng.uniform(.5, 1.5) for _group in selected]
         )
@@ -234,69 +499,55 @@ def build_synthetic_rolling_case(
                 if quantity:
                     booking_flow[ship, group, start + offset] = quantity
 
-    # The simulator realization and every forecast are independent draws from the
-    # same public booking baseline.  Thus zero error remains a deliberate perfect-
-    # forecast scenario, while the forecast generator never reads hidden truth.
-    true_flow = _forecast_cycle(
-        seed=seed + 91_919,
-        cycle=0,
-        mode=forecast_error_mode,
-        error=forecast_error,
-        ships=ships,
-        groups=groups,
+    true_flow = generate_hidden_truth(
         booking_flow=booking_flow,
+        forecast_error_mode=forecast_error_mode,
+        error_level=forecast_error,
+        seed=seed,
         receiving_start=receiving_start,
         eta_period=eta_period,
+        groups=groups,
     )
     true_total: dict[tuple[str, str], int] = {}
     for (ship, group, _absolute), quantity in true_flow.items():
         true_total[ship, group] = true_total.get((ship, group), 0) + quantity
 
-    forecasts: dict[tuple[int, str, str, int], int] = {}
-    for cycle in range(cycles):
-        cycle_forecast = _forecast_cycle(
-            seed=seed,
-            cycle=cycle,
-            mode=forecast_error_mode,
-            error=forecast_error,
-            ships=ships,
-            groups=groups,
-            booking_flow=booking_flow,
-            receiving_start=receiving_start,
-            eta_period=eta_period,
-        )
-        for (ship, group, absolute), quantity in cycle_forecast.items():
-            forecasts[cycle, ship, group, absolute] = quantity
+    forecasts = generate_forecast_trajectory(
+        true_flow=true_flow,
+        booking_flow=booking_flow,
+        cycles=cycles,
+        forecast_error_mode=forecast_error_mode,
+        error_level=forecast_error,
+        seed=seed,
+        receiving_start=receiving_start,
+        eta_period=eta_period,
+    )
+    forecast_diagnostics = forecast_trajectory_diagnostics(
+        forecasts=forecasts,
+        true_flow=true_flow,
+        cycles=cycles,
+    )
 
-    locked: dict[tuple[str, str], int] = {}
-    locked_height: dict[tuple[str, str], str] = {}
+    locked, locked_height, initialization_diagnostics = (
+        build_initial_locked_inventory(
+            bays=bays,
+            capacity=capacity,
+            bay_size=bay_size,
+            heights=heights,
+            target_utilization=initial_utilization,
+            seed=seed,
+            max_fill_ratio=INITIAL_BAY_MAX_FILL_RATIO,
+        )
+    )
     old_release_period: dict[str, int] = {}
-    target = int(sum(capacity.values()) * initial_utilization)
-    placed = 0
-    old_count = max(2, num_blocks // 3)
-    for old_index in range(old_count):
-        old_ship = f"OLD{old_index + 1:02d}"
-        quota = math.ceil(target / old_count) if old_count else 0
-        ship_placed = 0
-        for bay in bays[old_index::old_count]:
-            if placed >= target or ship_placed >= quota:
-                break
-            quantity = min(
-                capacity[bay] // 2,
-                target - placed,
-                quota - ship_placed,
-            )
-            if quantity <= 0:
-                continue
-            locked[bay, old_ship] = quantity
-            locked_height[bay, old_ship] = heights[(bays.index(bay) // 2) % 2]
-            placed += quantity
-            ship_placed += quantity
 
     old_outbound: dict[tuple[str, str, int], int] = {}
     for old_index, old_ship in enumerate(sorted({ship for _bay, ship in locked})):
         total = sum(quantity for (_bay, ship), quantity in locked.items() if ship == old_ship)
-        duration = max(1, math.ceil(total / outbound_boxes_per_period))
+        duration = max(
+            1,
+            math.ceil(total / nominal_outbound_rate_per_ship_period),
+        )
         start = old_index * EXECUTION_PERIODS
         old_release_period[old_ship] = start + duration
         block_remaining = {
@@ -331,25 +582,11 @@ def build_synthetic_rolling_case(
                 ship_outbound[ship, eta_period[ship] + offset] = quantity
 
     outbound_forecasts: dict[tuple[int, str, str, int], int] = {}
-    ship_outbound_forecasts: dict[tuple[int, str, int], int] = {}
     for cycle in range(cycles):
         now = cycle * EXECUTION_PERIODS
         for (old_ship, block, absolute), truth in old_outbound.items():
             if absolute >= now:
                 outbound_forecasts[cycle, old_ship, block, absolute] = truth
-        for ship in ships:
-            visible_total = sum(
-                quantity
-                for (r, j, _group, _absolute), quantity in forecasts.items()
-                if r == cycle and j == ship
-            )
-            duration = max(1, planned_release[ship] - eta_period[ship])
-            for offset, quantity in enumerate(
-                _integer_profile(visible_total, [1] * duration)
-            ):
-                absolute = eta_period[ship] + offset
-                if quantity and absolute >= now:
-                    ship_outbound_forecasts[cycle, ship, absolute] = quantity
 
     return {
         "blocks": blocks,
@@ -375,8 +612,9 @@ def build_synthetic_rolling_case(
         "true_total": true_total,
         "true_flow": true_flow,
         "booking_flow": booking_flow,
-        "forecast_generation_basis": "public_booking_baseline",
+        "forecast_generation_basis": "hidden_truth_noisy_information_trajectory",
         "forecasts": forecasts,
+        **forecast_diagnostics,
         "distance": distance,
         "locked_initial": locked,
         "locked_height_initial": locked_height,
@@ -384,8 +622,10 @@ def build_synthetic_rolling_case(
         "old_outbound_flow": old_outbound,
         "ship_outbound_flow": ship_outbound,
         "outbound_forecasts": outbound_forecasts,
-        "ship_outbound_forecasts": ship_outbound_forecasts,
-        "outbound_boxes_per_period": outbound_boxes_per_period,
+        "outbound_boxes_per_period": nominal_outbound_rate_per_ship_period,
+        "nominal_outbound_rate_per_ship_period": (
+            nominal_outbound_rate_per_ship_period
+        ),
         "cycles": cycles,
         "period_hours": PERIOD_HOURS,
         "execution_periods": EXECUTION_PERIODS,
@@ -395,6 +635,7 @@ def build_synthetic_rolling_case(
         "forecast_error": forecast_error,
         "forecast_error_mode": forecast_error_mode,
         "initial_utilization": initial_utilization,
+        **initialization_diagnostics,
         "containers_per_ship_range": containers_per_ship_range,
         "active_ship_overlap": active_ship_overlap,
         "pod_count": pod_count,
@@ -449,6 +690,38 @@ def _participating_ships(case: dict, now: int, completed: set[str]) -> set[str]:
     }
 
 
+def build_visible_ship_outbound_forecast(
+    case: dict,
+    state: dict,
+    cycle: int,
+    ship: str,
+) -> dict[int, int]:
+    """Build a ship outbound profile from visible inventory and remaining forecast."""
+    now = cycle * case["execution_periods"]
+    actual_total = sum(
+        quantity
+        for (_bay, j, _group), quantity in state["actual_inventory"].items()
+        if j == ship and _realized_present(case, j, now)
+    )
+    remaining_forecast = sum(
+        quantity
+        for (r, j, _group, absolute), quantity in case["forecasts"].items()
+        if r == cycle and j == ship and absolute >= now
+    )
+    visible_total = actual_total + remaining_forecast
+    operation_start = max(now, case["eta_period"][ship])
+    operation_end = case["planned_ship_release_period"][ship]
+    periods = list(range(operation_start, operation_end))
+    if not periods or visible_total <= 0:
+        return {}
+    profile = _integer_profile(visible_total, [1.0] * len(periods))
+    return {
+        absolute: quantity
+        for absolute, quantity in zip(periods, profile)
+        if quantity > 0
+    }
+
+
 def optimization_snapshot(case: dict, state: dict) -> dict:
     """Build the optimizer-visible snapshot without exposing hidden realization data."""
     cycle = state["cycle"]
@@ -494,7 +767,7 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
             )
             if quantity:
                 outbound[block, absolute - now] = quantity
-    for ship in case["ships"]:
+    for ship in active:
         block_basis = {
             block: sum(
                 quantity
@@ -511,8 +784,15 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         if not sum(block_basis.values()):
             closest = min(case["blocks"], key=lambda block: case["distance"][ship, block])
             block_basis[closest] = 1
-        for absolute in range(now, end):
-            quantity = case["ship_outbound_forecasts"].get((cycle, ship, absolute), 0)
+        visible_outbound = build_visible_ship_outbound_forecast(
+            case,
+            state,
+            cycle,
+            ship,
+        )
+        for absolute, quantity in sorted(visible_outbound.items()):
+            if absolute >= end:
+                continue
             if not quantity:
                 continue
             distributed = _integer_profile(
@@ -561,7 +841,7 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         "execution_periods",
         "lookahead_periods",
     )
-    return {key: case[key] for key in base_keys} | {
+    snapshot = {key: case[key] for key in base_keys} | {
         "cycle": cycle,
         "absolute_start_period": now,
         "periods": list(range(case["lookahead_periods"])),
@@ -580,6 +860,10 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         "remaining_demand": remaining,
         "release_period_basis": case["release_period_basis"],
     }
+    from rolling_model import validate_snapshot_temporal_consistency
+
+    validate_snapshot_temporal_consistency(snapshot)
+    return snapshot
 
 
 def _realized_present(case: dict, ship: str, absolute_period: int) -> bool:
@@ -760,6 +1044,8 @@ def _realized_space_metrics(case: dict, state: dict, absolute_period: int) -> di
     return {
         "support": support,
         "realized_active_ship_pod_bay_support": len(support),
+        "realized_ship_pod_bay_count_sum": sum(bay_counts),
+        "realized_ship_pod_observation_count": len(bay_counts),
         "realized_average_bays_per_ship_pod": (
             sum(bay_counts) / len(bay_counts) if bay_counts else 0.0
         ),
@@ -770,6 +1056,51 @@ def _realized_space_metrics(case: dict, state: dict, absolute_period: int) -> di
         ),
         "realized_max_utilization_spread": (
             max(utilizations, default=0.0) - min(utilizations, default=0.0)
+        ),
+    }
+
+
+def summarize_period_space_metrics(
+    period_spaces: list[dict],
+    initial_support: set[tuple[str, str, str]] | None = None,
+) -> dict:
+    """Aggregate true within-cycle peaks, activations, and weighted concentration."""
+    previous_support = set(initial_support or ())
+    activations = 0
+    for space in period_spaces:
+        current = set(space.get("support", ()))
+        activations += len(current - previous_support)
+        previous_support = current
+    bay_count_sum = sum(
+        space["realized_ship_pod_bay_count_sum"] for space in period_spaces
+    )
+    observation_count = sum(
+        space["realized_ship_pod_observation_count"] for space in period_spaces
+    )
+    return {
+        "realized_peak_block_utilization": max(
+            (space["realized_peak_block_utilization"] for space in period_spaces),
+            default=0.0,
+        ),
+        "realized_mean_absolute_utilization_deviation": (
+            sum(
+                space["realized_mean_absolute_utilization_deviation"]
+                for space in period_spaces
+            ) / max(1, len(period_spaces))
+        ),
+        "realized_max_utilization_spread": max(
+            (space["realized_max_utilization_spread"] for space in period_spaces),
+            default=0.0,
+        ),
+        "realized_support_activation_count": activations,
+        "realized_ship_pod_bay_count_sum": bay_count_sum,
+        "realized_ship_pod_observation_count": observation_count,
+        "realized_average_bays_per_ship_pod": (
+            bay_count_sum / observation_count if observation_count else 0.0
+        ),
+        "realized_max_bays_per_ship_pod": max(
+            (space["realized_max_bays_per_ship_pod"] for space in period_spaces),
+            default=0,
         ),
     }
 
@@ -807,6 +1138,7 @@ def advance_state(case: dict, state: dict, solution: dict) -> tuple[dict, dict]:
         "realized_distance": 0.0,
         "realized_in_out_conflict": 0.0,
     }
+    period_spaces: list[dict] = []
 
     for local in range(case["execution_periods"]):
         absolute = now + local
@@ -932,6 +1264,15 @@ def advance_state(case: dict, state: dict, solution: dict) -> tuple[dict, dict]:
             report = validate_execution_state(case, execution_state, absolute)
             if not report["feasible"]:
                 raise RuntimeError(f"execution state infeasible at period {absolute}: {report}")
+        period_space = _realized_space_metrics(
+            case,
+            {
+                "actual_inventory": actual,
+                "locked_inventory": locked,
+            },
+            absolute,
+        )
+        period_spaces.append(period_space)
 
     next_cycle = cycle + 1
     boundary = next_cycle * case["execution_periods"]
@@ -973,9 +1314,7 @@ def advance_state(case: dict, state: dict, solution: dict) -> tuple[dict, dict]:
         "completed": completed,
         "unplaced_actual": cumulative_unplaced,
     }
-    end_space = _realized_space_metrics(case, next_state, boundary)
-    metrics.update({key: value for key, value in end_space.items() if key != "support"})
-    metrics["realized_new_support_count"] = len(end_space["support"] - start_support)
+    metrics.update(summarize_period_space_metrics(period_spaces, start_support))
     metrics["fallback_rate"] = (
         metrics["fallback_placement_quantity"] / metrics["realized_arrivals"]
         if metrics["realized_arrivals"] else 0.0

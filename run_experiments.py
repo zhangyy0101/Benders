@@ -29,6 +29,10 @@ def stage_summary(result: dict) -> dict:
             bool(stage.get("stability_budget_binding")) for stage in stages
         ),
         "max_variables": max((stage.get("variables", 0) for stage in stages), default=0),
+        "max_binary_variables": max(
+            (stage.get("binary_variables", 0) for stage in stages),
+            default=0,
+        ),
         "max_constraints": max(
             (stage.get("constraints", 0) for stage in stages), default=0
         ),
@@ -70,10 +74,12 @@ def result_row(
         "bays_per_block": case["bays_per_block"],
         "num_ships": case["num_ships"],
         "cycles": case["cycles"],
-        "initial_utilization": case["initial_utilization"],
+        "initial_utilization": case["requested_initial_utilization"],
+        "requested_initial_utilization": case["requested_initial_utilization"],
+        "realized_initial_utilization": case["realized_initial_utilization"],
         "forecast_error": case["forecast_error"],
         "forecast_error_mode": case["forecast_error_mode"],
-        "outbound_rate": case["outbound_boxes_per_period"],
+        "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
         "configuration": configuration,
         "seed": seed,
         "time_limit": time_limit,
@@ -93,6 +99,15 @@ def result_row(
         "realized_in_out_conflict": result["total_realized_in_out_conflict"],
         "mean_realized_bays_per_ship_pod": result["mean_realized_bays_per_ship_pod"],
         "max_realized_bays_per_ship_pod": result["max_realized_bays_per_ship_pod"],
+        "realized_support_activation_count": result[
+            "total_realized_support_activation_count"
+        ],
+        "realized_ship_pod_bay_count_sum": result[
+            "realized_ship_pod_bay_count_sum"
+        ],
+        "realized_ship_pod_observation_count": result[
+            "realized_ship_pod_observation_count"
+        ],
         "max_realized_peak_block_utilization": result[
             "max_realized_peak_block_utilization"
         ],
@@ -106,6 +121,15 @@ def result_row(
         "block_reallocation_quantity": result["total_block_reallocation_quantity"],
         "stability_cost": result["total_stability_cost"],
         "revision_rate": result["revision_rate"],
+        "mean_cycle_first_incumbent_wall_time": result[
+            "mean_cycle_first_incumbent_wall_time"
+        ],
+        "max_cycle_first_incumbent_wall_time": result[
+            "max_cycle_first_incumbent_wall_time"
+        ],
+        "mean_final_stage_mip_gap": result["mean_final_stage_mip_gap"],
+        "max_final_stage_mip_gap": result["max_final_stage_mip_gap"],
+        "mean_nodes": result["mean_nodes"],
         "mean_cycle_predicted_shortage": (
             sum(predicted_shortage) / len(predicted_shortage)
             if predicted_shortage else None
@@ -148,6 +172,10 @@ def main() -> int:
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--outbound-rate", type=int, default=150)
     parser.add_argument("--release-delay-periods", type=int, default=0)
+    parser.add_argument("--containers-per-ship-low", type=int)
+    parser.add_argument("--containers-per-ship-high", type=int)
+    parser.add_argument("--active-ship-overlap", type=int)
+    parser.add_argument("--pod-count", type=int)
     parser.add_argument("--output", default="rolling_results.csv")
     args = parser.parse_args()
     rows: list[dict] = []
@@ -157,14 +185,28 @@ def main() -> int:
                 for utilization in args.initial_utilizations:
                     for seed in args.seeds:
                         for configuration in args.configurations:
+                            preset = dict(PRESETS[size])
+                            current_low, current_high = preset[
+                                "containers_per_ship_range"
+                            ]
+                            preset["containers_per_ship_range"] = (
+                                args.containers_per_ship_low or current_low,
+                                args.containers_per_ship_high or current_high,
+                            )
+                            if args.active_ship_overlap is not None:
+                                preset["active_ship_overlap"] = args.active_ship_overlap
+                            if args.pod_count is not None:
+                                preset["pod_count"] = args.pod_count
                             case = build_synthetic_rolling_case(
                                 seed=seed,
                                 forecast_error=error,
                                 forecast_error_mode=mode,
                                 initial_utilization=utilization,
-                                outbound_boxes_per_period=args.outbound_rate,
+                                nominal_outbound_rate_per_ship_period=(
+                                    args.outbound_rate
+                                ),
                                 release_delay_periods=args.release_delay_periods,
-                                **PRESETS[size],
+                                **preset,
                             )
                             result = run_rolling_case(
                                 case,

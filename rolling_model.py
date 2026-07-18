@@ -12,6 +12,7 @@ from config import (
     STABILITY_BLOCK_REALLOCATION_WEIGHT,
     STABILITY_CANCEL_WEIGHT,
     STABILITY_NEW_BAY_WEIGHT,
+    USE_EXACT_STABILITY_BIG_M,
     USE_NORMALIZED_OPERATION_OBJECTIVE,
 )
 
@@ -25,6 +26,21 @@ def compatible(d: dict, bay: str, group: str) -> bool:
 def ship_present_at(d: dict, ship: str, period: int) -> bool:
     """A planned ship occupies capacity strictly before whole-ship release."""
     return d.get("ship_release_local", {}).get(ship, INF) > period
+
+
+def validate_snapshot_temporal_consistency(d: dict) -> None:
+    """Reject positive arrivals at or after the optimizer-visible ship release."""
+    violations = [
+        (ship, group, period, quantity, d.get("ship_release_local", {}).get(ship))
+        for (ship, group, period), quantity in sorted(d["forecast_arrivals"].items())
+        if quantity > 0 and not ship_present_at(d, ship, period)
+    ]
+    if violations:
+        preview = violations[:5]
+        raise ValueError(
+            "forecast arrivals must precede planned ship release; "
+            f"violations={preview}, total={len(violations)}"
+        )
 
 
 def existing_support(d: dict, period: int = 0) -> set[tuple[str, str, str]]:
@@ -93,11 +109,17 @@ def build_rolling_model(
     shortage_allowed: bool = True,
     stability_budget: float | None = None,
     objective_scales: dict[str, float] | None = None,
+    use_exact_stability_big_m: bool | None = None,
 ) -> tuple[gp.Model, dict, dict]:
     m = gp.Model("rolling_6h_bay_allocation")
     m.Params.OutputFlag = 0
     bays, periods, attrs = d["bays"], d["periods"], d["group_attrs"]
     pairs = sorted(d["remaining_demand"])
+    exact_stability = (
+        USE_EXACT_STABILITY_BIG_M
+        if use_exact_stability_big_m is None
+        else use_exact_stability_big_m
+    )
 
     reserve_keys = []
     for j, g in pairs:
@@ -107,6 +129,7 @@ def build_rolling_model(
     flow_keys = sorted(
         (i, j, g, n)
         for (j, g, n) in d["forecast_arrivals"]
+        if ship_present_at(d, j, n)
         for i, jj, gg in reserve_keys
         if jj == j and gg == g
     )
@@ -145,27 +168,41 @@ def build_rolling_model(
     old = d["previous_reservation"]
     cancellation_keys = sorted(set(reserve_keys) | set(old))
     cancel = m.addVars(cancellation_keys, vtype=GRB.INTEGER, lb=0, name="cancel")
-    cancel_active = m.addVars(
-        cancellation_keys, vtype=GRB.BINARY, name="cancel_active"
+    cancel_active = (
+        m.addVars(cancellation_keys, vtype=GRB.BINARY, name="cancel_active")
+        if exact_stability else {}
     )
     stability_pairs = sorted(set(pairs) | {(j, g) for (_i, j, g) in old})
     block_cancel = m.addVars(stability_pairs, d["blocks"], lb=0, name="block_cancel")
-    block_cancel_active = m.addVars(
-        stability_pairs,
-        d["blocks"],
-        vtype=GRB.BINARY,
-        name="block_cancel_active",
+    block_cancel_active = (
+        m.addVars(
+            stability_pairs,
+            d["blocks"],
+            vtype=GRB.BINARY,
+            name="block_cancel_active",
+        )
+        if exact_stability else {}
     )
     reallocation = m.addVars(stability_pairs, lb=0, name="block_reallocation")
-    reallocation_active = m.addVars(
-        stability_pairs, vtype=GRB.BINARY, name="block_reallocation_active"
+    reallocation_active = (
+        m.addVars(
+            stability_pairs,
+            vtype=GRB.BINARY,
+            name="block_reallocation_active",
+        )
+        if exact_stability else {}
     )
     pair_cancellation = m.addVars(stability_pairs, lb=0, name="pair_cancellation")
     pair_discretionary = m.addVars(
         stability_pairs, lb=0, name="pair_discretionary_cancel"
     )
-    discretionary_active = m.addVars(
-        stability_pairs, vtype=GRB.BINARY, name="discretionary_active"
+    discretionary_active = (
+        m.addVars(
+            stability_pairs,
+            vtype=GRB.BINARY,
+            name="discretionary_active",
+        )
+        if exact_stability else {}
     )
 
     def locked_at(i: str, n: int) -> float:
@@ -262,8 +299,11 @@ def build_rolling_model(
         raw_cancel = old.get(key, 0) - current
         cancel_m = max(1, old.get(key, 0) + d["capacity"][key[0]])
         m.addConstr(cancel[key] >= raw_cancel)
-        m.addConstr(cancel[key] <= raw_cancel + cancel_m * (1 - cancel_active[key]))
-        m.addConstr(cancel[key] <= cancel_m * cancel_active[key])
+        if exact_stability:
+            m.addConstr(
+                cancel[key] <= raw_cancel + cancel_m * (1 - cancel_active[key])
+            )
+            m.addConstr(cancel[key] <= cancel_m * cancel_active[key])
     support_baseline = existing_support(d, period=0)
     for j, pod, i in use_keys:
         was_used = (j, pod, i) in support_baseline
@@ -295,13 +335,16 @@ def build_rolling_model(
             )
             raw_block_cancel = _old_block_amount(d, j, g, k) - current_block
             m.addConstr(block_cancel[j, g, k] >= raw_block_cancel)
-            m.addConstr(
-                block_cancel[j, g, k]
-                <= raw_block_cancel + exactness_m * (1 - block_cancel_active[j, g, k])
-            )
-            m.addConstr(
-                block_cancel[j, g, k] <= exactness_m * block_cancel_active[j, g, k]
-            )
+            if exact_stability:
+                m.addConstr(
+                    block_cancel[j, g, k]
+                    <= raw_block_cancel
+                    + exactness_m * (1 - block_cancel_active[j, g, k])
+                )
+                m.addConstr(
+                    block_cancel[j, g, k]
+                    <= exactness_m * block_cancel_active[j, g, k]
+                )
         pair_shortage = gp.quicksum(
             shortage[jj, gg, n]
             for jj, gg, n in shortage
@@ -313,21 +356,26 @@ def build_rolling_model(
             - pair_shortage
         )
         m.addConstr(reallocation[j, g] >= raw_reallocation)
-        m.addConstr(
-            reallocation[j, g]
-            <= raw_reallocation + exactness_m * (1 - reallocation_active[j, g])
-        )
-        m.addConstr(reallocation[j, g] <= exactness_m * reallocation_active[j, g])
+        if exact_stability:
+            m.addConstr(
+                reallocation[j, g]
+                <= raw_reallocation
+                + exactness_m * (1 - reallocation_active[j, g])
+            )
+            m.addConstr(
+                reallocation[j, g] <= exactness_m * reallocation_active[j, g]
+            )
         raw_discretionary = pair_cancellation[j, g] - mandatory[j, g] - pair_shortage
         big_m = exactness_m
         m.addConstr(pair_discretionary[j, g] >= raw_discretionary)
-        m.addConstr(
-            pair_discretionary[j, g]
-            <= raw_discretionary + big_m * (1 - discretionary_active[j, g])
-        )
-        m.addConstr(
-            pair_discretionary[j, g] <= big_m * discretionary_active[j, g]
-        )
+        if exact_stability:
+            m.addConstr(
+                pair_discretionary[j, g]
+                <= raw_discretionary + big_m * (1 - discretionary_active[j, g])
+            )
+            m.addConstr(
+                pair_discretionary[j, g] <= big_m * discretionary_active[j, g]
+            )
     cancellation_quantity = cancel.sum()
     mandatory_total = sum(mandatory.values())
     discretionary_total = pair_discretionary.sum()

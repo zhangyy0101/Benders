@@ -33,8 +33,26 @@ class InformationBoundaryTest(unittest.TestCase):
             "true_total",
             "true_flow",
             "realized_ship_release_period",
+            "forecast_mae_by_cycle",
+            "forecast_mape_by_cycle",
+            "forecast_total_error_by_cycle",
+            "forecast_timing_error_by_cycle",
         ):
             self.assertNotIn(forbidden, snapshot)
+        serialized_keys = set()
+
+        def collect_keys(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    serialized_keys.add(str(key))
+                    collect_keys(item)
+            elif isinstance(value, (list, tuple, set)):
+                for item in value:
+                    collect_keys(item)
+
+        collect_keys(snapshot)
+        for forbidden in ("true_flow", "true_total", "realized_ship_release"):
+            self.assertFalse(any(forbidden in key for key in serialized_keys))
         ship = case["ships"][0]
         self.assertEqual(
             snapshot["ship_release_local"][ship],
