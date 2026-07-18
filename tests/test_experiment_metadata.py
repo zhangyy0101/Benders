@@ -124,6 +124,22 @@ class ExperimentMetadataTest(unittest.TestCase):
             ),
         )
 
+    def test_manifest_treats_csv_false_string_as_failure(self):
+        metadata = {
+            "git_commit": "abc123",
+            "weight_profile": collect_weight_profile(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = write_experiment_artifacts(
+                rows=[{"ok": "True"}, {"ok": "False"}],
+                output_csv=Path(directory) / "partial.csv",
+                metadata=metadata,
+                requested_matrix={"status": "partial"},
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["row_count"], 2)
+        self.assertFalse(manifest["all_ok"])
+
     def test_collected_metadata_uses_runtime_configuration(self):
         with patch(
             "experiment_metadata.collect_git_metadata",

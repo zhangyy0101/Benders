@@ -172,6 +172,14 @@ def default_manifest_path(output_csv: str | Path) -> Path:
     return Path(output_csv).with_suffix(".manifest.json")
 
 
+def _experiment_row_ok(row: dict) -> bool:
+    """Interpret in-memory booleans and CSV boolean strings consistently."""
+    value = row.get("ok")
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+
 def write_experiment_artifacts(
     *,
     rows: list[dict],
@@ -208,7 +216,7 @@ def write_experiment_artifacts(
         "metadata": metadata,
         "requested_matrix": requested_matrix,
         "row_count": len(rows),
-        "all_ok": all(bool(row.get("ok")) for row in rows),
+        "all_ok": all(_experiment_row_ok(row) for row in rows),
     }
     with manifest_path.open("w", encoding="utf-8") as stream:
         json.dump(manifest, stream, ensure_ascii=False, indent=2, sort_keys=True)
