@@ -55,6 +55,113 @@ def stage_summary(result: dict) -> dict:
     }
 
 
+def pilot_diagnostics(result: dict) -> dict:
+    """Aggregate cycle-level failure, propagation, repair, and polish diagnostics."""
+    cycles = [cycle for cycle in result["cycles"] if not cycle.get("skipped")]
+    cycle_count = len(cycles)
+    failures = [
+        cycle["failure_status"]
+        for cycle in cycles
+        if cycle.get("failure_status")
+    ]
+    propagated = [
+        len((cycle.get("impact_diagnostics") or {}).get("propagated_pairs", []))
+        for cycle in cycles
+    ]
+    pressure = [
+        len((cycle.get("impact_diagnostics") or {}).get("pressure_propagation", []))
+        for cycle in cycles
+    ]
+    release = [
+        len(
+            (cycle.get("impact_diagnostics") or {}).get(
+                "release_opportunity_propagation", []
+            )
+        )
+        for cycle in cycles
+    ]
+    edges = [
+        int((cycle.get("impact_diagnostics") or {}).get("dependency_edge_count", 0))
+        for cycle in cycles
+    ]
+    graph_times = [float(cycle.get("dependency_graph_time", 0) or 0) for cycle in cycles]
+    expansion_counts = [
+        max(
+            (
+                int(stage.get("dependency_expansion_count", 0) or 0)
+                for stage in cycle.get("stages", [])
+            ),
+            default=propagated[index],
+        )
+        for index, cycle in enumerate(cycles)
+    ]
+    global_repairs = sum(
+        stage.get("stage") == "global_repair"
+        for cycle in cycles
+        for stage in cycle.get("stages", [])
+    )
+    repair_triggered = sum(bool(cycle.get("repair_triggered")) for cycle in cycles)
+    polish_triggered = sum(
+        bool(cycle.get("quality_polish_triggered")) for cycle in cycles
+    )
+    polish_improved = sum(
+        bool(cycle.get("quality_polish_improved")) for cycle in cycles
+    )
+    epigraph_slack = [
+        float(stage["stability_epigraph_max_slack"])
+        for cycle in cycles
+        for stage in cycle.get("stages", [])
+        if stage.get("stability_epigraph_max_slack") is not None
+    ]
+    validation_failures = sum(
+        cycle.get("validation") is not None
+        and not bool(cycle["validation"].get("feasible"))
+        for cycle in cycles
+    )
+    return {
+        "failure_status": ";".join(failures) if failures else None,
+        "wall_clock_time_limit_exceeded": sum(
+            failure == "wall_clock_time_limit_exceeded" for failure in failures
+        ),
+        "validation_failure_count": validation_failures,
+        "no_incumbent_count": sum(failure == "no_incumbent" for failure in failures),
+        "preprocessing_time_limit_count": sum(
+            failure == "preprocessing_time_limit" for failure in failures
+        ),
+        "solved_cycle_count": cycle_count,
+        "propagation_triggered_count": sum(value > 0 for value in propagated),
+        "propagation_trigger_rate": (
+            sum(value > 0 for value in propagated) / cycle_count if cycle_count else 0.0
+        ),
+        "propagated_pair_count": sum(propagated),
+        "mean_propagated_pair_count": (
+            sum(propagated) / cycle_count if cycle_count else 0.0
+        ),
+        "dependency_expansion_count": sum(expansion_counts),
+        "dependency_edge_count": sum(edges),
+        "mean_dependency_edge_count": sum(edges) / cycle_count if cycle_count else 0.0,
+        "pressure_propagation_count": sum(pressure),
+        "release_opportunity_propagation_count": sum(release),
+        "total_dependency_graph_time": sum(graph_times),
+        "mean_dependency_graph_time": (
+            sum(graph_times) / cycle_count if cycle_count else 0.0
+        ),
+        "repair_triggered_count": repair_triggered,
+        "repair_trigger_rate": repair_triggered / cycle_count if cycle_count else 0.0,
+        "global_repair_count": global_repairs,
+        "global_repair_rate": global_repairs / cycle_count if cycle_count else 0.0,
+        "quality_polish_triggered_count": polish_triggered,
+        "quality_polish_trigger_rate": (
+            polish_triggered / cycle_count if cycle_count else 0.0
+        ),
+        "quality_polish_improved_count": polish_improved,
+        "quality_polish_improvement_rate": (
+            polish_improved / polish_triggered if polish_triggered else 0.0
+        ),
+        "max_stability_epigraph_slack": max(epigraph_slack, default=None),
+    }
+
+
 def result_row(
     instance: str,
     case: dict,
@@ -86,6 +193,8 @@ def result_row(
         "forecast_error": case["forecast_error"],
         "forecast_error_mode": case["forecast_error_mode"],
         "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
+        "release_delay_periods": case["release_delay_periods"],
+        "initial_total_capacity": case["initial_total_capacity"],
         "configuration": configuration,
         "seed": seed,
         "time_limit": time_limit,
@@ -95,6 +204,7 @@ def result_row(
         "total_solver_time": result["total_solver_time"],
         "total_preprocessing_time": result["total_preprocessing_time"],
         **stage_summary(result),
+        **pilot_diagnostics(result),
         "realized_arrivals": result["total_realized_arrivals"],
         "planned_placement": result["total_planned_placement_quantity"],
         "planned_infeasible_quantity": result["total_planned_infeasible_quantity"],

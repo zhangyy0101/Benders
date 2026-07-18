@@ -17,16 +17,43 @@ SCENARIO_FIELDS = (
     "time_limit",
 )
 DEFAULT_METRICS = (
+    "ok",
     "total_wall_time",
     "realized_unplaced",
+    "unplaced_rate",
+    "fallback_rate",
+    "mean_cycle_first_incumbent_wall_time",
+    "final_global_repair_count",
+    "global_repair_rate",
     "stability_cost",
+    "revision_rate",
+    "mean_cycle_predicted_operations_cost",
+    "realized_distance",
+    "realized_in_out_conflict",
     "mean_realized_bays_per_ship_pod",
+    "max_realized_peak_block_utilization",
+    "mean_realized_utilization_deviation",
+    "propagation_trigger_rate",
+    "mean_propagated_pair_count",
+    "mean_dependency_edge_count",
+    "mean_dependency_graph_time",
+    "repair_trigger_rate",
+    "quality_polish_trigger_rate",
+    "quality_polish_improvement_rate",
+    "max_variables",
+    "max_binary_variables",
+    "max_constraints",
+    "mean_nodes",
+    "mean_preprocessing_time",
+    "mean_solver_time",
 )
 
 
 def _number(row: dict, field: str) -> float | None:
     try:
         value = row.get(field, "")
+        if isinstance(value, str) and value.lower() in ("true", "false"):
+            return 1.0 if value.lower() == "true" else 0.0
         return float(value) if value not in (None, "") else None
     except ValueError:
         return None
