@@ -137,6 +137,8 @@ same bounded tail for incumbent extraction and independent validation: 15% of
 the cycle limit, with a 0.5-second minimum and 3-second maximum, while very
 short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
+Each completed stage also disposes its Gurobi model explicitly so long Pilot
+batches do not accumulate native solver resources across rolling cycles.
 
 Gurobi may not expose `ObjBound` or `MIPGap` reliably for this lexicographic
 multiobjective model. `final_stage_objective_bound` and

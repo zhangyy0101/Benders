@@ -1110,6 +1110,8 @@ def solve_rolling_snapshot(
                     "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
                 ),
             })
+            model.dispose()
+            del model, variables, expressions
             break
 
         model.Params.OutputFlag = int(verbose)
@@ -1262,6 +1264,8 @@ def solve_rolling_snapshot(
                 quality_improved = previous_key is None or best_key < previous_key
         record["stage_wall_time"] = time.perf_counter() - stage_wall_start
         trace.append(record)
+        model.dispose()
+        del model, variables, expressions
         position += 1
         if not settings["progressive_repair"]:
             continue
