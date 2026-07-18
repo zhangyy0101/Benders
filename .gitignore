@@ -28,6 +28,7 @@ env/
 # Generated experiment payloads
 *_results.csv
 *.manifest.json
+pilot_*_summary.json
 experiments/**/solutions/
 experiments/**/results.json
 validation/**/results.json
