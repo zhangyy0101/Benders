@@ -1,80 +1,131 @@
-# Rolling yard bay-slot allocation
+# Rolling-horizon export-container bay allocation
 
-This repository implements a stability-aware rolling optimization framework.
-Every 24 hours it solves a 96-hour look-ahead model divided into sixteen 6-hour
-periods. Each ship has its own twelve-period (72-hour) receiving window and a
-ship-specific time-varying forecast. The model jointly reallocates the remaining
-demand of receiving ships and newly admitted ships (ETA in 72--96 hours).
-Already received containers are immutable.  Old outbound inventory is released
-only after its whole ship has left the yard.
+This repository implements a stability-aware rolling-horizon model for
+**bay-level allocation and capacity reservation**. It does not assign exact
+row/tier/stack slots, model stacking order, or optimize container relocation.
 
-All ships follow one non-overlapping lifecycle: twelve inbound periods before
-ETA, then uniform outbound periods beginning at ETA. The default aggregate rate
-is 150 boxes per ship per 6-hour period and is configurable. Outbound forecasts
-create a conflict cost whenever they overlap another ship's inbound flow in the
-same block and period, while capacity remains locked until whole-ship completion.
+Every 24 hours the framework solves a 96-hour look-ahead model with 6-hour
+periods. Each ship has a 72-hour receiving window. Already received containers
+are immutable, while the unexecuted part of the previous reservation can be
+revised together with newly admitted ships.
 
-The core integer MIP preserves bay capacity, fixed container size, no mixed
-height, same-ship/same-POD concentration, block balance, berth distance, and
-same-block simultaneous inbound/outbound conflict.
-Its lexicographic objectives minimize shortage, plan disruption, and operational
-cost in that order.
+## Information and release assumptions
 
-The outer framework contains four focused mechanisms:
+Forecast arrivals and planned vessel-completion times are external inputs to
+the optimizer. Hidden realized arrivals are used only by the execution
+simulator. In synthetic cases, forecasts and hidden realizations are separate
+reproducible draws from a public booking baseline; the forecast generator does
+not read the hidden realization. Planned release times are generated from public ship classes and
+external operation durations; they are never inferred from hidden container
+totals. Optional realized release delays are stored separately and remain
+invisible to optimization.
 
-1. inherited MIP starts from the unexecuted part of the previous plan;
-2. ship-group direct-impact detection and optional dependency propagation;
-3. capacity/conflict-guided adaptive repair and final global recovery;
-4. selective quality polishing.
+A vessel's containers and reserved capacity remain in the yard until its
+planned completion period, when the whole vessel allocation is released at
+once. Progressive box-by-box loading release is not modeled. Outbound flows are
+used only as an inbound/outbound operation-overlap proxy; they do not release
+capacity.
 
-The Full configuration derives a cancellation budget from the rolling forecast
-change. Candidate blocks are ranked by normalized demand coverage and marginal
-distance, time-specific inbound/outbound overlap, balance, bay-use, height, and
-stability effects. If shortage remains, only deficient ship-attribute pairs are
-expanded and successive repairs relax the cancellation budget before global
-recovery. Once a shortage-free plan is found, one selective quality-polishing
-solve expands two alternatives for the highest-cost half of ship-attribute
-pairs. The incumbent is retained unless the lexicographic objective improves.
+## Model
 
-Five ablation configurations are available:
+The integer MIP enforces:
 
-- `core`: global Core MIP without a start;
-- `core_start`: global Core MIP with the inherited start;
-- `core_start_impact`: inherited start plus the restricted impact region;
-- `full_direct`: direct ship-group impact, repair, recovery, and polishing;
-- `full`: the same mechanisms plus dependency propagation.
+- bay capacity by period and at the horizon boundary;
+- fixed 20/40-foot bay compatibility;
+- no mixed height type in one bay during the same period;
+- immutable realized inventory;
+- ship/POD bay-support concentration;
+- block occupancy-utilization balance;
+- transport distance and inbound/outbound overlap costs.
 
-Forecast-window diagnostics, plan-revision metrics, and realized 24-hour
-execution metrics are reported separately. Only realized execution metrics are
-summed across rolling cycles as operational outcomes. See
-`docs/dependency_impact_design.md` for the dependency and accounting definitions.
+The lexicographic objectives minimize predicted shortage, plan stability cost,
+and normalized operation cost. All stages reuse one set of scales computed from
+the unrestricted snapshot, so local and global incumbent objectives are
+comparable.
 
-Forecasts are exogenous.  Synthetic tests keep a hidden realized demand and
-generate correlated forecasts that improve as ETA approaches; the optimizer
-never sees the hidden demand.
+Stability is calculated per ship-group. A group's cancellation can be explained
+only by its own mandatory demand reduction and its own predicted shortage.
+Cancellation from one group cannot be offset by another group's shortage.
+Actual inventory contributes to existing bay support but never to the
+cancellable plan baseline.
 
-Run a rolling case:
+## Dependency-aware impact algorithm
+
+The `full` configuration:
+
+1. identifies directly changed ship-group pairs;
+2. computes time-dependent compatible residual capacity and height conflicts;
+3. builds a resource-competition graph;
+4. propagates both capacity pressure and release opportunities;
+5. solves the resulting impact region with an inherited MIP start;
+6. expands shortage pairs and their strongest dependency neighbors;
+7. falls back to the unrestricted compatible-bay model if required;
+8. selectively polishes a shortage-free incumbent.
+
+Historical pairs whose demand disappears remain dependency nodes, although no
+decision variables are created for their zero demand. Their released historical
+blocks can therefore be reconsidered by affected positive-demand pairs.
+
+Available configurations are:
+
+- `core`: unrestricted MIP without a start;
+- `core_start`: unrestricted MIP with inherited MIP start;
+- `core_start_impact`: direct impact region without propagation or repair;
+- `full_direct`: direct impact, repair, global recovery, and polishing;
+- `full`: identical to `full_direct`, plus dependency propagation.
+
+The time limit is a per-cycle wall-clock deadline. Impact detection, score and
+graph construction, model construction, Gurobi runtime, extraction, and
+validation are all reported and included in elapsed time.
+
+## Closed-loop evaluation
+
+Execution first tries the period-specific planned bay and then uses a
+deterministic fallback ranking based on planned block, existing ship/POD
+support, realized conflict, distance, free capacity, and remaining reservation.
+Both planned and fallback placement use the same capacity, size, height,
+release, and reservation feasibility check.
+
+Results distinguish:
+
+- overlapping 96-hour predicted diagnostics;
+- plan-revision metrics at each reoptimization;
+- non-overlapping realized 24-hour execution metrics.
+
+Realized outputs include fallback and unplaced rates, distance, operation
+overlap, bay concentration, peak block utilization, and utilization deviation.
+Occupancy balance refers to inventory utilization—not equipment workload.
+
+## Running
+
+Run one small case:
 
 ```bash
-python main.py --size small --time 20 --forecast-error 0.1
+python main.py --size small --configuration full --time 20 --seed 0
 ```
 
-Run one ablation or a diagnostic repair case:
+Select an uncertainty mode or realized release delay:
 
 ```bash
-python main.py --configuration core_start_impact
-python main.py --configuration full --pressure nearby
-python main.py --configuration full --pressure global
+python main.py --forecast-error-mode timing_shift --release-delay-periods 1
 ```
 
-Run controlled scale/error experiments:
+Run controlled experiment combinations:
 
 ```bash
-python run_experiments.py --sizes small medium large --errors 0 0.1 0.2
+python run_experiments.py --sizes small medium --errors 0.1 0.2 \
+  --forecast-error-modes multiplicative timing_shift booking_add_cancel \
+  --initial-utilizations 0.25 0.55 0.70 \
+  --configurations core_start full_direct full --seeds 0 1 2
 ```
 
-Run the component comparison and both repair diagnostics:
+The `xlarge` preset is an interface for later formal experiments and is not part
+of default smoke testing. Experiment summaries and paired differences can be
+generated with:
 
 ```bash
-python run_experiments.py --sizes small --errors 0.1 --configurations core core_start core_start_impact full_direct full --pressure-levels nearby global
+python analysis/summarize_experiments.py rolling_results.csv
 ```
+
+Detailed assumptions and algorithm definitions are in
+`docs/model_assumptions.md` and `docs/dependency_impact_design.md`.

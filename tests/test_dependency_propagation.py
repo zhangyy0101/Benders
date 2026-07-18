@@ -67,6 +67,8 @@ class DependencyPropagationTest(unittest.TestCase):
                 for period in [0, 1]
             },
             "previous_reservation": {},
+            "previous_din": {},
+            "actual_inventory": {},
             "bay_block": {},
         }
         eligible = {
@@ -79,6 +81,10 @@ class DependencyPropagationTest(unittest.TestCase):
             (ship, group, block): {
                 "score": 1.0 if block in eligible[ship, group] else 0.0,
                 "compatible_capacity": 20 if block in eligible[ship, group] else 0,
+                "capacity_by_period": {
+                    period: 20 if block in eligible[ship, group] else 0
+                    for period in snapshot["periods"]
+                },
             }
             for ship, group in pairs
             for block in snapshot["blocks"]

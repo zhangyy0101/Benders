@@ -9,7 +9,12 @@ def exact_execution_solution(case, state):
     for (j, g, absolute), q in case["true_flow"].items():
         if not (now <= absolute < now + case["execution_periods"]):
             continue
-        bay = next(i for i in case["bays"] if case["bay_size"][i] == case["group_attrs"][g]["size"])
+        candidates = [
+            bay for bay in case["bays"]
+            if case["bay_size"][bay] == case["group_attrs"][g]["size"]
+        ]
+        height_index = 0 if case["group_attrs"][g]["height"] == "STD" else 1
+        bay = candidates[height_index]
         reservation[bay, j, g] = reservation.get((bay, j, g), 0) + q
         din[bay, j, g, absolute - now] = q
     return {"reservation": reservation, "din": din}

@@ -34,8 +34,19 @@ from config import (
     STABILITY_CANCEL_WEIGHT,
     STABILITY_CHANGE_RATIO,
     STABILITY_NEW_BAY_WEIGHT,
+    TIME_CAPACITY_WEIGHT,
+    MINIMUM_PERIOD_CAPACITY_WEIGHT,
+    WALL_TIME_TOLERANCE_SECONDS,
 )
-from rolling_model import build_rolling_model, compatible, extract_rolling_solution, ship_present_at
+from rolling_model import (
+    build_rolling_model,
+    compatible,
+    compute_objective_scales,
+    existing_blocks,
+    existing_support,
+    extract_rolling_solution,
+    ship_present_at,
+)
 
 Pair: TypeAlias = tuple[str, str]
 INF = 10**9
@@ -86,6 +97,26 @@ def _direct_impact_pairs(d: dict, threshold: float) -> tuple[set[Pair], dict[Pai
     return direct, reasons
 
 
+def _impact_directions(d: dict) -> dict[Pair, str]:
+    """Classify visible demand changes without using hidden realization data."""
+    old = _pair_totals(d["previous_reservation"])
+    current = d["remaining_demand"]
+    directions: dict[Pair, str] = {}
+    for pair in sorted(set(old) | set(current)):
+        previous, demand = old.get(pair, 0), current.get(pair, 0)
+        if previous <= 0 < demand:
+            directions[pair] = "new"
+        elif previous > 0 and demand <= 0:
+            directions[pair] = "disappear"
+        elif demand > previous:
+            directions[pair] = "increase"
+        elif demand < previous:
+            directions[pair] = "decrease"
+        else:
+            directions[pair] = "unchanged"
+    return directions
+
+
 def _dynamic_stability_budget(d: dict) -> dict:
     old = _pair_totals(d["previous_reservation"])
     current = d["remaining_demand"]
@@ -100,98 +131,172 @@ def _dynamic_stability_budget(d: dict) -> dict:
         "mandatory_reduction": mandatory,
         "prediction_change": prediction_change,
         "previous_reservation": sum(old.values()),
+        "pair_allowance_basis": {
+            pair: abs(current.get(pair, 0) - old.get(pair, 0))
+            for pair in sorted(keys)
+            if abs(current.get(pair, 0) - old.get(pair, 0)) > 0
+        },
     }
+
+
+def _dependency_pairs(d: dict) -> set[Pair]:
+    return set(d["remaining_demand"]) | {
+        (ship, group)
+        for (_bay, ship, group), quantity in d["previous_reservation"].items()
+        if quantity > 0
+    }
+
+
+def residual_capacity_by_bay_period(d: dict) -> dict[tuple[str, int], float]:
+    """Return base residual capacity before any new planning decisions."""
+    residual: dict[tuple[str, int], float] = {}
+    for bay in d["bays"]:
+        for period in d["periods"]:
+            locked = sum(
+                quantity
+                for (i, old_ship), quantity in d["locked_inventory"].items()
+                if i == bay
+                and d["locked_release_local"].get((i, old_ship), INF) > period
+            )
+            actual = sum(
+                quantity
+                for (i, ship, _group), quantity in d["actual_inventory"].items()
+                if i == bay and ship_present_at(d, ship, period)
+            )
+            residual[bay, period] = max(0.0, d["capacity"][bay] - locked - actual)
+    return residual
+
+
+def _base_heights(d: dict, bay: str, period: int) -> set[str]:
+    attrs = d["group_attrs"]
+    return {
+        height
+        for (i, old_ship), height in d["locked_height"].items()
+        if i == bay and d["locked_release_local"].get((i, old_ship), INF) > period
+    } | {
+        attrs[group]["height"]
+        for (i, ship, group), quantity in d["actual_inventory"].items()
+        if i == bay and quantity > 0 and ship_present_at(d, ship, period)
+    }
+
+
+def _pair_time_profile(d: dict, pair: Pair) -> tuple[dict[int, float], dict[int, float]]:
+    """Return visible quantity profile and normalized temporal weights."""
+    ship, group = pair
+    profile = {
+        period: float(d["forecast_arrivals"].get((ship, group, period), 0))
+        for period in d["periods"]
+    }
+    total = sum(profile.values())
+    if total <= 0:
+        profile = {
+            period: float(sum(
+                quantity
+                for (_bay, j, g, n), quantity in d.get("previous_din", {}).items()
+                if j == ship and g == group and n == period
+            ))
+            for period in d["periods"]
+        }
+        total = sum(profile.values())
+    if total <= 0:
+        eligible_periods = [
+            period for period in d["periods"]
+            if period >= d.get("execution_periods", 0)
+        ] or list(d["periods"])
+        profile = {period: float(period in eligible_periods) for period in d["periods"]}
+        total = float(len(eligible_periods))
+    weights = {period: profile[period] / max(1.0, total) for period in d["periods"]}
+    return profile, weights
 
 
 def _block_scores(d: dict) -> dict:
-    """Rank blocks with normalized, objective-aligned marginal features."""
-    scores = {}
+    """Rank blocks using arrival-weighted residual capacity and height feasibility."""
+    scores: dict = {}
     periods, attrs = d["periods"], d["group_attrs"]
-    last = periods[-1]
+    residual = residual_capacity_by_bay_period(d)
     max_dist = max(d["distance"].values(), default=1)
     max_out = max(d["forecast_outbound"].values(), default=1)
-    old_blocks = {
-        (j, g): {
-            d["bay_block"][i]
-            for (i, jj, gg), q in d["previous_reservation"].items()
-            if jj == j and gg == g and q > 0
-        }
-        for j, g in d["remaining_demand"]
+    block_capacity = {
+        block: sum(d["capacity"][bay] for bay in d["bays_in_block"][block])
+        for block in d["blocks"]
     }
-    base_load = {}
-    for k in d["blocks"]:
-        for n in periods:
-            locked = sum(
-                q
-                for (i, old), q in d["locked_inventory"].items()
-                if d["bay_block"][i] == k and d["locked_release_local"].get((i, old), INF) > n
+    base_utilization = {
+        (block, period): 1.0 - sum(
+            residual[bay, period] for bay in d["bays_in_block"][block]
+        ) / max(1, block_capacity[block])
+        for block in d["blocks"]
+        for period in periods
+    }
+    old_totals = _pair_totals(d["previous_reservation"])
+
+    for ship, group in sorted(_dependency_pairs(d)):
+        pair = (ship, group)
+        height = attrs[group]["height"]
+        current_demand = d["remaining_demand"].get(pair, 0)
+        released_quantity = max(0, old_totals.get(pair, 0) - current_demand)
+        demand_basis = max(1, current_demand or released_quantity)
+        profile, weights = _pair_time_profile(d, pair)
+        support_blocks = existing_blocks(d, ship, group)
+        for block in d["blocks"]:
+            capacity_by_period: dict[int, float] = {}
+            conflict_by_period: dict[int, int] = {}
+            compatible_bays = [
+                bay for bay in d["bays_in_block"][block] if compatible(d, bay, group)
+            ]
+            for period in periods:
+                capacity = 0.0
+                conflicts = 0
+                for bay in compatible_bays:
+                    fixed_heights = _base_heights(d, bay, period)
+                    if fixed_heights and height not in fixed_heights:
+                        conflicts += 1
+                    else:
+                        capacity += residual[bay, period]
+                capacity_by_period[period] = capacity
+                conflict_by_period[period] = conflicts
+            effective_capacity = sum(
+                weights[period] * capacity_by_period[period] for period in periods
             )
-            actual = sum(
-                q
-                for (i, j, _g), q in d["actual_inventory"].items()
-                if d["bay_block"][i] == k and ship_present_at(d, j, n)
+            arrival_periods = [period for period in periods if profile[period] > 0]
+            minimum_capacity = min(
+                (capacity_by_period[period] for period in arrival_periods),
+                default=0.0,
             )
-            base_load[k, n] = locked + actual
-    for j, g in sorted(d["remaining_demand"]):
-        height = attrs[g]["height"]
-        demand = d["remaining_demand"][j, g]
-        profile = {n: d["forecast_arrivals"].get((j, g, n), 0) for n in periods}
-        for k in d["blocks"]:
-            capacity, height_conflicts, bay_free = 0, 0, []
-            for i in d["bays_in_block"][k]:
-                if not compatible(d, i, g):
-                    continue
-                locked = sum(
-                    q
-                    for (ii, old), q in d["locked_inventory"].items()
-                    if ii == i and d["locked_release_local"].get((ii, old), INF) > last
-                )
-                actual = sum(
-                    q
-                    for (ii, ship, _g), q in d["actual_inventory"].items()
-                    if ii == i and ship_present_at(d, ship, last)
-                )
-                fixed = {
-                    h
-                    for (ii, old), h in d["locked_height"].items()
-                    if ii == i and d["locked_release_local"].get((ii, old), INF) > last
-                } | {
-                    attrs[gg]["height"]
-                    for (ii, ship, gg), q in d["actual_inventory"].items()
-                    if ii == i and q > 0 and ship_present_at(d, ship, last)
-                }
-                if fixed and height not in fixed:
-                    height_conflicts += 1
-                    continue
-                free = max(0, d["capacity"][i] - locked - actual)
-                capacity += free
-                if free:
-                    bay_free.append(free)
-            left, estimated_bays = demand, 0
-            for free in sorted(bay_free, reverse=True):
-                if left <= 0:
-                    break
-                left -= free
-                estimated_bays += 1
-            if left > 0:
-                estimated_bays += math.ceil(left / max(1, max(bay_free, default=1)))
-            capacity_ratio = min(1.0, capacity / max(1, demand))
-            distance = d["distance"][j, k] / max_dist
+            weighted_ratio = min(1.0, effective_capacity / demand_basis)
+            minimum_ratio = min(1.0, minimum_capacity / demand_basis)
+            capacity_ratio = (
+                TIME_CAPACITY_WEIGHT * weighted_ratio
+                + MINIMUM_PERIOD_CAPACITY_WEIGHT * minimum_ratio
+            )
+            weighted_height_conflict = sum(
+                weights[period]
+                * conflict_by_period[period]
+                / max(1, len(compatible_bays))
+                for period in periods
+            )
+            distance = d["distance"].get((ship, block), max_dist) / max_dist
             overlap = sum(
-                profile[n] * d["forecast_outbound"].get((k, n), 0) for n in periods
-            ) / (max(1, demand) * max_out)
+                profile[period] * d["forecast_outbound"].get((block, period), 0)
+                for period in periods
+            ) / (max(1, sum(profile.values())) * max_out)
             balance_delta = 0.0
-            for n in periods:
-                loads = [base_load[kk, n] for kk in d["blocks"]]
-                average = sum(loads) / len(loads)
-                before = sum(abs(value - average) for value in loads)
-                cumulative = sum(profile[t] for t in periods if t <= n)
-                loads[d["blocks"].index(k)] += cumulative
-                new_average = sum(loads) / len(loads)
-                balance_delta += sum(abs(value - new_average) for value in loads) - before
-            balance_delta /= max(1, demand * len(periods))
+            for period in periods:
+                values = [base_utilization[k, period] for k in d["blocks"]]
+                before_mean = sum(values) / max(1, len(values))
+                before = sum(abs(value - before_mean) for value in values)
+                position = d["blocks"].index(block)
+                values[position] += sum(
+                    profile[t] for t in periods if t <= period
+                ) / max(1, block_capacity[block])
+                after_mean = sum(values) / max(1, len(values))
+                balance_delta += sum(abs(value - after_mean) for value in values) - before
+            balance_delta /= max(1, len(periods))
+            estimated_bays = math.ceil(demand_basis / max(1, max(
+                (residual[bay, period] for bay in compatible_bays for period in periods),
+                default=1,
+            )))
             bay_penalty = min(1.0, estimated_bays / 3)
-            stability_loss = int(bool(old_blocks[j, g]) and k not in old_blocks[j, g])
+            stability_loss = int(bool(support_blocks) and block not in support_blocks)
             score = (
                 IMPACT_SCORE_CAPACITY_WEIGHT * capacity_ratio
                 - IMPACT_SCORE_DISTANCE_WEIGHT * distance
@@ -199,17 +304,24 @@ def _block_scores(d: dict) -> dict:
                 - IMPACT_SCORE_BALANCE_WEIGHT * balance_delta
                 - IMPACT_SCORE_BAY_WEIGHT * bay_penalty
                 - IMPACT_SCORE_STABILITY_WEIGHT * stability_loss
+                - weighted_height_conflict
             )
-            scores[j, g, k] = {
+            scores[ship, group, block] = {
                 "score": score,
-                "compatible_capacity": capacity,
+                "compatible_capacity": effective_capacity,
+                "effective_capacity": effective_capacity,
+                "minimum_arrival_period_capacity": minimum_capacity,
+                "capacity_by_period": capacity_by_period,
+                "arrival_weight": weights,
                 "capacity_ratio": capacity_ratio,
                 "distance_normalized": distance,
                 "outbound_overlap": overlap,
                 "balance_delta": balance_delta,
                 "estimated_bays": estimated_bays,
-                "height_conflicts": height_conflicts,
+                "height_conflicts": sum(conflict_by_period.values()),
+                "time_weighted_height_conflict": weighted_height_conflict,
                 "stability_loss": stability_loss,
+                "released_quantity": released_quantity,
             }
     return scores
 
@@ -217,26 +329,36 @@ def _block_scores(d: dict) -> dict:
 def _pair_resource_features(d: dict, scores: dict) -> dict[Pair, dict]:
     count = max(2, math.ceil(len(d["blocks"]) * DEPENDENCY_CANDIDATE_BLOCK_RATIO))
     features = {}
-    for pair in sorted(d["remaining_demand"]):
+    old_totals = _pair_totals(d["previous_reservation"])
+    for pair in sorted(_dependency_pairs(d)):
         j, g = pair
         ranked = sorted(d["blocks"], key=lambda k: (-scores[j, g, k]["score"], k))
-        old_blocks = {
-            d["bay_block"][i]
-            for (i, jj, gg), q in d["previous_reservation"].items()
-            if jj == j and gg == g and q > 0
+        old_blocks = existing_blocks(d, j, g)
+        eligible = {
+            k for k in d["blocks"]
+            if scores[j, g, k]["compatible_capacity"] > 0 or k in old_blocks
         }
-        eligible = {k for k in d["blocks"] if scores[j, g, k]["compatible_capacity"] > 0}
-        candidates = (set(ranked[:count]) | old_blocks) & eligible
+        demand = d["remaining_demand"].get(pair, 0)
+        candidates = (
+            old_blocks if demand <= 0 else set(ranked[:count]) | old_blocks
+        ) & eligible
+        profile, weights = _pair_time_profile(d, pair)
         features[pair] = {
-            "demand": d["remaining_demand"][pair],
+            "demand": demand,
+            "released_quantity": max(0, old_totals.get(pair, 0) - demand),
             "size": d["group_attrs"][g]["size"],
             "height": d["group_attrs"][g]["height"],
-            "arrival_profile": tuple(d["forecast_arrivals"].get((j, g, n), 0) for n in d["periods"]),
+            "arrival_profile": tuple(profile[n] for n in d["periods"]),
+            "arrival_weight": tuple(weights[n] for n in d["periods"]),
             "old_blocks": old_blocks,
             "eligible_blocks": eligible,
             "candidate_blocks": candidates,
             "compatible_capacity_by_block": {
                 k: scores[j, g, k]["compatible_capacity"] for k in d["blocks"]
+            },
+            "compatible_capacity_by_block_period": {
+                (k, n): scores[j, g, k]["capacity_by_period"][n]
+                for k in d["blocks"] for n in d["periods"]
             },
         }
     return features
@@ -273,10 +395,19 @@ def _build_dependency_graph(d: dict, scores: dict) -> tuple[dict, list[dict], di
             candidate_overlap = _jaccard(a["candidate_blocks"], b["candidate_blocks"])
             temporal_overlap = _cosine(a["arrival_profile"], b["arrival_profile"])
             common_capacity = sum(
-                min(a["compatible_capacity_by_block"][k], b["compatible_capacity_by_block"][k])
+                min(a["arrival_weight"][index], b["arrival_weight"][index])
+                * min(
+                    a["compatible_capacity_by_block_period"][k, period],
+                    b["compatible_capacity_by_block_period"][k, period],
+                )
                 for k in common
+                for index, period in enumerate(d["periods"])
             )
-            capacity_pressure = min(1.0, (a["demand"] + b["demand"]) / max(1, common_capacity))
+            resource_quantity = (
+                a["demand"] + a["released_quantity"]
+                + b["demand"] + b["released_quantity"]
+            )
+            capacity_pressure = min(1.0, resource_quantity / max(1, common_capacity))
             historical_overlap = _jaccard(a["old_blocks"], b["old_blocks"])
             fragmentation = 1.0 if a["height"] != b["height"] else .8
             dependency = fragmentation * (
@@ -296,6 +427,7 @@ def _build_dependency_graph(d: dict, scores: dict) -> tuple[dict, list[dict], di
                 "candidate_overlap": candidate_overlap,
                 "temporal_overlap": temporal_overlap,
                 "capacity_pressure": capacity_pressure,
+                "common_time_weighted_capacity": common_capacity,
                 "historical_overlap": historical_overlap,
                 "fragmentation_factor": fragmentation,
             })
@@ -309,6 +441,7 @@ def _propagate_impact_pairs(
     direct_pairs: set[Pair],
     dependency_graph: dict,
     *,
+    impact_direction: dict[Pair, str] | None = None,
     edge_threshold: float = DEPENDENCY_EDGE_THRESHOLD,
     path_threshold: float = DEPENDENCY_PATH_THRESHOLD,
     max_depth: int = DEPENDENCY_MAX_DEPTH,
@@ -320,6 +453,12 @@ def _propagate_impact_pairs(
     depth = {pair: 0 for pair in sorted(direct_pairs)}
     parent = {pair: None for pair in sorted(direct_pairs)}
     incoming_edge = {pair: 1.0 for pair in sorted(direct_pairs)}
+    propagation_type = {
+        pair: "release_opportunity"
+        if (impact_direction or {}).get(pair) in ("decrease", "disappear")
+        else "pressure"
+        for pair in sorted(direct_pairs)
+    }
     queue = deque(sorted(direct_pairs))
     while queue:
         current = queue.popleft()
@@ -336,6 +475,7 @@ def _propagate_impact_pairs(
                 depth[neighbor] = candidate_depth
                 parent[neighbor] = current
                 incoming_edge[neighbor] = edge_score
+                propagation_type[neighbor] = propagation_type[current]
                 queue.append(neighbor)
     affected = set(best)
     return {
@@ -346,6 +486,7 @@ def _propagate_impact_pairs(
         "propagation_depth": depth,
         "parent_pair": parent,
         "edge_score": incoming_edge,
+        "propagation_type": propagation_type,
     }
 
 
@@ -356,17 +497,15 @@ def _allowed(
     propagated_pairs: set[Pair],
     scores: dict,
     repair_pairs: set[Pair] | None = None,
+    release_opportunity_blocks: dict[Pair, set[str]] | None = None,
 ) -> dict:
     result = {}
     repair_pairs = set(repair_pairs or ())
+    release_opportunity_blocks = release_opportunity_blocks or {}
     affected = direct_pairs | propagated_pairs
     for pair in sorted(d["remaining_demand"]):
         j, g = pair
-        old_blocks = {
-            d["bay_block"][i]
-            for (i, jj, gg), q in d["previous_reservation"].items()
-            if jj == j and gg == g and q > 0
-        }
+        old_blocks = existing_blocks(d, j, g)
         ranked = sorted(d["blocks"], key=lambda k: (-scores[j, g, k]["score"], k))
         batch = max(1, math.ceil(len(d["blocks"]) * ADAPTIVE_BLOCK_BATCH_RATIO))
         if level == 3:
@@ -377,7 +516,11 @@ def _allowed(
             selected = old_blocks | set(ranked[:min(len(ranked), base + extra)])
         elif pair in propagated_pairs:
             extra = (batch * level) if pair in repair_pairs else 0
-            selected = old_blocks | set(ranked[:min(len(ranked), 1 + extra)])
+            selected = (
+                old_blocks
+                | release_opportunity_blocks.get(pair, set())
+                | set(ranked[:min(len(ranked), 1 + extra)])
+            )
         elif old_blocks:
             selected = old_blocks
         else:
@@ -397,8 +540,16 @@ def _quality_polish_allowed(
     propagated_pairs: set[Pair],
     scores: dict,
     solution: dict,
+    release_opportunity_blocks: dict[Pair, set[str]] | None = None,
 ) -> tuple[dict, dict]:
-    allowed = _allowed(d, 0, direct_pairs, propagated_pairs, scores)
+    allowed = _allowed(
+        d,
+        0,
+        direct_pairs,
+        propagated_pairs,
+        scores,
+        release_opportunity_blocks=release_opportunity_blocks,
+    )
     reserve, din, attrs = solution["reservation"], solution["din"], d["group_attrs"]
     max_dist = max(d["distance"].values(), default=1)
     max_out = max(d["forecast_outbound"].values(), default=1)
@@ -418,10 +569,20 @@ def _quality_polish_allowed(
     }
     average = sum(final_load.values()) / max(1, len(final_load))
     contribution = {}
+    support_baseline = existing_support(d, period=0)
     for j, g in sorted(affected_pairs & set(d["remaining_demand"])):
         demand = max(1, d["remaining_demand"][j, g])
         used = [i for (i, jj, gg), q in reserve.items() if jj == j and gg == g and q > 1e-6]
-        support = len({(attrs[g]["pod"], i) for i in used})
+        pod = attrs[g]["pod"]
+        support_bays = {
+            bay for ship, existing_pod, bay in support_baseline
+            if ship == j and existing_pod == pod
+        } | {
+            bay
+            for (bay, ship, group), quantity in reserve.items()
+            if ship == j and attrs[group]["pod"] == pod and quantity > 1e-6
+        }
+        support = len(support_bays)
         distance = sum(
             d["distance"][j, d["bay_block"][i]] * q
             for (i, jj, gg, _n), q in din.items() if jj == j and gg == g
@@ -492,40 +653,65 @@ def _submit_start(variables: dict, d: dict, incumbent: dict | None = None, enabl
 
 
 def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> dict:
-    """Compute observable plan revisions without auxiliary-variable ambiguity."""
+    """Compute pair-level plan revisions without cross-pair shortage offsets."""
     old = d["previous_reservation"]
-    cancellation = sum(max(0, q - reservation.get(key, 0)) for key, q in old.items())
     old_totals, current_totals = _pair_totals(old), d["remaining_demand"]
     pairs = set(old_totals) | set(current_totals)
-    mandatory = sum(max(0, old_totals.get(pair, 0) - current_totals.get(pair, 0)) for pair in pairs)
-    total_shortage = sum(shortage.values())
-    discretionary = max(0, cancellation - mandatory - total_shortage)
-    block_reallocation = 0.0
+    pair_cancellation: dict[Pair, float] = {}
+    pair_discretionary: dict[Pair, float] = {}
+    pair_reallocation: dict[Pair, float] = {}
+    mandatory_by_pair: dict[Pair, float] = {}
     for j, g in pairs:
+        pair = (j, g)
+        cancellation = sum(
+            max(0, quantity - reservation.get((bay, j, g), 0))
+            for (bay, ship, group), quantity in old.items()
+            if ship == j and group == g
+        )
+        mandatory = max(0, old_totals.get(pair, 0) - current_totals.get(pair, 0))
+        pair_shortage = sum(
+            quantity
+            for (ship, group, _period), quantity in shortage.items()
+            if ship == j and group == g
+        )
         block_cancel = 0.0
         for k in d["blocks"]:
             old_block = _old_block_amount_for_plan(d, old, j, g, k)
             current_block = _old_block_amount_for_plan(d, reservation, j, g, k)
             block_cancel += max(0, old_block - current_block)
-        pair_shortage = sum(q for (jj, gg, _n), q in shortage.items() if jj == j and gg == g)
-        pair_mandatory = max(0, old_totals.get((j, g), 0) - current_totals.get((j, g), 0))
-        block_reallocation += max(0, block_cancel - pair_mandatory - pair_shortage)
+        pair_cancellation[pair] = cancellation
+        mandatory_by_pair[pair] = mandatory
+        pair_discretionary[pair] = max(0, cancellation - mandatory - pair_shortage)
+        pair_reallocation[pair] = max(0, block_cancel - mandatory - pair_shortage)
+    cancellation_total = sum(pair_cancellation.values())
+    mandatory_total = sum(mandatory_by_pair.values())
+    discretionary_total = sum(pair_discretionary.values())
+    block_reallocation = sum(pair_reallocation.values())
     attrs = d["group_attrs"]
-    old_support = {(j, attrs[g]["pod"], i) for (i, j, g), q in old.items() if q > 1e-6}
+    old_support = existing_support(d, period=0)
     support = {(j, attrs[g]["pod"], i) for (i, j, g), q in reservation.items() if q > 1e-6}
     new_bays = len(support - old_support)
     stability_cost = (
-        STABILITY_CANCEL_WEIGHT * cancellation
+        STABILITY_CANCEL_WEIGHT * cancellation_total
         + STABILITY_NEW_BAY_WEIGHT * new_bays
         + STABILITY_BLOCK_REALLOCATION_WEIGHT * block_reallocation
     )
     return {
-        "cancellation_quantity": float(cancellation),
-        "mandatory_reduction": float(mandatory),
-        "discretionary_cancel": float(discretionary),
+        "cancellation_quantity": float(cancellation_total),
+        "mandatory_reduction": float(mandatory_total),
+        "discretionary_cancel": float(discretionary_total),
         "new_bay_count": float(new_bays),
         "block_reallocation_quantity": float(block_reallocation),
         "stability_cost": float(stability_cost),
+        "pair_discretionary_cancel": {
+            pair: float(value) for pair, value in sorted(pair_discretionary.items()) if value > 1e-9
+        },
+        "pair_block_reallocation": {
+            pair: float(value) for pair, value in sorted(pair_reallocation.items()) if value > 1e-9
+        },
+        "pair_cancellation": {
+            pair: float(value) for pair, value in sorted(pair_cancellation.items()) if value > 1e-9
+        },
     }
 
 
@@ -576,9 +762,31 @@ def validate_rolling_solution(d: dict, solution: dict, tol: float = 1e-6) -> dic
     for value in din.values():
         record("flow_integrality", abs(value - round(value)))
     canonical = canonical_stability_metrics(d, reserve, shortage)
-    for name, expected in canonical.items():
+    for name in (
+        "cancellation_quantity",
+        "mandatory_reduction",
+        "discretionary_cancel",
+        "new_bay_count",
+        "block_reallocation_quantity",
+        "stability_cost",
+    ):
+        expected = canonical[name]
         if name in solution.get("components", {}):
             record(f"{name}_accounting", abs(solution["components"][name] - expected))
+    auxiliary_pairs = {
+        "pair_cancellation": "pair_cancellation",
+        "pair_discretionary_cancel": "pair_discretionary_cancel",
+        "block_reallocation": "pair_block_reallocation",
+    }
+    stability_pairs = set(_dependency_pairs(d))
+    for variable_name, canonical_name in auxiliary_pairs.items():
+        actual_values = solution.get(variable_name, {})
+        expected_values = canonical[canonical_name]
+        for pair in stability_pairs:
+            record(
+                f"{variable_name}_accounting",
+                abs(actual_values.get(pair, 0) - expected_values.get(pair, 0)),
+            )
     maximum = max(violations.values(), default=0)
     return {"feasible": maximum <= tol, "max_violation": maximum, "violations": violations}
 
@@ -595,84 +803,243 @@ def solve_rolling_snapshot(
     verbose: bool = False,
 ) -> dict:
     settings = configuration_features(configuration)
-    started = time.perf_counter()
-    direct_pairs, direct_reasons = _direct_impact_pairs(d, impact_threshold)
-    scores = _block_scores(d)
-    dependency_graph, dependency_edges = {}, []
-    if settings["dependency_propagation"]:
+    wall_start = time.perf_counter()
+    deadline = wall_start + max(0.0, time_limit)
+    # Leave a bounded tail for incumbent extraction and the mandatory independent
+    # validation.  The reserve is part of the common wall-clock budget, not extra
+    # time granted to any configuration.
+    postprocessing_reserve = min(
+        WALL_TIME_TOLERANCE_SECONDS,
+        max(.01, .10 * max(0.0, time_limit)),
+    )
+    optimization_deadline = max(wall_start, deadline - postprocessing_reserve)
+    timing = {
+        "direct_impact_time": 0.0,
+        "objective_scale_time": 0.0,
+        "block_score_time": 0.0,
+        "dependency_graph_time": 0.0,
+        "propagation_time": 0.0,
+        "model_build_time": 0.0,
+        "solver_time": 0.0,
+        "solution_extract_time": 0.0,
+        "validation_time": 0.0,
+    }
+
+    direct_pairs: set[Pair] = set()
+    direct_reasons: dict[Pair, list[str]] = {}
+    impact_direction: dict[Pair, str] = {}
+    if settings["impact_region"] and time.perf_counter() < deadline:
+        started = time.perf_counter()
+        direct_pairs, direct_reasons = _direct_impact_pairs(d, impact_threshold)
+        impact_direction = _impact_directions(d)
+        timing["direct_impact_time"] = time.perf_counter() - started
+
+    objective_scales: dict[str, float] = {}
+    if time.perf_counter() < deadline:
+        started = time.perf_counter()
+        objective_scales = compute_objective_scales(d)
+        timing["objective_scale_time"] = time.perf_counter() - started
+
+    scores: dict = {}
+    if settings["impact_region"] and time.perf_counter() < deadline:
+        started = time.perf_counter()
+        scores = _block_scores(d)
+        timing["block_score_time"] = time.perf_counter() - started
+
+    dependency_graph: dict = {}
+    dependency_edges: list[dict] = []
+    if settings["dependency_propagation"] and time.perf_counter() < deadline:
+        started = time.perf_counter()
         dependency_graph, dependency_edges, _resource = _build_dependency_graph(d, scores)
-        propagation = _propagate_impact_pairs(direct_pairs, dependency_graph)
+        timing["dependency_graph_time"] = time.perf_counter() - started
+
+    started = time.perf_counter()
+    if settings["dependency_propagation"] and time.perf_counter() < deadline:
+        propagation = _propagate_impact_pairs(
+            direct_pairs,
+            dependency_graph,
+            impact_direction=impact_direction,
+        )
     else:
-        propagation = _propagate_impact_pairs(direct_pairs, {}, max_depth=0)
+        propagation = _propagate_impact_pairs(
+            direct_pairs,
+            {},
+            impact_direction=impact_direction,
+            max_depth=0,
+        )
+    timing["propagation_time"] = time.perf_counter() - started
+
     propagated_pairs = set(propagation["propagated_pairs"])
     affected_pairs = set(propagation["affected_pairs"])
     diagnostic_path_scores = dict(propagation["best_path_score"])
     diagnostic_depths = dict(propagation["propagation_depth"])
+    propagation_types = dict(propagation["propagation_type"])
+    release_opportunity_blocks: dict[Pair, set[str]] = {}
+    for pair in sorted(propagated_pairs):
+        if propagation_types.get(pair) != "release_opportunity":
+            continue
+        ancestor = pair
+        while propagation["parent_pair"].get(ancestor) is not None:
+            ancestor = propagation["parent_pair"][ancestor]
+        release_opportunity_blocks[pair] = existing_blocks(d, ancestor[0], ancestor[1])
+
     budget_info = _dynamic_stability_budget(d)
-    incumbent = None;best_key = None;trace = [];solver_spent = 0.0
-    repair_expansions = 0;quality_triggered = False;quality_improved = False
+    preprocessing_time = sum(
+        timing[name]
+        for name in (
+            "direct_impact_time",
+            "objective_scale_time",
+            "block_score_time",
+            "dependency_graph_time",
+            "propagation_time",
+        )
+    )
+    preprocessing_timed_out = (
+        time.perf_counter() >= optimization_deadline
+        or not objective_scales
+        or (settings["impact_region"] and not scores)
+    )
+    incumbent = None
+    best_key = None
+    trace: list[dict] = []
+    repair_expansions = 0
+    quality_triggered = False
+    quality_improved = False
     repair_pairs: set[Pair] = set()
-    if not settings["impact_region"]:
-        stages = [(3, "global_core", None)]
-    else:
-        stages = [(0, "impact_region", None)]
+    stages = (
+        [(3, "global_core", None)]
+        if not settings["impact_region"]
+        else [(0, "impact_region", None)]
+    )
     position = 0
-    while position < len(stages):
-        level, name, explicit_allowed = stages[position]
-        remaining = max(0.0, time_limit - solver_spent)
-        if remaining <= .1:
+
+    while position < len(stages) and not preprocessing_timed_out:
+        stage_wall_start = time.perf_counter()
+        remaining_wall = optimization_deadline - stage_wall_start
+        if remaining_wall <= .01:
             break
+        level, name, explicit_allowed = stages[position]
         if explicit_allowed is not None:
             allowed = explicit_allowed
         elif level == 3:
             allowed = None
         else:
-            allowed = _allowed(d, level, direct_pairs, propagated_pairs, scores, repair_pairs)
+            allowed = _allowed(
+                d,
+                level,
+                direct_pairs,
+                propagated_pairs,
+                scores,
+                repair_pairs,
+                release_opportunity_blocks,
+            )
         budget = None
         if settings["impact_region"] and level < 3 and name != "quality_polish":
-            budget = math.ceil(budget_info["allowance"] * (1, 1.5, 2.5)[min(level, 2)])
+            budget = math.ceil(
+                budget_info["allowance"] * (1, 1.5, 2.5)[min(level, 2)]
+            )
         if settings["progressive_repair"] and name == "impact_region":
-            allocation = min(remaining, max(.1, .35 * time_limit))
+            requested_stage_time = min(remaining_wall, max(.05, .35 * time_limit))
         elif settings["progressive_repair"] and name.startswith("adaptive_repair"):
-            allocation = min(remaining, max(.1, remaining / 2))
+            requested_stage_time = min(remaining_wall, max(.05, remaining_wall / 2))
         else:
-            allocation = remaining
-        stage_started = time.perf_counter()
-        model, variables, expressions = build_rolling_model(
-            d, allowed_bays=allowed, shortage_allowed=True, stability_budget=budget
+            requested_stage_time = remaining_wall
+        stage_deadline = min(
+            optimization_deadline,
+            stage_wall_start + requested_stage_time,
         )
-        start_stats = _submit_start(variables, d, incumbent, enabled=settings["mip_start"])
-        model.Params.OutputFlag = int(verbose);model.Params.Threads = threads;model.Params.Seed = seed
-        model.Params.MIPGap = mip_gap;model.Params.TimeLimit = allocation;first = [None]
-        def callback(m, where):
+
+        build_started = time.perf_counter()
+        model, variables, expressions = build_rolling_model(
+            d,
+            allowed_bays=allowed,
+            shortage_allowed=True,
+            stability_budget=budget,
+            objective_scales=objective_scales,
+        )
+        build_time = time.perf_counter() - build_started
+        timing["model_build_time"] += build_time
+        start_stats = _submit_start(
+            variables,
+            d,
+            incumbent,
+            enabled=settings["mip_start"],
+        )
+        solver_budget = stage_deadline - time.perf_counter()
+        if solver_budget <= .01:
+            trace.append({
+                "stage": name,
+                "neighborhood_level": level,
+                "status": "model_build_time_limit",
+                "model_build_time": build_time,
+                "solver_runtime": 0.0,
+                "stage_wall_time": time.perf_counter() - stage_wall_start,
+                "variables": int(model.NumVars),
+                "constraints": int(model.NumConstrs),
+                "has_solution": False,
+                "stability_budget": budget,
+                "stability_budget_disabled": budget is None,
+            })
+            break
+
+        model.Params.OutputFlag = int(verbose)
+        model.Params.Threads = threads
+        model.Params.Seed = seed
+        model.Params.MIPGap = mip_gap
+        model.Params.TimeLimit = max(.01, solver_budget)
+        first = [None]
+        optimize_started = time.perf_counter()
+
+        def callback(_model, where):
             if where == GRB.Callback.MIPSOL and first[0] is None:
-                first[0] = time.perf_counter() - stage_started
+                first[0] = time.perf_counter() - stage_wall_start
+
         diagnostic_pairs = repair_pairs or affected_pairs
-        ranking = {
-            f"{j}|{g}": [
-                {"block": k, **scores[j, g, k]}
-                for k in sorted(d["blocks"], key=lambda k: (-scores[j, g, k]["score"], k))[:3]
-            ]
-            for j, g in sorted(diagnostic_pairs & set(d["remaining_demand"]))
-        }
+        ranking = {}
+        for ship, group in sorted(diagnostic_pairs & set(d["remaining_demand"])):
+            entries = []
+            for block in sorted(
+                d["blocks"],
+                key=lambda item: (-scores[ship, group, item]["score"], item),
+            )[:3]:
+                entries.append({
+                    "block": block,
+                    **{
+                        key: value
+                        for key, value in scores[ship, group, block].items()
+                        if key not in ("capacity_by_period", "arrival_weight")
+                    },
+                })
+            ranking[f"{ship}|{group}"] = entries
         model.optimize(callback)
-        run_time = float(model.Runtime);solver_spent += run_time
+        solver_runtime = float(model.Runtime)
+        timing["solver_time"] += solver_runtime
         record = {
             "stage": name,
             "neighborhood_level": level,
             "stability_budget": budget,
             "stability_budget_disabled": budget is None,
-            "allocated_solver_time": allocation,
-            "cumulative_solver_time": solver_spent,
+            "allocated_solver_time": solver_budget,
             "expanded_shortage_pairs": [list(pair) for pair in sorted(repair_pairs)],
             "top_block_scores": ranking,
             "direct_pair_count": len(direct_pairs),
             "propagated_pair_count": len(propagated_pairs),
             "affected_pair_count": len(affected_pairs),
-            "allowed_pair_bay_count": sum(len(value) for value in allowed.values()) if allowed else sum(1 for i in d["bays"] for j, g in d["remaining_demand"] if compatible(d, i, g)),
+            "allowed_pair_bay_count": (
+                sum(len(value) for value in allowed.values())
+                if allowed is not None
+                else sum(
+                    1
+                    for bay in d["bays"]
+                    for _ship, group in d["remaining_demand"]
+                    if compatible(d, bay, group)
+                )
+            ),
             "dependency_expansion_count": len(propagated_pairs),
             "status": int(model.Status),
-            "runtime": run_time,
+            "runtime": solver_runtime,
+            "solver_runtime": solver_runtime,
+            "model_build_time": build_time,
             "nodes": float(model.NodeCount),
             "variables": int(model.NumVars),
             "constraints": int(model.NumConstrs),
@@ -682,87 +1049,193 @@ def solve_rolling_snapshot(
         }
         previous_key = best_key
         if model.SolCount:
+            extract_started = time.perf_counter()
             candidate = extract_rolling_solution(variables, expressions)
-            candidate["components"].update(canonical_stability_metrics(d, candidate["reservation"], candidate["shortage"]))
-            c = candidate["components"]
-            key = (round(c["predicted_shortage"], 6), round(c["stability_cost"], 6), round(c["operations_cost"], 9))
-            record.update({name: c[name] for name in (
-                "predicted_shortage", "cancellation_quantity", "mandatory_reduction",
-                "discretionary_cancel", "new_bay_count", "block_reallocation_quantity",
-                "stability_cost", "operations_cost", "in_out_conflict_raw"
-            )})
-            record["stability_budget_binding"] = budget is not None and c["discretionary_cancel"] >= budget - 1e-6
+            candidate["components"].update(
+                canonical_stability_metrics(
+                    d,
+                    candidate["reservation"],
+                    candidate["shortage"],
+                )
+            )
+            timing["solution_extract_time"] += time.perf_counter() - extract_started
+            components = candidate["components"]
+            key = (
+                round(components["predicted_shortage"], 6),
+                round(components["stability_cost"], 6),
+                round(components["operations_cost"], 9),
+            )
+            record.update({
+                field: components[field]
+                for field in (
+                    "predicted_shortage",
+                    "cancellation_quantity",
+                    "mandatory_reduction",
+                    "discretionary_cancel",
+                    "new_bay_count",
+                    "block_reallocation_quantity",
+                    "stability_cost",
+                    "operations_cost",
+                    "in_out_conflict_raw",
+                    "occupancy_balance_raw",
+                )
+            })
+            record["stability_budget_binding"] = (
+                budget is not None
+                and components["discretionary_cancel"] >= budget - 1e-6
+            )
             if best_key is None or key < best_key:
                 incumbent, best_key = candidate, key
             if name == "quality_polish":
                 quality_improved = previous_key is None or best_key < previous_key
-        trace.append(record);position += 1
+        record["stage_wall_time"] = time.perf_counter() - stage_wall_start
+        trace.append(record)
+        position += 1
         if not settings["progressive_repair"]:
             continue
+
         shortage_pairs = {
-            (j, g) for (j, g, _n), q in (incumbent or {}).get("shortage", {}).items() if q > 1e-6
+            (ship, group)
+            for (ship, group, _period), quantity in (incumbent or {}).get("shortage", {}).items()
+            if quantity > 1e-6
         }
-        remaining = max(0.0, time_limit - solver_spent)
+        remaining_wall = optimization_deadline - time.perf_counter()
         if incumbent and incumbent["components"]["predicted_shortage"] <= 1e-6:
-            if settings["quality_polish"] and name != "quality_polish" and remaining > .1:
+            if (
+                settings["quality_polish"]
+                and name != "quality_polish"
+                and remaining_wall > .05
+            ):
                 polish_allowed, info = _quality_polish_allowed(
-                    d, affected_pairs, direct_pairs, propagated_pairs, scores, incumbent
+                    d,
+                    affected_pairs,
+                    direct_pairs,
+                    propagated_pairs,
+                    scores,
+                    incumbent,
+                    release_opportunity_blocks,
                 )
-                quality_triggered = True;stages.append((0, "quality_polish", polish_allowed))
+                quality_triggered = True
+                stages.append((0, "quality_polish", polish_allowed))
                 record["quality_polish_plan"] = info
             continue
         if shortage_pairs:
             for pair in shortage_pairs:
-                direct_pairs.add(pair);direct_reasons.setdefault(pair, []).append("shortage_repair")
-                diagnostic_path_scores[pair] = max(1.0, diagnostic_path_scores.get(pair, 0.0))
+                direct_pairs.add(pair)
+                direct_reasons.setdefault(pair, []).append("shortage_repair")
+                impact_direction[pair] = "increase"
+                diagnostic_path_scores[pair] = max(
+                    1.0, diagnostic_path_scores.get(pair, 0.0)
+                )
                 diagnostic_depths[pair] = 0
+                propagation_types[pair] = "pressure"
             propagated_pairs -= shortage_pairs
-            repair_pairs |= shortage_pairs;affected_pairs |= shortage_pairs
+            repair_pairs |= shortage_pairs
+            affected_pairs |= shortage_pairs
             if settings["dependency_propagation"]:
-                repair_prop = _propagate_impact_pairs(shortage_pairs, dependency_graph, max_depth=1)
+                repair_prop = _propagate_impact_pairs(
+                    shortage_pairs,
+                    dependency_graph,
+                    impact_direction=impact_direction,
+                    max_depth=1,
+                )
                 new_neighbors = set(repair_prop["propagated_pairs"]) - direct_pairs
-                propagated_pairs |= new_neighbors;affected_pairs |= new_neighbors;repair_pairs |= new_neighbors
+                propagated_pairs |= new_neighbors
+                affected_pairs |= new_neighbors
+                repair_pairs |= new_neighbors
                 for pair in sorted(new_neighbors):
                     score = repair_prop["best_path_score"][pair]
                     if score > diagnostic_path_scores.get(pair, -1):
                         diagnostic_path_scores[pair] = score
                         diagnostic_depths[pair] = repair_prop["propagation_depth"][pair]
+                        propagation_types[pair] = repair_prop["propagation_type"][pair]
         if name == "impact_region":
-            stages.append((1, "adaptive_repair_1", None));repair_expansions += 1
+            stages.append((1, "adaptive_repair_1", None))
+            repair_expansions += 1
         elif name == "adaptive_repair_1":
-            stages.append((2, "adaptive_repair_2", None));repair_expansions += 1
+            stages.append((2, "adaptive_repair_2", None))
+            repair_expansions += 1
         elif name == "adaptive_repair_2":
-            stages.append((3, "global_repair", None));repair_expansions += 1
+            stages.append((3, "global_repair", None))
+            repair_expansions += 1
+
+    validation_started = time.perf_counter()
     report = validate_rolling_solution(d, incumbent) if incumbent else None
-    top_edges = dependency_edges[:20]
+    timing["validation_time"] = time.perf_counter() - validation_started
+    total_wall_time = time.perf_counter() - wall_start
+    deadline_exceeded = total_wall_time > time_limit + WALL_TIME_TOLERANCE_SECONDS
     path_scores = {
-        f"{j}|{g}": score
-        for (j, g), score in sorted(diagnostic_path_scores.items())
+        f"{ship}|{group}": score
+        for (ship, group), score in sorted(diagnostic_path_scores.items())
     }
     impact_diagnostics = {
         "direct_pairs": [list(pair) for pair in sorted(direct_pairs)],
-        "direct_reasons": {f"{j}|{g}": reasons for (j, g), reasons in sorted(direct_reasons.items())},
+        "direct_reasons": {
+            f"{ship}|{group}": reasons
+            for (ship, group), reasons in sorted(direct_reasons.items())
+        },
+        "impact_direction": {
+            f"{ship}|{group}": direction
+            for (ship, group), direction in sorted(impact_direction.items())
+        },
         "propagated_pairs": [list(pair) for pair in sorted(propagated_pairs)],
+        "pressure_propagation": [
+            list(pair)
+            for pair in sorted(propagated_pairs)
+            if propagation_types.get(pair) == "pressure"
+        ],
+        "release_opportunity_propagation": [
+            list(pair)
+            for pair in sorted(propagated_pairs)
+            if propagation_types.get(pair) == "release_opportunity"
+        ],
         "affected_pairs": [list(pair) for pair in sorted(affected_pairs)],
         "propagation_enabled": settings["dependency_propagation"],
         "max_depth_reached": max(diagnostic_depths.values(), default=0),
         "dependency_edge_count": len(dependency_edges),
-        "top_dependency_edges": top_edges,
+        "top_dependency_edges": dependency_edges[:20],
         "path_scores": path_scores,
+        "release_opportunity_blocks": {
+            f"{ship}|{group}": sorted(blocks)
+            for (ship, group), blocks in sorted(release_opportunity_blocks.items())
+            if blocks
+        },
     }
+    failure_status = None
+    if preprocessing_timed_out:
+        failure_status = "preprocessing_time_limit"
+    elif deadline_exceeded:
+        failure_status = "wall_clock_time_limit_exceeded"
+    elif incumbent is None:
+        failure_status = "no_incumbent"
+    elif report and not report["feasible"]:
+        failure_status = "solution_validation_failed"
     return {
-        "ok": bool(incumbent and report["feasible"]),
+        "ok": bool(
+            incumbent
+            and report
+            and report["feasible"]
+            and not deadline_exceeded
+        ),
+        "failure_status": failure_status,
         "configuration": configuration,
         "solution": incumbent,
         "validation": report,
-        "affected_ships": sorted({j for j, _g in affected_pairs}),
+        "affected_ships": sorted({ship for ship, _group in affected_pairs}),
         "impact_diagnostics": impact_diagnostics,
         "stability_budget_diagnostics": budget_info,
+        "objective_scales": objective_scales,
         "stages": trace,
         "repair_triggered": settings["progressive_repair"] and repair_expansions > 0,
         "repair_expansions": repair_expansions,
         "quality_polish_triggered": quality_triggered,
         "quality_polish_improved": quality_improved,
-        "runtime": time.perf_counter() - started,
+        "preprocessing_time": preprocessing_time,
+        **timing,
+        "total_wall_time": total_wall_time,
+        "runtime": total_wall_time,
+        "wall_time_limit": time_limit,
+        "wall_time_tolerance": WALL_TIME_TOLERANCE_SECONDS,
+        "postprocessing_time_reserve": postprocessing_reserve,
         "final_stage": trace[-1]["stage"] if trace else None,
     }

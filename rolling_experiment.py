@@ -1,17 +1,9 @@
-"""Multi-cycle simulator with separate forecast, revision, and execution metrics."""
+"""Multi-cycle simulator with distinct forecast, revision, and execution metrics."""
 from __future__ import annotations
 
 from rolling_data import advance_state, initial_simulation_state, optimization_snapshot
 from rolling_solver import solve_rolling_snapshot
 
-EXECUTION_KEYS = (
-    "realized_arrivals",
-    "planned_placement_quantity",
-    "fallback_placement_quantity",
-    "realized_unplaced",
-    "realized_distance",
-    "realized_in_out_conflict",
-)
 REVISION_KEYS = (
     "cancellation_quantity",
     "mandatory_reduction",
@@ -31,14 +23,16 @@ def run_rolling_case(
     seed: int = 0,
     configuration: str = "full",
 ) -> dict:
+    """Optimize and execute each rolling cycle under a common wall-clock limit."""
     state = initial_simulation_state(case)
-    cycles = []
+    cycles: list[dict] = []
     for _ in range(case["cycles"]):
         snapshot = optimization_snapshot(case, state)
         if not snapshot["active_ships"]:
+            cycle_index = state["cycle"]
             state, execution = advance_state(case, state, {"reservation": {}, "din": {}})
             cycles.append({
-                "cycle": state["cycle"] - 1,
+                "cycle": cycle_index,
                 "skipped": True,
                 "active_ships": [],
                 "forecast_diagnostics": {},
@@ -60,6 +54,7 @@ def run_rolling_case(
             "predicted_operations_cost": components.get("operations_cost"),
             "predicted_in_out_conflict": components.get("in_out_conflict_raw"),
             "predicted_distance": components.get("distance_raw"),
+            "predicted_occupancy_balance": components.get("occupancy_balance_raw"),
         }
         revision = {key: components.get(key) for key in REVISION_KEYS}
         cycle_row = {
@@ -82,22 +77,94 @@ def run_rolling_case(
     def total(section: str, key: str) -> float:
         return sum((row.get(section) or {}).get(key, 0) or 0 for row in cycles)
 
+    def mean(section: str, key: str) -> float:
+        values = [
+            (row.get(section) or {}).get(key)
+            for row in cycles
+            if (row.get(section) or {}).get(key) is not None
+        ]
+        return sum(values) / len(values) if values else 0.0
+
+    def maximum(section: str, key: str) -> float:
+        values = [
+            (row.get(section) or {}).get(key)
+            for row in cycles
+            if (row.get(section) or {}).get(key) is not None
+        ]
+        return max(values, default=0.0)
+
+    realized_arrivals = total("execution_metrics", "realized_arrivals")
+    realized_unplaced = total("execution_metrics", "realized_unplaced")
+    fallback = total("execution_metrics", "fallback_placement_quantity")
+    previous_basis = sum(
+        (row.get("stability_budget_diagnostics") or {}).get("previous_reservation", 0)
+        for row in cycles
+    )
+    discretionary = total("plan_revision_metrics", "discretionary_cancel")
+    total_wall = sum(row.get("total_wall_time", 0) or 0 for row in cycles)
+    total_solver = sum(row.get("solver_time", 0) or 0 for row in cycles)
+    total_preprocessing = sum(
+        (row.get("preprocessing_time", 0) or 0)
+        + (row.get("model_build_time", 0) or 0)
+        for row in cycles
+    )
     return {
         "ok": all(row.get("ok", True) for row in cycles),
         "configuration": configuration,
         "cycles": cycles,
         "final_state": state,
-        "total_runtime": sum(row.get("runtime", 0) for row in cycles),
-        "total_realized_arrivals": total("execution_metrics", "realized_arrivals"),
-        "total_planned_placement_quantity": total("execution_metrics", "planned_placement_quantity"),
-        "total_fallback_placement_quantity": total("execution_metrics", "fallback_placement_quantity"),
-        "total_realized_unplaced": total("execution_metrics", "realized_unplaced"),
+        "total_runtime": total_wall,
+        "total_wall_time": total_wall,
+        "total_solver_time": total_solver,
+        "total_preprocessing_time": total_preprocessing,
+        "total_realized_arrivals": realized_arrivals,
+        "total_planned_placement_quantity": total(
+            "execution_metrics", "planned_placement_quantity"
+        ),
+        "total_planned_infeasible_quantity": total(
+            "execution_metrics", "planned_infeasible_quantity"
+        ),
+        "total_fallback_placement_quantity": fallback,
+        "total_fallback_candidate_attempts": total(
+            "execution_metrics", "fallback_candidate_attempts"
+        ),
+        "fallback_rate": fallback / realized_arrivals if realized_arrivals else 0.0,
+        "total_realized_unplaced": realized_unplaced,
+        "unplaced_rate": realized_unplaced / realized_arrivals if realized_arrivals else 0.0,
         "total_realized_distance": total("execution_metrics", "realized_distance"),
-        "total_realized_in_out_conflict": total("execution_metrics", "realized_in_out_conflict"),
-        "total_cancellation_quantity": total("plan_revision_metrics", "cancellation_quantity"),
-        "total_mandatory_reduction": total("plan_revision_metrics", "mandatory_reduction"),
-        "total_discretionary_cancel": total("plan_revision_metrics", "discretionary_cancel"),
+        "total_realized_in_out_conflict": total(
+            "execution_metrics", "realized_in_out_conflict"
+        ),
+        "mean_realized_bays_per_ship_pod": mean(
+            "execution_metrics", "realized_average_bays_per_ship_pod"
+        ),
+        "max_realized_bays_per_ship_pod": maximum(
+            "execution_metrics", "realized_max_bays_per_ship_pod"
+        ),
+        "total_realized_new_support_count": total(
+            "execution_metrics", "realized_new_support_count"
+        ),
+        "max_realized_peak_block_utilization": maximum(
+            "execution_metrics", "realized_peak_block_utilization"
+        ),
+        "mean_realized_utilization_deviation": mean(
+            "execution_metrics", "realized_mean_absolute_utilization_deviation"
+        ),
+        "max_realized_utilization_spread": maximum(
+            "execution_metrics", "realized_max_utilization_spread"
+        ),
+        "total_cancellation_quantity": total(
+            "plan_revision_metrics", "cancellation_quantity"
+        ),
+        "total_mandatory_reduction": total(
+            "plan_revision_metrics", "mandatory_reduction"
+        ),
+        "total_discretionary_cancel": discretionary,
         "total_new_bay_count": total("plan_revision_metrics", "new_bay_count"),
-        "total_block_reallocation_quantity": total("plan_revision_metrics", "block_reallocation_quantity"),
+        "total_block_reallocation_quantity": total(
+            "plan_revision_metrics", "block_reallocation_quantity"
+        ),
         "total_stability_cost": total("plan_revision_metrics", "stability_cost"),
+        "previous_reservation_basis": previous_basis,
+        "revision_rate": discretionary / previous_basis if previous_basis else 0.0,
     }
