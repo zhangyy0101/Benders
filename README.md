@@ -132,6 +132,12 @@ Every stage reports total and binary variables, constraints, nodes, solution
 count, stage first-incumbent time, and reliable bound/gap attributes. Cycle
 first-incumbent time starts before preprocessing.
 
+To enforce that contract on medium instances, every configuration reserves the
+same bounded tail for incumbent extraction and independent validation: 15% of
+the cycle limit, with a 0.5-second minimum and 3-second maximum, while very
+short diagnostic limits retain at least half their budget for optimization.
+The reserve is included in the recorded weight/runtime profile.
+
 Gurobi may not expose `ObjBound` or `MIPGap` reliably for this lexicographic
 multiobjective model. `final_stage_objective_bound` and
 `final_stage_mip_gap` therefore describe the last optimization stage and are

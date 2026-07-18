@@ -2,10 +2,18 @@ import unittest
 
 from config import FORECAST_ERROR_MODES, WALL_TIME_TOLERANCE_SECONDS
 from rolling_data import build_synthetic_rolling_case, initial_simulation_state, optimization_snapshot
-from rolling_solver import solve_rolling_snapshot
+from rolling_solver import postprocessing_reserve_seconds, solve_rolling_snapshot
 
 
 class WallClockAndGenerationTest(unittest.TestCase):
+    def test_postprocessing_reserve_is_scaled_and_bounded(self):
+        self.assertEqual(postprocessing_reserve_seconds(0), 0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(.05), .025)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(5), .75)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(10), 1.5)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 3.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 3.0)
+
     def test_all_forecast_modes_are_reproducible(self):
         for mode in FORECAST_ERROR_MODES:
             first = build_synthetic_rolling_case(

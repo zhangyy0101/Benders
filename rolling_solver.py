@@ -33,6 +33,9 @@ from config import (
     QUALITY_POLISH_WEIGHT_OVERLAP,
     QUALITY_POLISH_WEIGHT_SUPPORT,
     QUALITY_POLISH_WEIGHT_UTILIZATION,
+    POSTPROCESSING_RESERVE_MAX_SECONDS,
+    POSTPROCESSING_RESERVE_MIN_SECONDS,
+    POSTPROCESSING_RESERVE_RATIO,
     STABILITY_BASE_RATIO,
     STABILITY_BLOCK_REALLOCATION_WEIGHT,
     STABILITY_CANCEL_WEIGHT,
@@ -56,6 +59,21 @@ from rolling_model import (
 Pair: TypeAlias = tuple[str, str]
 INF = 10**9
 CONFIGURATIONS = ("core", "core_start", "core_start_impact", "full_direct", "full")
+
+
+def postprocessing_reserve_seconds(time_limit: float) -> float:
+    """Reserve a common bounded wall-clock tail for extraction and validation."""
+    limit = max(0.0, float(time_limit))
+    if limit <= 0:
+        return 0.0
+    target = min(
+        POSTPROCESSING_RESERVE_MAX_SECONDS,
+        max(
+            POSTPROCESSING_RESERVE_MIN_SECONDS,
+            POSTPROCESSING_RESERVE_RATIO * limit,
+        ),
+    )
+    return min(.50 * limit, target)
 
 
 def configuration_features(configuration: str) -> dict:
@@ -892,10 +910,7 @@ def solve_rolling_snapshot(
     # Leave a bounded tail for incumbent extraction and the mandatory independent
     # validation.  The reserve is part of the common wall-clock budget, not extra
     # time granted to any configuration.
-    postprocessing_reserve = min(
-        WALL_TIME_TOLERANCE_SECONDS,
-        max(.01, .10 * max(0.0, time_limit)),
-    )
+    postprocessing_reserve = postprocessing_reserve_seconds(time_limit)
     optimization_deadline = max(wall_start, deadline - postprocessing_reserve)
     timing = {
         "direct_impact_time": 0.0,

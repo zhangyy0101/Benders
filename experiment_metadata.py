@@ -108,6 +108,16 @@ def collect_weight_profile() -> dict[str, dict[str, object]]:
             "overlap": config.QUALITY_POLISH_WEIGHT_OVERLAP,
             "utilization": config.QUALITY_POLISH_WEIGHT_UTILIZATION,
         },
+        "runtime": {
+            "wall_time_tolerance_seconds": config.WALL_TIME_TOLERANCE_SECONDS,
+            "postprocessing_reserve_ratio": config.POSTPROCESSING_RESERVE_RATIO,
+            "postprocessing_reserve_min_seconds": (
+                config.POSTPROCESSING_RESERVE_MIN_SECONDS
+            ),
+            "postprocessing_reserve_max_seconds": (
+                config.POSTPROCESSING_RESERVE_MAX_SECONDS
+            ),
+        },
     }
 
 
