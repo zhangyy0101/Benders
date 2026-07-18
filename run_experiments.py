@@ -1,35 +1,116 @@
-"""Minimal batch comparison runner for the retained nine-instance suite."""
+"""Controlled rolling experiments with non-overlapping realized metrics."""
 from __future__ import annotations
-import argparse,csv,json
-from pathlib import Path
-from benchmark_io import load_instance
-from config import Weights
-from data import prepare_instance
-from solve_direct_gurobi import solve_direct_gurobi
-from solver_classical_benders import solve_classical_benders
-from solver_partial_bbc import solve_partial_bbc
 
-METHODS={"direct":solve_direct_gurobi,"bbc_candidate":solve_partial_bbc,"classical_benders":solve_classical_benders}
+import argparse
+import csv
+import json
 
-def serial(value):
-    if isinstance(value,dict):return {("|".join(map(str,key)) if isinstance(key,tuple) else str(key)):serial(item) for key,item in value.items()}
-    if isinstance(value,(list,tuple)):return [serial(item) for item in value]
-    return value
+from main import PRESETS
+from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
+from rolling_experiment import run_rolling_case
+from rolling_solver import CONFIGURATIONS
 
-def parser():
-    p=argparse.ArgumentParser(description="Compare exact methods on the current suite");p.add_argument("--suite-dir",default="benchmarks/paper_exp_v1_pilot21");p.add_argument("--instances",nargs="+");p.add_argument("--methods",nargs="+",choices=tuple(METHODS),default=["direct","bbc_candidate"]);p.add_argument("--budget",type=float,default=60);p.add_argument("--threads",type=int,default=1);p.add_argument("--mip-gap",type=float,default=.03);p.add_argument("--seed",type=int,default=0);p.add_argument("--old-outbound-release-policy",choices=("proportional","legacy_sorted","conservative","ship_complete"),default="ship_complete");p.add_argument("--output",default="results");return p
 
-def main():
-    a=parser().parse_args();root=Path(a.suite_dir);manifest=json.loads((root/"manifest.json").read_text(encoding="utf-8"));wanted=set(a.instances or [row["instance_id"] for row in manifest["instances"]]);entries=[row for row in manifest["instances"] if row["instance_id"] in wanted];missing=wanted-{row["instance_id"] for row in entries}
-    if missing:raise ValueError(f"unknown instances: {sorted(missing)}")
-    rows=[]
-    for entry in entries:
-        data=prepare_instance(load_instance(root/entry["relative_path"]),old_outbound_release_policy=a.old_outbound_release_policy)
-        for method in a.methods:
-            result=METHODS[method](data,Weights(),time_limit=a.budget,mip_gap=a.mip_gap,threads=a.threads,seed=a.seed);rows.append({"instance":entry["instance_id"],"method":method,"status":result.get("status_name"),"ub":result.get("ub"),"lb":result.get("lb"),"gap":result.get("gap"),"runtime":result.get("runtime"),"nodes":result.get("nodes"),"details":serial({k:v for k,v in result.items() if k not in ("solution","components")})});print(entry["instance_id"],method,result.get("status_name"),result.get("gap"),flush=True)
-    out=Path(a.output);out.mkdir(parents=True,exist_ok=True);(out/"results.json").write_text(json.dumps(rows,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    with (out/"results.csv").open("w",newline="",encoding="utf-8-sig") as handle:
-        writer=csv.DictWriter(handle,fieldnames=("instance","method","status","ub","lb","gap","runtime","nodes"));writer.writeheader();writer.writerows({k:r[k] for k in writer.fieldnames} for r in rows)
-    return 0
+def stage_summary(result: dict) -> dict:
+    stages = [stage for cycle in result["cycles"] for stage in cycle.get("stages", [])]
+    first = [stage["first_incumbent_time"] for stage in stages if stage.get("first_incumbent_time") is not None]
+    return {
+        "repair_expansions": sum(cycle.get("repair_expansions", 0) for cycle in result["cycles"]),
+        "budget_binding_stages": sum(bool(stage.get("stability_budget_binding")) for stage in stages),
+        "max_variables": max((stage["variables"] for stage in stages), default=0),
+        "max_constraints": max((stage["constraints"] for stage in stages), default=0),
+        "mean_first_incumbent_time": sum(first) / len(first) if first else None,
+    }
 
-if __name__=="__main__":raise SystemExit(main())
+
+def result_row(instance: str, forecast_error: float, outbound_rate: int, configuration: str, seed: int, result: dict) -> dict:
+    predicted = [
+        (cycle.get("forecast_diagnostics") or {}).get("predicted_shortage")
+        for cycle in result["cycles"]
+    ]
+    predicted = [value for value in predicted if value is not None]
+    return {
+        "instance": instance,
+        "forecast_error": forecast_error,
+        "outbound_rate": outbound_rate,
+        "configuration": configuration,
+        "seed": seed,
+        "ok": result["ok"],
+        "cycles": len(result["cycles"]),
+        "runtime": result["total_runtime"],
+        "realized_arrivals": result["total_realized_arrivals"],
+        "planned_placement": result["total_planned_placement_quantity"],
+        "fallback_placement": result["total_fallback_placement_quantity"],
+        "realized_unplaced": result["total_realized_unplaced"],
+        "realized_distance": result["total_realized_distance"],
+        "realized_in_out_conflict": result["total_realized_in_out_conflict"],
+        "cancellation_quantity": result["total_cancellation_quantity"],
+        "mandatory_reduction": result["total_mandatory_reduction"],
+        "discretionary_cancel": result["total_discretionary_cancel"],
+        "new_bay_count": result["total_new_bay_count"],
+        "block_reallocation_quantity": result["total_block_reallocation_quantity"],
+        "stability_cost": result["total_stability_cost"],
+        "mean_cycle_predicted_shortage": sum(predicted) / len(predicted) if predicted else None,
+        "max_cycle_predicted_shortage": max(predicted) if predicted else None,
+        **stage_summary(result),
+        "stages": json.dumps([cycle.get("final_stage") for cycle in result["cycles"]]),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sizes", nargs="+", choices=PRESETS, default=list(PRESETS))
+    parser.add_argument("--errors", nargs="+", type=float, default=[0, .1, .2])
+    parser.add_argument("--configurations", nargs="+", choices=CONFIGURATIONS, default=["full"])
+    parser.add_argument("--pressure-levels", nargs="*", choices=("nearby", "global"), default=[])
+    parser.add_argument("--seeds", nargs="+", type=int, default=[0])
+    parser.add_argument("--time", type=float, default=20)
+    parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--outbound-rate", type=int, default=150)
+    parser.add_argument("--output", default="rolling_results.csv")
+    args = parser.parse_args()
+    rows = []
+    for size in args.sizes:
+        for error in args.errors:
+            for seed in args.seeds:
+                for configuration in args.configurations:
+                    case = build_synthetic_rolling_case(
+                        seed=seed,
+                        forecast_error=error,
+                        outbound_boxes_per_period=args.outbound_rate,
+                        **PRESETS[size],
+                    )
+                    result = run_rolling_case(
+                        case,
+                        time_per_cycle=args.time,
+                        threads=args.threads,
+                        seed=seed,
+                        configuration=configuration,
+                    )
+                    row = result_row(size, error, args.outbound_rate, configuration, seed, result)
+                    rows.append(row)
+                    print(row, flush=True)
+    for level in args.pressure_levels:
+        for seed in args.seeds:
+            case = build_repair_pressure_case(level=level, seed=seed)
+            result = run_rolling_case(
+                case,
+                time_per_cycle=args.time,
+                threads=args.threads,
+                seed=seed,
+                configuration="full",
+            )
+            row = result_row(
+                f"pressure_{level}", .1, case["outbound_boxes_per_period"], "full", seed, result
+            )
+            rows.append(row)
+            print(row, flush=True)
+    with open(args.output, "w", newline="", encoding="utf-8-sig") as stream:
+        writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    return 0 if all(row["ok"] for row in rows) else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
