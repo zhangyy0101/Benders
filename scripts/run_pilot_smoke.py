@@ -10,8 +10,10 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the pilot-small smoke matrix")
     parser.add_argument("--output", default="pilot_smoke_results.csv")
+    parser.add_argument("--mip-gap", type=float, default=.01)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    manifest_output = Path(args.output).with_suffix(".manifest.json")
     command = [
         sys.executable,
         str(root / "run_experiments.py"),
@@ -34,8 +36,12 @@ def main() -> int:
         "0.1",
         "--time",
         "5",
+        "--mip-gap",
+        str(args.mip_gap),
         "--output",
         args.output,
+        "--manifest-output",
+        str(manifest_output),
     ]
     return subprocess.run(command, cwd=root, check=False).returncode
 

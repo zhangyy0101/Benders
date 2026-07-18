@@ -1,4 +1,5 @@
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *.pyo
 *.pyd
@@ -25,6 +26,8 @@ env/
 *.prm
 
 # Generated experiment payloads
+*_results.csv
+*.manifest.json
 experiments/**/solutions/
 experiments/**/results.json
 validation/**/results.json

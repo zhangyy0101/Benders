@@ -26,14 +26,26 @@
     contains truth or truth-based error diagnostics.
 15. Current actual inventory is observed operational state and is visible to
     optimization; future realized arrivals and realized release delays are not.
-16. A continuing vessel's outbound forecast uses visible actual inventory plus
-    its remaining current arrival forecast. The nominal outbound rate is a
-    public per-vessel, per-6-hour planning parameter.
-17. Planned operation duration is the maximum of a public class duration and a
+16. An outbound-relevant vessel has ETA before the current look-ahead end and a
+    planned release after now. This includes receiving vessels whose ETA falls
+    inside the horizon and loading-phase vessels that have already reached ETA.
+17. An outbound-relevant vessel's forecast uses visible actual inventory plus
+    its remaining current arrival forecast. It does not use true flow, true
+    total, realized outbound flow, or realized release time.
+18. Planned outbound workload and capacity release are separate concepts. The
+    workload profile is generated over the complete `[ETA, planned release)`
+    interval and may vary by period; past or out-of-horizon periods are then
+    truncated without redistributing their quantity.
+19. A changing outbound workload profile does not imply progressive capacity
+    release. Inventory capacity remains occupied until the vessel's whole
+    planned release in optimization or realized release in simulation.
+20. The nominal outbound rate is a public per-vessel, per-6-hour planning
+    parameter.
+21. Planned operation duration is the maximum of a public class duration and a
     public-booking-volume duration. Planned release remains external to hidden
     realization volume.
-18. Initial synthetic inventory may fill each bay up to 95%. If the rounded
+22. Initial synthetic inventory may fill each bay up to 95%. If the rounded
     requested total exceeds that physical limit, generation fails explicitly.
-19. Realized peak utilization, utilization deviation, support activation, and
+23. Realized peak utilization, utilization deviation, support activation, and
     bay concentration are sampled after every executed 6-hour period rather
     than inferred only from the cycle-end state.

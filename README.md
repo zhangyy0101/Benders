@@ -25,10 +25,19 @@ simulation diagnostics and are excluded from optimization snapshots.
 Planned vessel release uses public ship class and booking volume. Planned
 operation duration is the maximum of the external class duration and
 `ceil(public_booking_total / nominal_outbound_rate_per_ship_period)`. It never
-uses hidden volume. A continuing vessel's outbound forecast is rebuilt from
-visible actual inventory plus remaining visible forecast arrivals, distributed
-over `[planned ETA, planned release)` and then across blocks using current
-actual inventory and inherited reservations.
+uses hidden volume. Outbound-relevant vessels satisfy `ETA < look-ahead end`
+and `planned release > now`. This set is distinct from active receiving vessels:
+it includes both vessels whose ETA falls in the look-ahead window and vessels
+already loading after ETA but before planned release.
+
+Each relevant vessel's visible outbound total is current actual inventory plus
+remaining current-cycle forecast arrivals. Its planned workload profile is
+first distributed over the complete `[planned ETA, planned release)` interval;
+periods before now and at or beyond the look-ahead end are then truncated, not
+redistributed. Block weights use current actual inventory plus unexecuted
+previous reservations, with a deterministic closest-block fallback when both
+are empty. Loading-phase vessels therefore remain represented in predicted
+inbound/outbound conflict.
 
 Capacity is released only when the entire vessel operation is complete.
 Progressive box-by-box release is not modeled. Outbound flows are an
@@ -134,7 +143,8 @@ explicitly `None` when the attributes are unavailable; root relaxation is also
 Run one case:
 
 ```bash
-python main.py --size small --configuration full --time 20 --seed 0
+python main.py --size small --configuration full --time 20 \
+  --mip-gap 0.01 --seed 0
 ```
 
 Run controlled combinations:
@@ -143,14 +153,28 @@ Run controlled combinations:
 python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --forecast-error-modes multiplicative timing_shift booking_add_cancel \
   --initial-utilizations 0.25 0.55 0.70 \
-  --configurations core_start full_direct full --seeds 0 1 2
+  --configurations core_start full_direct full --seeds 0 1 2 \
+  --mip-gap 0.01 --output pilot_results.csv \
+  --manifest-output pilot_results.manifest.json
 ```
+
+If `--manifest-output` is omitted, the manifest defaults to the CSV stem, for
+example `pilot_results.manifest.json`. Every CSV row records the Git commit,
+branch and dirty state; problem protocol; Python and Gurobi versions; threads;
+MIP gap; stability formulation; and a compact sorted JSON weight profile. The
+batch manifest additionally records UTC creation time, the command, platform
+and Python implementation, requested experiment matrix, row count, and batch
+success status. Unavailable Git or Gurobi metadata is recorded as null rather
+than aborting the experiment.
 
 Run the bounded pilot workflow, which uses only `pilot_small`:
 
 ```bash
-python scripts/run_pilot_smoke.py
+python scripts/run_pilot_smoke.py --output pilot_smoke_results.csv
 ```
+
+This produces both `pilot_smoke_results.csv` and
+`pilot_smoke_results.manifest.json`.
 
 `large` and `xlarge` are interfaces for later formal experiments and are never
 part of the default smoke workflow. Statistical summaries are generated with:

@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
+import sys
 
 from config import FORECAST_ERROR_MODES
+from experiment_metadata import (
+    collect_experiment_metadata,
+    csv_metadata_fields,
+    write_experiment_artifacts,
+)
 from main import PRESETS
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
@@ -57,6 +62,7 @@ def result_row(
     seed: int,
     time_limit: float,
     result: dict,
+    metadata: dict[str, object],
 ) -> dict:
     predicted_shortage = [
         (cycle.get("forecast_diagnostics") or {}).get("predicted_shortage")
@@ -83,6 +89,7 @@ def result_row(
         "configuration": configuration,
         "seed": seed,
         "time_limit": time_limit,
+        **csv_metadata_fields(metadata),
         "ok": result["ok"],
         "total_wall_time": result["total_wall_time"],
         "total_solver_time": result["total_solver_time"],
@@ -170,6 +177,7 @@ def main() -> int:
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
     parser.add_argument("--time", type=float, default=20)
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--mip-gap", type=float, default=.01)
     parser.add_argument("--outbound-rate", type=int, default=150)
     parser.add_argument("--release-delay-periods", type=int, default=0)
     parser.add_argument("--containers-per-ship-low", type=int)
@@ -177,7 +185,13 @@ def main() -> int:
     parser.add_argument("--active-ship-overlap", type=int)
     parser.add_argument("--pod-count", type=int)
     parser.add_argument("--output", default="rolling_results.csv")
+    parser.add_argument("--manifest-output")
     args = parser.parse_args()
+    metadata = collect_experiment_metadata(
+        threads=args.threads,
+        mip_gap=args.mip_gap,
+        time_limit=args.time,
+    )
     rows: list[dict] = []
     for size in args.sizes:
         for error in args.errors:
@@ -211,6 +225,7 @@ def main() -> int:
                             result = run_rolling_case(
                                 case,
                                 time_per_cycle=args.time,
+                                mip_gap=args.mip_gap,
                                 threads=args.threads,
                                 seed=seed,
                                 configuration=configuration,
@@ -222,6 +237,7 @@ def main() -> int:
                                 seed,
                                 args.time,
                                 result,
+                                metadata,
                             )
                             rows.append(row)
                             print(row, flush=True)
@@ -231,21 +247,44 @@ def main() -> int:
             result = run_rolling_case(
                 case,
                 time_per_cycle=args.time,
+                mip_gap=args.mip_gap,
                 threads=args.threads,
                 seed=seed,
                 configuration="full",
             )
             row = result_row(
-                f"pressure_{level}", case, "full", seed, args.time, result
+                f"pressure_{level}",
+                case,
+                "full",
+                seed,
+                args.time,
+                result,
+                metadata,
             )
             rows.append(row)
             print(row, flush=True)
-    if not rows:
-        raise ValueError("no experiment rows were requested")
-    with open(args.output, "w", newline="", encoding="utf-8-sig") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+    requested_matrix = {
+        "sizes": list(args.sizes),
+        "errors": list(args.errors),
+        "forecast_error_modes": list(args.forecast_error_modes),
+        "initial_utilizations": list(args.initial_utilizations),
+        "configurations": list(args.configurations),
+        "pressure_levels": list(args.pressure_levels),
+        "seeds": list(args.seeds),
+        "time_limit": args.time,
+        "threads": args.threads,
+        "mip_gap": args.mip_gap,
+        "outbound_rate": args.outbound_rate,
+        "release_delay_periods": args.release_delay_periods,
+    }
+    write_experiment_artifacts(
+        rows=rows,
+        output_csv=args.output,
+        metadata=metadata,
+        requested_matrix=requested_matrix,
+        manifest_output=args.manifest_output,
+        command=list(sys.argv),
+    )
     return 0 if all(row["ok"] for row in rows) else 2
 
 

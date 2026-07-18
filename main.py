@@ -89,6 +89,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--release-delay-periods", type=int, default=0)
     result.add_argument("--seed", type=int, default=0)
     result.add_argument("--threads", type=int, default=1)
+    result.add_argument("--mip-gap", type=float, default=.01)
     result.add_argument("--output")
     return result
 
@@ -123,6 +124,7 @@ def main() -> int:
     result = run_rolling_case(
         case,
         time_per_cycle=args.time,
+        mip_gap=args.mip_gap,
         threads=args.threads,
         seed=args.seed,
         configuration=args.configuration,

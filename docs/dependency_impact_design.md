@@ -11,6 +11,13 @@ draw one hidden truth and then generate a correlated noisy information
 trajectory that approaches truth as lead time shrinks; only the current
 forecast enters the optimization snapshot.
 
+Active receiving vessels and outbound-relevant vessels are deliberately
+different sets. The latter also includes vessels already between ETA and
+planned release. Their visible workload is constructed from actual inventory
+and remaining arrival forecasts over the complete planned loading interval,
+then truncated to the current horizon. Thus block-level outbound overlap does
+not disappear merely because a vessel has entered its loading phase.
+
 ## Plan baseline and existing support
 
 The cancellable baseline is `previous_reservation` only. Actual inventory is
@@ -75,6 +82,12 @@ pairs remain adjustable and are not deducted as frozen commitments.
 
 For each ship-group and block, compatible capacity is calculated only from bays
 with the correct size and a compatible live height type.
+
+The outbound component of block scoring includes all outbound-relevant vessels,
+including loading-phase vessels. Their block distribution uses current actual
+inventory and unexecuted previous reservation only. This overlap enters both
+the block score and the dependency-aware candidate ranking; no future MIP
+allocation or hidden realized outbound data is used to construct it.
 
 For arrival weights `w[p,n]`, the effective block capacity is
 

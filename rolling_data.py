@@ -690,35 +690,75 @@ def _participating_ships(case: dict, now: int, completed: set[str]) -> set[str]:
     }
 
 
-def build_visible_ship_outbound_forecast(
+def _visible_ship_outbound_total(
     case: dict,
     state: dict,
     cycle: int,
     ship: str,
-) -> dict[int, int]:
-    """Build a ship outbound profile from visible inventory and remaining forecast."""
+) -> int:
+    """Return current inventory plus not-yet-due forecast arrivals."""
     now = cycle * case["execution_periods"]
     actual_total = sum(
         quantity
         for (_bay, j, _group), quantity in state["actual_inventory"].items()
-        if j == ship and _realized_present(case, j, now)
+        if j == ship
     )
     remaining_forecast = sum(
         quantity
         for (r, j, _group, absolute), quantity in case["forecasts"].items()
         if r == cycle and j == ship and absolute >= now
     )
-    visible_total = actual_total + remaining_forecast
-    operation_start = max(now, case["eta_period"][ship])
-    operation_end = case["planned_ship_release_period"][ship]
-    periods = list(range(operation_start, operation_end))
-    if not periods or visible_total <= 0:
+    return actual_total + remaining_forecast
+
+
+def build_visible_ship_outbound_forecast(
+    case: dict,
+    state: dict,
+    cycle: int,
+    ship: str,
+    *,
+    horizon_end: int | None = None,
+) -> dict[int, int]:
+    """Build and truncate a planned outbound profile using visible information."""
+    now = cycle * case["execution_periods"]
+    visible_total = _visible_ship_outbound_total(case, state, cycle, ship)
+    planned_release = case["planned_ship_release_period"][ship]
+    full_periods = list(range(case["eta_period"][ship], planned_release))
+    if not full_periods or visible_total <= 0:
         return {}
-    profile = _integer_profile(visible_total, [1.0] * len(periods))
+    full_quantities = _integer_profile(visible_total, [1.0] * len(full_periods))
+    full_profile = dict(zip(full_periods, full_quantities))
+    lower = now
+    upper = min(
+        horizon_end if horizon_end is not None else planned_release,
+        planned_release,
+    )
     return {
         absolute: quantity
-        for absolute, quantity in zip(periods, profile)
-        if quantity > 0
+        for absolute, quantity in full_profile.items()
+        if lower <= absolute < upper and quantity > 0
+    }
+
+
+def visible_ship_block_basis(
+    case: dict,
+    state: dict,
+    previous_reservation: dict,
+    ship: str,
+) -> dict[str, int]:
+    """Return the optimizer-visible block basis for planned outbound workload."""
+    return {
+        block: sum(
+            quantity
+            for (bay, j, _group), quantity in state["actual_inventory"].items()
+            if j == ship and case["bay_block"][bay] == block and quantity > 0
+        )
+        + sum(
+            quantity
+            for (bay, j, _group), quantity in previous_reservation.items()
+            if j == ship and case["bay_block"][bay] == block and quantity > 0
+        )
+        for block in case["blocks"]
     }
 
 
@@ -739,6 +779,12 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
             continuing.append(ship)
             active.append(ship)
     active_set = set(active)
+    outbound_relevant_ships = {
+        ship
+        for ship in case["ships"]
+        if case["eta_period"][ship] < end
+        and case["planned_ship_release_period"][ship] > now
+    }
     previous_reservation = {
         key: quantity
         for key, quantity in state["previous_reservation"].items()
@@ -758,29 +804,28 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
                     forecast[ship, group, absolute - now] = quantity
 
     outbound: dict[tuple[str, int], int] = {}
+    planned_ship_set = set(case["ships"])
     for block in case["blocks"]:
         for absolute in range(now, end):
             quantity = sum(
                 value
                 for (r, _old, k, period), value in case["outbound_forecasts"].items()
-                if r == cycle and k == block and period == absolute
+                if r == cycle
+                and _old not in planned_ship_set
+                and k == block
+                and period == absolute
             )
             if quantity:
                 outbound[block, absolute - now] = quantity
-    for ship in active:
-        block_basis = {
-            block: sum(
-                quantity
-                for (bay, j, _group), quantity in state["actual_inventory"].items()
-                if j == ship and case["bay_block"][bay] == block
-            )
-            + sum(
-                quantity
-                for (bay, j, _group), quantity in previous_reservation.items()
-                if j == ship and case["bay_block"][bay] == block
-            )
-            for block in case["blocks"]
-        }
+    visible_outbound_total_by_ship: dict[str, int] = {}
+    remaining_outbound_total_by_ship: dict[str, int] = {}
+    for ship in sorted(outbound_relevant_ships):
+        block_basis = visible_ship_block_basis(
+            case,
+            state,
+            state.get("previous_reservation", {}),
+            ship,
+        )
         if not sum(block_basis.values()):
             closest = min(case["blocks"], key=lambda block: case["distance"][ship, block])
             block_basis[closest] = 1
@@ -789,10 +834,15 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
             state,
             cycle,
             ship,
+            horizon_end=end,
         )
+        visible_total = _visible_ship_outbound_total(case, state, cycle, ship)
+        if visible_total > 0:
+            visible_outbound_total_by_ship[ship] = visible_total
+        remaining_total = sum(visible_outbound.values())
+        if remaining_total > 0:
+            remaining_outbound_total_by_ship[ship] = remaining_total
         for absolute, quantity in sorted(visible_outbound.items()):
-            if absolute >= end:
-                continue
             if not quantity:
                 continue
             distributed = _integer_profile(
@@ -848,6 +898,23 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         "active_ships": active,
         "new_ships": new,
         "continuing_ships": continuing,
+        "outbound_relevant_ships": sorted(outbound_relevant_ships),
+        "outbound_forecast_diagnostics": {
+            "outbound_relevant_ships": sorted(outbound_relevant_ships),
+            "loading_phase_ships": sorted(
+                ship
+                for ship in outbound_relevant_ships
+                if case["eta_period"][ship] <= now
+                < case["planned_ship_release_period"][ship]
+            ),
+            "receiving_phase_outbound_ships": sorted(
+                ship
+                for ship in outbound_relevant_ships
+                if now < case["eta_period"][ship] < end
+            ),
+            "visible_outbound_total_by_ship": visible_outbound_total_by_ship,
+            "remaining_outbound_total_by_ship": remaining_outbound_total_by_ship,
+        },
         "actual_inventory": dict(state["actual_inventory"]),
         "previous_reservation": previous_reservation,
         "previous_din": previous_din,

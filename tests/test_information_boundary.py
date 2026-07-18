@@ -80,6 +80,36 @@ class InformationBoundaryTest(unittest.TestCase):
             case["planned_ship_release_period"][ship],
         )
 
+    def test_outbound_forecast_does_not_require_hidden_outbound_truth(self):
+        case = build_synthetic_rolling_case(
+            seed=12,
+            num_blocks=2,
+            bays_per_block=4,
+            num_ships=1,
+            cycles=4,
+            initial_utilization=0,
+            containers_per_ship_range=(40, 40),
+        )
+        ship = case["ships"][0]
+        group = next(iter(case["group_attrs"]))
+        case["eta_period"][ship] = 10
+        case["planned_ship_release_period"][ship] = 14
+        state = initial_simulation_state(case)
+        state["cycle"] = 3
+        state["actual_inventory"] = {(case["bays"][0], ship, group): 40}
+        for hidden in (
+            "true_flow",
+            "true_total",
+            "ship_outbound_flow",
+            "realized_ship_release_period",
+        ):
+            del case[hidden]
+
+        snapshot = optimization_snapshot(case, state)
+
+        self.assertIn(ship, snapshot["outbound_relevant_ships"])
+        self.assertGreater(sum(snapshot["forecast_outbound"].values()), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
