@@ -366,7 +366,7 @@ def result_row(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sizes", nargs="+", choices=PRESETS, default=["small"])
+    parser.add_argument("--sizes", nargs="*", choices=PRESETS, default=["small"])
     parser.add_argument("--errors", nargs="+", type=float, default=[.1])
     parser.add_argument(
         "--forecast-error-modes",
@@ -441,7 +441,7 @@ def main() -> int:
         * len(args.initial_utilizations)
         * len(args.seeds)
         * len(args.configurations)
-        + len(args.pressure_levels) * len(args.seeds)
+        + len(args.pressure_levels) * len(args.seeds) * len(args.configurations)
     )
     rows: list[dict] = (
         _resume_rows(
@@ -527,32 +527,33 @@ def main() -> int:
                             checkpoint(row)
     for level in args.pressure_levels:
         for seed in args.seeds:
-            case = build_repair_pressure_case(level=level, seed=seed)
-            identity = planned_experiment_identity(
-                f"pressure_{level}", case, "full", seed, args.time
-            )
-            if identity in completed:
-                print(f"resume: skipping {identity}", flush=True)
-                continue
-            result = run_rolling_case(
-                case,
-                time_per_cycle=args.time,
-                mip_gap=args.mip_gap,
-                threads=args.threads,
-                seed=seed,
-                configuration="full",
-                dependency_profile=args.dependency_profile,
-            )
-            row = result_row(
-                f"pressure_{level}",
-                case,
-                "full",
-                seed,
-                args.time,
-                result,
-                metadata,
-            )
-            checkpoint(row)
+            for configuration in args.configurations:
+                case = build_repair_pressure_case(level=level, seed=seed)
+                identity = planned_experiment_identity(
+                    f"pressure_{level}", case, configuration, seed, args.time
+                )
+                if identity in completed:
+                    print(f"resume: skipping {identity}", flush=True)
+                    continue
+                result = run_rolling_case(
+                    case,
+                    time_per_cycle=args.time,
+                    mip_gap=args.mip_gap,
+                    threads=args.threads,
+                    seed=seed,
+                    configuration=configuration,
+                    dependency_profile=args.dependency_profile,
+                )
+                row = result_row(
+                    f"pressure_{level}",
+                    case,
+                    configuration,
+                    seed,
+                    args.time,
+                    result,
+                    metadata,
+                )
+                checkpoint(row)
     write_experiment_artifacts(
         rows=rows,
         output_csv=args.output,
