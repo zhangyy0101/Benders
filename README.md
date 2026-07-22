@@ -139,7 +139,7 @@ short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
-The Pilot quality-polish stage is disabled in protocol `rolling-v3.6` because
+The Pilot quality-polish stage is disabled in protocol `rolling-v3.7` because
 it consumed most of the residual budget without improving any accepted Pilot
 incumbent. The switch is applied equally to `full_direct` and `full` and is
 recorded in every experiment weight profile.

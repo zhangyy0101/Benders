@@ -1241,8 +1241,8 @@ def solve_rolling_snapshot(
             )
             candidate["components"].update(canonical)
             if not USE_EXACT_STABILITY_BIG_M:
-                for name, expected in auxiliary_mapping.items():
-                    candidate[name] = dict(expected)
+                for auxiliary_name, expected in auxiliary_mapping.items():
+                    candidate[auxiliary_name] = dict(expected)
             timing["solution_extract_time"] += time.perf_counter() - extract_started
             components = candidate["components"]
             key = (
@@ -1278,6 +1278,7 @@ def solve_rolling_snapshot(
         model.dispose()
         del model, variables, expressions
         position += 1
+        record["progressive_repair_enabled"] = settings["progressive_repair"]
         if not settings["progressive_repair"]:
             continue
 
@@ -1287,6 +1288,11 @@ def solve_rolling_snapshot(
             if quantity > 1e-6
         }
         remaining_wall = optimization_deadline - time.perf_counter()
+        record["postsolve_predicted_shortage"] = (
+            incumbent["components"]["predicted_shortage"] if incumbent else None
+        )
+        record["postsolve_shortage_pair_count"] = len(shortage_pairs)
+        record["postsolve_remaining_wall_time"] = remaining_wall
         if incumbent and incumbent["components"]["predicted_shortage"] <= 1e-6:
             if (
                 settings["quality_polish"]

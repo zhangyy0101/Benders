@@ -9,6 +9,11 @@ from rolling_model import (
     extract_rolling_solution,
     validate_snapshot_temporal_consistency,
 )
+from rolling_data import (
+    build_repair_pressure_case,
+    initial_simulation_state,
+    optimization_snapshot,
+)
 from rolling_solver import (
     _block_scores,
     _horizon_end_block_utilization,
@@ -200,6 +205,19 @@ class PilotModelFormulationTest(unittest.TestCase):
             "shortage_repair_only",
         )
         self.assertEqual(diagnostics["propagated_pairs"], [])
+
+    def test_shortage_incumbent_enqueues_progressive_repair(self):
+        case = build_repair_pressure_case(level="nearby", seed=100)
+        snapshot = optimization_snapshot(case, initial_simulation_state(case))
+        result = solve_rolling_snapshot(
+            snapshot,
+            time_limit=3,
+            configuration="full",
+            seed=100,
+        )
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["repair_triggered"])
+        self.assertIn("adaptive_repair_1", [stage["stage"] for stage in result["stages"]])
 
 
 if __name__ == "__main__":
