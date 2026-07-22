@@ -22,6 +22,14 @@ from test_time_scores_and_release_propagation import base_snapshot
 
 
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_unknown_dependency_profile_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "dependency_profile"):
+            solve_rolling_snapshot(
+                objective_snapshot(),
+                time_limit=1,
+                dependency_profile="unknown",
+            )
+
     def test_integer_solution_values_are_normalized_before_validation(self):
         variables = {
             "integer": {"i": SimpleNamespace(X=2.0000087, VType=GRB.INTEGER)},

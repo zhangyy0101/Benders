@@ -139,13 +139,17 @@ short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
-The Pilot quality-polish stage is disabled in protocol `rolling-v3.4` because
+The Pilot quality-polish stage is disabled in protocol `rolling-v3.5` because
 it consumed most of the residual budget without improving any accepted Pilot
 incumbent. The switch is applied equally to `full_direct` and `full` and is
 recorded in every experiment weight profile.
 Integer and binary solver values are normalized to exact integers before
 independent validation. This follows the solver's integer-feasibility contract
 without weakening the tighter physical-balance and capacity checks.
+Dependency propagation exposes exactly three reproducible sensitivity profiles:
+`conservative`, `current`, and `expansive`. They change only the edge/path
+thresholds and are selected with `--dependency-profile`; the selected values
+are stored in both scalar metadata and the weight profile.
 
 Gurobi may not expose `ObjBound` or `MIPGap` reliably for this lexicographic
 multiobjective model. `final_stage_objective_bound` and

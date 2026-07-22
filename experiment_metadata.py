@@ -59,8 +59,11 @@ def collect_gurobi_version() -> str | None:
         return None
 
 
-def collect_weight_profile() -> dict[str, dict[str, object]]:
+def collect_weight_profile(
+    dependency_profile: str = "current",
+) -> dict[str, dict[str, object]]:
     """Collect algorithm weights and thresholds directly from configuration."""
+    dependency_thresholds = config.DEPENDENCY_PROFILES[dependency_profile]
     return {
         "stability": {
             "cancel": config.STABILITY_CANCEL_WEIGHT,
@@ -82,8 +85,9 @@ def collect_weight_profile() -> dict[str, dict[str, object]]:
             "temporal_overlap": config.DEPENDENCY_WEIGHT_TEMPORAL_OVERLAP,
             "capacity_pressure": config.DEPENDENCY_WEIGHT_CAPACITY_PRESSURE,
             "historical_overlap": config.DEPENDENCY_WEIGHT_HISTORICAL_OVERLAP,
-            "edge_threshold": config.DEPENDENCY_EDGE_THRESHOLD,
-            "path_threshold": config.DEPENDENCY_PATH_THRESHOLD,
+            "profile": dependency_profile,
+            "edge_threshold": dependency_thresholds["edge_threshold"],
+            "path_threshold": dependency_thresholds["path_threshold"],
             "max_depth": config.DEPENDENCY_MAX_DEPTH,
             "decay": config.DEPENDENCY_DECAY,
             "candidate_block_ratio": config.DEPENDENCY_CANDIDATE_BLOCK_RATIO,
@@ -128,6 +132,7 @@ def collect_experiment_metadata(
     threads: int,
     mip_gap: float,
     time_limit: float,
+    dependency_profile: str = "current",
 ) -> dict[str, object]:
     """Collect one immutable metadata record for an experiment batch."""
     return {
@@ -140,12 +145,13 @@ def collect_experiment_metadata(
         "threads": int(threads),
         "mip_gap": float(mip_gap),
         "time_limit": float(time_limit),
+        "dependency_profile": dependency_profile,
         "stability_formulation": (
             "exact_big_m"
             if config.USE_EXACT_STABILITY_BIG_M
             else "epigraph_only"
         ),
-        "weight_profile": collect_weight_profile(),
+        "weight_profile": collect_weight_profile(dependency_profile),
     }
 
 
@@ -160,6 +166,7 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "gurobi_version": metadata.get("gurobi_version"),
         "threads": metadata.get("threads"),
         "mip_gap": metadata.get("mip_gap"),
+        "dependency_profile": metadata.get("dependency_profile"),
         "stability_formulation": metadata.get("stability_formulation"),
         "weight_profile": json.dumps(
             metadata.get("weight_profile", {}),

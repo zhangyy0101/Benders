@@ -22,6 +22,7 @@ def run_rolling_case(
     threads: int = 1,
     seed: int = 0,
     configuration: str = "full",
+    dependency_profile: str = "current",
 ) -> dict:
     """Optimize and execute each rolling cycle under a common wall-clock limit."""
     state = initial_simulation_state(case)
@@ -47,6 +48,7 @@ def run_rolling_case(
             threads=threads,
             seed=seed + state["cycle"],
             configuration=configuration,
+            dependency_profile=dependency_profile,
         )
         components = result["solution"]["components"] if result.get("solution") else {}
         forecast = {

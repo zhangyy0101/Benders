@@ -1,5 +1,5 @@
 """Protocol and algorithm constants for reproducible rolling experiments."""
-PROBLEM_PROTOCOL="rolling-v3.4-dynamic-allocation-tuning"
+PROBLEM_PROTOCOL="rolling-v3.5-dynamic-allocation-tuning"
 ROLLING_CYCLE_HOURS=24
 RECEIVING_WINDOW_HOURS=72
 TIME_BUCKET_HOURS=6
@@ -63,6 +63,11 @@ DEPENDENCY_PROPAGATION_ENABLED=True
 DEPENDENCY_CANDIDATE_BLOCK_RATIO=.30
 DEPENDENCY_EDGE_THRESHOLD=.35
 DEPENDENCY_PATH_THRESHOLD=.20
+DEPENDENCY_PROFILES={
+    "conservative":{"edge_threshold":.50,"path_threshold":.35},
+    "current":{"edge_threshold":DEPENDENCY_EDGE_THRESHOLD,"path_threshold":DEPENDENCY_PATH_THRESHOLD},
+    "expansive":{"edge_threshold":.20,"path_threshold":.10},
+}
 DEPENDENCY_MAX_DEPTH=2
 DEPENDENCY_DECAY=.85
 DEPENDENCY_MAX_NEIGHBORS_PER_PAIR=8

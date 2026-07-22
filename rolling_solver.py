@@ -16,6 +16,7 @@ from config import (
     DEPENDENCY_MAX_DEPTH,
     DEPENDENCY_MAX_NEIGHBORS_PER_PAIR,
     DEPENDENCY_PATH_THRESHOLD,
+    DEPENDENCY_PROFILES,
     DEPENDENCY_PROPAGATION_ENABLED,
     DEPENDENCY_WEIGHT_CANDIDATE_OVERLAP,
     DEPENDENCY_WEIGHT_CAPACITY_PRESSURE,
@@ -906,8 +907,14 @@ def solve_rolling_snapshot(
     seed: int = 0,
     impact_threshold: float = .10,
     configuration: str = "full",
+    dependency_profile: str = "current",
     verbose: bool = False,
 ) -> dict:
+    if dependency_profile not in DEPENDENCY_PROFILES:
+        raise ValueError(
+            f"dependency_profile must be one of {tuple(DEPENDENCY_PROFILES)}"
+        )
+    dependency_thresholds = DEPENDENCY_PROFILES[dependency_profile]
     settings = configuration_features(configuration)
     wall_start = time.perf_counter()
     deadline = wall_start + max(0.0, time_limit)
@@ -967,6 +974,8 @@ def solve_rolling_snapshot(
             direct_pairs,
             dependency_graph,
             impact_direction=impact_direction,
+            edge_threshold=dependency_thresholds["edge_threshold"],
+            path_threshold=dependency_thresholds["path_threshold"],
         )
     else:
         propagation = _propagate_impact_pairs(
@@ -1321,6 +1330,8 @@ def solve_rolling_snapshot(
                     dependency_graph,
                     impact_direction=impact_direction,
                     max_depth=1,
+                    edge_threshold=dependency_thresholds["edge_threshold"],
+                    path_threshold=dependency_thresholds["path_threshold"],
                 )
                 new_neighbors = set(repair_prop["propagated_pairs"]) - direct_pairs
                 propagated_pairs |= new_neighbors
@@ -1352,6 +1363,9 @@ def solve_rolling_snapshot(
         for (ship, group), score in sorted(diagnostic_path_scores.items())
     }
     impact_diagnostics = {
+        "dependency_profile": dependency_profile,
+        "dependency_edge_threshold": dependency_thresholds["edge_threshold"],
+        "dependency_path_threshold": dependency_thresholds["path_threshold"],
         "direct_pairs": [list(pair) for pair in sorted(direct_pairs)],
         "direct_reasons": {
             f"{ship}|{group}": reasons

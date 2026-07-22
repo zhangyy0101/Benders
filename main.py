@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from config import FORECAST_ERROR_MODES
+from config import DEPENDENCY_PROFILES, FORECAST_ERROR_MODES
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
 from rolling_solver import CONFIGURATIONS
@@ -90,6 +90,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--seed", type=int, default=0)
     result.add_argument("--threads", type=int, default=1)
     result.add_argument("--mip-gap", type=float, default=.01)
+    result.add_argument(
+        "--dependency-profile",
+        choices=DEPENDENCY_PROFILES,
+        default="current",
+    )
     result.add_argument("--output")
     return result
 
@@ -128,6 +133,7 @@ def main() -> int:
         threads=args.threads,
         seed=args.seed,
         configuration=args.configuration,
+        dependency_profile=args.dependency_profile,
     )
     summary = {key: value for key, value in result.items() if key != "final_state"}
     print(json.dumps(serial(summary), indent=2, ensure_ascii=False))

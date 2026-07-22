@@ -183,6 +183,19 @@ class ExperimentMetadataTest(unittest.TestCase):
         self.assertEqual(metadata["time_limit"], 7.0)
         self.assertIn(metadata["stability_formulation"], ("epigraph_only", "exact_big_m"))
 
+    def test_dependency_sensitivity_profile_is_recorded(self):
+        profile = collect_weight_profile("conservative")
+        dependency = profile["dependency"]
+        self.assertEqual(dependency["profile"], "conservative")
+        self.assertEqual(
+            dependency["edge_threshold"],
+            config.DEPENDENCY_PROFILES["conservative"]["edge_threshold"],
+        )
+        self.assertEqual(
+            dependency["path_threshold"],
+            config.DEPENDENCY_PROFILES["conservative"]["path_threshold"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

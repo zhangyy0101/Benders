@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from config import FORECAST_ERROR_MODES
+from config import DEPENDENCY_PROFILES, FORECAST_ERROR_MODES
 from experiment_metadata import (
     collect_experiment_metadata,
     csv_metadata_fields,
@@ -390,6 +390,11 @@ def main() -> int:
     parser.add_argument("--time", type=float, default=20)
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--mip-gap", type=float, default=.01)
+    parser.add_argument(
+        "--dependency-profile",
+        choices=DEPENDENCY_PROFILES,
+        default="current",
+    )
     parser.add_argument("--outbound-rate", type=int, default=150)
     parser.add_argument("--release-delay-periods", type=int, default=0)
     parser.add_argument("--containers-per-ship-low", type=int)
@@ -408,6 +413,7 @@ def main() -> int:
         threads=args.threads,
         mip_gap=args.mip_gap,
         time_limit=args.time,
+        dependency_profile=args.dependency_profile,
     )
     requested_matrix = {
         "sizes": list(args.sizes),
@@ -420,6 +426,7 @@ def main() -> int:
         "time_limit": args.time,
         "threads": args.threads,
         "mip_gap": args.mip_gap,
+        "dependency_profile": args.dependency_profile,
         "outbound_rate": args.outbound_rate,
         "release_delay_periods": args.release_delay_periods,
         "containers_per_ship_low": args.containers_per_ship_low,
@@ -506,6 +513,7 @@ def main() -> int:
                                 threads=args.threads,
                                 seed=seed,
                                 configuration=configuration,
+                                dependency_profile=args.dependency_profile,
                             )
                             row = result_row(
                                 size,
@@ -533,6 +541,7 @@ def main() -> int:
                 threads=args.threads,
                 seed=seed,
                 configuration="full",
+                dependency_profile=args.dependency_profile,
             )
             row = result_row(
                 f"pressure_{level}",
