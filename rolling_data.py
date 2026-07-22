@@ -653,18 +653,45 @@ def build_repair_pressure_case(*, level: str = "nearby", seed: int = 0) -> dict:
         seed=seed,
         num_blocks=8,
         bays_per_block=4,
-        num_ships=1,
-        cycles=1,
+        num_ships=4,
+        cycles=2,
+        active_ship_overlap=3,
+        pod_count=4,
         initial_utilization=0,
-        forecast_error=0,
+        forecast_error=.20,
+        forecast_error_mode="mixed",
         containers_per_ship_range=(60, 60),
     )
-    factor = 8 if level == "nearby" else 14
+    factor = 3
     case["forecasts"] = {
         key: value * factor for key, value in case["forecasts"].items()
     }
+    shock_candidates = {
+        group: sum(
+            value
+            for (cycle, ship, g, _period), value in case["forecasts"].items()
+            if cycle == 1 and ship == "V01" and g == group
+        )
+        for cycle, ship, group, _period in case["forecasts"]
+        if cycle == 1 and ship == "V01"
+    }
+    shock_group = min(shock_candidates, key=lambda group: (shock_candidates[group], group))
+    shock_keys = sorted(
+        key
+        for key in case["forecasts"]
+        if key[0] == 1 and key[1] == "V01" and key[2] == shock_group
+    )
+    shock_total = 210 if level == "nearby" else 540
+    shock_profile = _integer_profile(
+        shock_total,
+        [case["forecasts"][key] for key in shock_keys],
+    )
+    for key, value in zip(shock_keys, shock_profile):
+        case["forecasts"][key] = value
     case["pressure_level"] = level
     case["pressure_demand_factor"] = factor
+    case["pressure_shock_group"] = shock_group
+    case["pressure_shock_total"] = shock_total
     return case
 
 

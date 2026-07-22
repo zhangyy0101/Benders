@@ -11,9 +11,8 @@ from rolling_model import (
 )
 from rolling_data import (
     build_repair_pressure_case,
-    initial_simulation_state,
-    optimization_snapshot,
 )
+from rolling_experiment import run_rolling_case
 from rolling_solver import (
     _block_scores,
     _horizon_end_block_utilization,
@@ -208,16 +207,22 @@ class PilotModelFormulationTest(unittest.TestCase):
 
     def test_shortage_incumbent_enqueues_progressive_repair(self):
         case = build_repair_pressure_case(level="nearby", seed=100)
-        snapshot = optimization_snapshot(case, initial_simulation_state(case))
-        result = solve_rolling_snapshot(
-            snapshot,
-            time_limit=3,
+        self.assertEqual(case["cycles"], 2)
+        self.assertEqual(case["num_ships"], 4)
+        self.assertEqual(case["pressure_shock_total"], 210)
+        result = run_rolling_case(
+            case,
+            time_per_cycle=3,
             configuration="full",
             seed=100,
         )
         self.assertTrue(result["ok"])
-        self.assertTrue(result["repair_triggered"])
-        self.assertIn("adaptive_repair_1", [stage["stage"] for stage in result["stages"]])
+        repair_cycles = [cycle for cycle in result["cycles"] if cycle.get("repair_triggered")]
+        self.assertTrue(repair_cycles)
+        self.assertIn(
+            "adaptive_repair_1",
+            [stage["stage"] for stage in repair_cycles[0]["stages"]],
+        )
 
 
 if __name__ == "__main__":

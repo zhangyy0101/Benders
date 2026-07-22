@@ -139,7 +139,7 @@ short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
-The Pilot quality-polish stage is disabled in protocol `rolling-v3.7` because
+The Pilot quality-polish stage is disabled in protocol `rolling-v3.8` because
 it consumed most of the residual budget without improving any accepted Pilot
 incumbent. The switch is applied equally to `full_direct` and `full` and is
 recorded in every experiment weight profile.
@@ -154,6 +154,10 @@ Propagation is reactive: the first impact-region solve changes direct pairs
 only, and dependency neighbors are released only when that incumbent has
 predicted shortage and Progressive Repair is invoked. This prevents routine
 cycles from trading execution robustness for marginal operational polishing.
+The `nearby` and `global` pressure cases are two-cycle, multi-ship mechanism
+tests with a controlled second-cycle forecast shock. They are intended only to
+verify reactive propagation and repair-stage reachability, not to estimate
+normal operational performance.
 
 Gurobi may not expose `ObjBound` or `MIPGap` reliably for this lexicographic
 multiobjective model. `final_stage_objective_bound` and
