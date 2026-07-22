@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import platform as platform_module
 import subprocess
 import sys
@@ -101,6 +102,7 @@ def collect_weight_profile() -> dict[str, dict[str, object]]:
             "minimum_period_capacity": config.MINIMUM_PERIOD_CAPACITY_WEIGHT,
         },
         "quality_polish": {
+            "enabled": config.QUALITY_POLISH_ENABLED,
             "pair_ratio": config.QUALITY_POLISH_PAIR_RATIO,
             "blocks_per_pair": config.QUALITY_POLISH_BLOCKS_PER_PAIR,
             "support": config.QUALITY_POLISH_WEIGHT_SUPPORT,
@@ -189,16 +191,21 @@ def write_experiment_artifacts(
     manifest_output: str | Path | None = None,
     command: list[str] | None = None,
     created_at_utc: str | None = None,
+    expected_row_count: int | None = None,
 ) -> Path:
-    """Write one CSV and its reproducibility manifest using stable JSON."""
+    """Atomically write one CSV and its reproducibility manifest."""
     if not rows:
         raise ValueError("no experiment rows were requested")
     output_path = Path(output_csv)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", newline="", encoding="utf-8-sig") as stream:
+    output_temporary = output_path.with_name(f".{output_path.name}.tmp")
+    with output_temporary.open("w", newline="", encoding="utf-8-sig") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(output_temporary, output_path)
 
     manifest_path = (
         Path(manifest_output)
@@ -216,9 +223,21 @@ def write_experiment_artifacts(
         "metadata": metadata,
         "requested_matrix": requested_matrix,
         "row_count": len(rows),
+        "expected_row_count": (
+            len(rows) if expected_row_count is None else int(expected_row_count)
+        ),
+        "complete": (
+            True
+            if expected_row_count is None
+            else len(rows) == int(expected_row_count)
+        ),
         "all_ok": all(_experiment_row_ok(row) for row in rows),
     }
-    with manifest_path.open("w", encoding="utf-8") as stream:
+    manifest_temporary = manifest_path.with_name(f".{manifest_path.name}.tmp")
+    with manifest_temporary.open("w", encoding="utf-8") as stream:
         json.dump(manifest, stream, ensure_ascii=False, indent=2, sort_keys=True)
         stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(manifest_temporary, manifest_path)
     return manifest_path

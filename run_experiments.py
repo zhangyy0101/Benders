@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
+from pathlib import Path
 
 from config import FORECAST_ERROR_MODES
 from experiment_metadata import (
@@ -15,6 +17,106 @@ from main import PRESETS
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
 from rolling_solver import CONFIGURATIONS
+
+
+EXPERIMENT_ID_FIELDS = (
+    "instance",
+    "num_blocks",
+    "bays_per_block",
+    "num_ships",
+    "cycles",
+    "requested_initial_utilization",
+    "forecast_error",
+    "forecast_error_mode",
+    "outbound_rate",
+    "release_delay_periods",
+    "configuration",
+    "seed",
+    "time_limit",
+)
+NUMERIC_EXPERIMENT_ID_FIELDS = set(EXPERIMENT_ID_FIELDS) - {
+    "instance",
+    "forecast_error_mode",
+    "configuration",
+}
+
+
+def _identity_value(field: str, value: object) -> str:
+    if field in NUMERIC_EXPERIMENT_ID_FIELDS and value is not None:
+        return format(float(value), ".12g")
+    return str(value)
+
+
+def experiment_identity(row: dict) -> tuple[str, ...]:
+    """Return a stable identity for one scenario/configuration/seed run."""
+    return tuple(
+        _identity_value(field, row.get(field)) for field in EXPERIMENT_ID_FIELDS
+    )
+
+
+def planned_experiment_identity(
+    instance: str,
+    case: dict,
+    configuration: str,
+    seed: int,
+    time_limit: float,
+) -> tuple[str, ...]:
+    """Build the same identity without solving the experiment."""
+    return experiment_identity({
+        "instance": instance,
+        "num_blocks": case["num_blocks"],
+        "bays_per_block": case["bays_per_block"],
+        "num_ships": case["num_ships"],
+        "cycles": case["cycles"],
+        "requested_initial_utilization": case["requested_initial_utilization"],
+        "forecast_error": case["forecast_error"],
+        "forecast_error_mode": case["forecast_error_mode"],
+        "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
+        "release_delay_periods": case["release_delay_periods"],
+        "configuration": configuration,
+        "seed": seed,
+        "time_limit": time_limit,
+    })
+
+
+def _row_ok(row: dict) -> bool:
+    value = row.get("ok")
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+
+def _resume_rows(
+    *,
+    output_csv: str,
+    manifest_output: str | None,
+    metadata: dict[str, object],
+    requested_matrix: dict[str, object],
+) -> list[dict]:
+    """Load a compatible atomic checkpoint or reject an unsafe resume."""
+    output_path = Path(output_csv)
+    manifest_path = (
+        Path(manifest_output)
+        if manifest_output is not None
+        else output_path.with_suffix(".manifest.json")
+    )
+    if not output_path.exists() and not manifest_path.exists():
+        return []
+    if not output_path.exists() or not manifest_path.exists():
+        raise ValueError("resume requires both the CSV checkpoint and its manifest")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("metadata") != metadata:
+        raise ValueError("resume metadata differs from the current environment or protocol")
+    if manifest.get("requested_matrix") != requested_matrix:
+        raise ValueError("resume matrix differs from the current requested matrix")
+    with output_path.open(newline="", encoding="utf-8-sig") as stream:
+        rows = list(csv.DictReader(stream))
+    if int(manifest.get("row_count", -1)) != len(rows):
+        raise ValueError("resume CSV and manifest row counts disagree")
+    identities = [experiment_identity(row) for row in rows]
+    if len(identities) != len(set(identities)):
+        raise ValueError("resume checkpoint contains duplicate experiment rows")
+    return rows
 
 
 def stage_summary(result: dict) -> dict:
@@ -296,13 +398,72 @@ def main() -> int:
     parser.add_argument("--pod-count", type=int)
     parser.add_argument("--output", default="rolling_results.csv")
     parser.add_argument("--manifest-output")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="resume a compatible row-level checkpoint",
+    )
     args = parser.parse_args()
     metadata = collect_experiment_metadata(
         threads=args.threads,
         mip_gap=args.mip_gap,
         time_limit=args.time,
     )
-    rows: list[dict] = []
+    requested_matrix = {
+        "sizes": list(args.sizes),
+        "errors": list(args.errors),
+        "forecast_error_modes": list(args.forecast_error_modes),
+        "initial_utilizations": list(args.initial_utilizations),
+        "configurations": list(args.configurations),
+        "pressure_levels": list(args.pressure_levels),
+        "seeds": list(args.seeds),
+        "time_limit": args.time,
+        "threads": args.threads,
+        "mip_gap": args.mip_gap,
+        "outbound_rate": args.outbound_rate,
+        "release_delay_periods": args.release_delay_periods,
+        "containers_per_ship_low": args.containers_per_ship_low,
+        "containers_per_ship_high": args.containers_per_ship_high,
+        "active_ship_overlap": args.active_ship_overlap,
+        "pod_count": args.pod_count,
+    }
+    expected_row_count = (
+        len(args.sizes)
+        * len(args.errors)
+        * len(args.forecast_error_modes)
+        * len(args.initial_utilizations)
+        * len(args.seeds)
+        * len(args.configurations)
+        + len(args.pressure_levels) * len(args.seeds)
+    )
+    rows: list[dict] = (
+        _resume_rows(
+            output_csv=args.output,
+            manifest_output=args.manifest_output,
+            metadata=metadata,
+            requested_matrix=requested_matrix,
+        )
+        if args.resume else []
+    )
+    completed = {experiment_identity(row) for row in rows}
+
+    def checkpoint(row: dict) -> None:
+        identity = experiment_identity(row)
+        if identity in completed:
+            raise ValueError(f"duplicate experiment row: {identity}")
+        rows.append(row)
+        completed.add(identity)
+        write_experiment_artifacts(
+            rows=rows,
+            output_csv=args.output,
+            metadata=metadata,
+            requested_matrix=requested_matrix,
+            manifest_output=args.manifest_output,
+            command=list(sys.argv),
+            expected_row_count=expected_row_count,
+        )
+        print(row, flush=True)
+
     for size in args.sizes:
         for error in args.errors:
             for mode in args.forecast_error_modes:
@@ -332,6 +493,12 @@ def main() -> int:
                                 release_delay_periods=args.release_delay_periods,
                                 **preset,
                             )
+                            identity = planned_experiment_identity(
+                                size, case, configuration, seed, args.time
+                            )
+                            if identity in completed:
+                                print(f"resume: skipping {identity}", flush=True)
+                                continue
                             result = run_rolling_case(
                                 case,
                                 time_per_cycle=args.time,
@@ -349,11 +516,16 @@ def main() -> int:
                                 result,
                                 metadata,
                             )
-                            rows.append(row)
-                            print(row, flush=True)
+                            checkpoint(row)
     for level in args.pressure_levels:
         for seed in args.seeds:
             case = build_repair_pressure_case(level=level, seed=seed)
+            identity = planned_experiment_identity(
+                f"pressure_{level}", case, "full", seed, args.time
+            )
+            if identity in completed:
+                print(f"resume: skipping {identity}", flush=True)
+                continue
             result = run_rolling_case(
                 case,
                 time_per_cycle=args.time,
@@ -371,22 +543,7 @@ def main() -> int:
                 result,
                 metadata,
             )
-            rows.append(row)
-            print(row, flush=True)
-    requested_matrix = {
-        "sizes": list(args.sizes),
-        "errors": list(args.errors),
-        "forecast_error_modes": list(args.forecast_error_modes),
-        "initial_utilizations": list(args.initial_utilizations),
-        "configurations": list(args.configurations),
-        "pressure_levels": list(args.pressure_levels),
-        "seeds": list(args.seeds),
-        "time_limit": args.time,
-        "threads": args.threads,
-        "mip_gap": args.mip_gap,
-        "outbound_rate": args.outbound_rate,
-        "release_delay_periods": args.release_delay_periods,
-    }
+            checkpoint(row)
     write_experiment_artifacts(
         rows=rows,
         output_csv=args.output,
@@ -394,8 +551,9 @@ def main() -> int:
         requested_matrix=requested_matrix,
         manifest_output=args.manifest_output,
         command=list(sys.argv),
+        expected_row_count=expected_row_count,
     )
-    return 0 if all(row["ok"] for row in rows) else 2
+    return 0 if all(_row_ok(row) for row in rows) else 2
 
 
 if __name__ == "__main__":

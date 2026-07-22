@@ -114,6 +114,8 @@ class ExperimentMetadataTest(unittest.TestCase):
         self.assertEqual(float(csv_row["mip_gap"]), .01)
         self.assertEqual(csv_row["stability_formulation"], "epigraph_only")
         self.assertEqual(manifest["row_count"], 1)
+        self.assertEqual(manifest["expected_row_count"], 1)
+        self.assertTrue(manifest["complete"])
         self.assertTrue(manifest["all_ok"])
         self.assertEqual(
             csv_row["weight_profile"],
@@ -139,6 +141,24 @@ class ExperimentMetadataTest(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["row_count"], 2)
         self.assertFalse(manifest["all_ok"])
+
+    def test_manifest_records_incomplete_atomic_checkpoint(self):
+        metadata = {"git_commit": "abc123"}
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "checkpoint.csv"
+            manifest_path = write_experiment_artifacts(
+                rows=[{"instance": "one", "ok": True}],
+                output_csv=output,
+                metadata=metadata,
+                requested_matrix={"seeds": [1, 2]},
+                expected_row_count=2,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            temporary_files = list(Path(directory).glob(".*.tmp"))
+        self.assertEqual(manifest["row_count"], 1)
+        self.assertEqual(manifest["expected_row_count"], 2)
+        self.assertFalse(manifest["complete"])
+        self.assertEqual(temporary_files, [])
 
     def test_collected_metadata_uses_runtime_configuration(self):
         with patch(

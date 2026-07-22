@@ -28,6 +28,7 @@ from config import (
     IMPACT_SCORE_OUTBOUND_WEIGHT,
     IMPACT_SCORE_STABILITY_WEIGHT,
     QUALITY_POLISH_BLOCKS_PER_PAIR,
+    QUALITY_POLISH_ENABLED,
     QUALITY_POLISH_PAIR_RATIO,
     QUALITY_POLISH_WEIGHT_DISTANCE,
     QUALITY_POLISH_WEIGHT_OVERLAP,
@@ -85,7 +86,10 @@ def configuration_features(configuration: str) -> dict:
         "impact_region": configuration not in ("core", "core_start"),
         "dependency_propagation": configuration == "full" and DEPENDENCY_PROPAGATION_ENABLED,
         "progressive_repair": configuration in ("full_direct", "full"),
-        "quality_polish": configuration in ("full_direct", "full"),
+        "quality_polish": (
+            QUALITY_POLISH_ENABLED
+            and configuration in ("full_direct", "full")
+        ),
     }
 
 

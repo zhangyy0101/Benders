@@ -139,6 +139,10 @@ short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
+The Pilot quality-polish stage is disabled in protocol `rolling-v3.3` because
+it consumed most of the residual budget without improving any accepted Pilot
+incumbent. The switch is applied equally to `full_direct` and `full` and is
+recorded in every experiment weight profile.
 
 Gurobi may not expose `ObjBound` or `MIPGap` reliably for this lexicographic
 multiobjective model. `final_stage_objective_bound` and
@@ -165,6 +169,13 @@ python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --mip-gap 0.01 --output pilot_results.csv \
   --manifest-output pilot_results.manifest.json
 ```
+
+Each completed row atomically checkpoints both files. An interrupted batch can
+be continued with the identical command plus `--resume`; incompatible Git,
+protocol, runtime, weight-profile, or matrix metadata is rejected instead of
+silently mixing results. The manifest distinguishes a successful partial
+checkpoint from a complete requested matrix through `row_count`,
+`expected_row_count`, and `complete`.
 
 If `--manifest-output` is omitted, the manifest defaults to the CSV stem, for
 example `pilot_results.manifest.json`. Every CSV row records the Git commit,
