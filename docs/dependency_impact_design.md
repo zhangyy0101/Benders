@@ -28,7 +28,7 @@ Existing spatial support combines live `actual_inventory` and
 `previous_reservation`. It is represented by `(ship, POD, bay)` support and
 ship-group historical blocks. This combined baseline is used for new-bay
 counting, stability loss in block ranking, local candidate regions, dependency
-history, and quality polishing. Continuing in a bay already occupied by the
+history. Continuing in a bay already occupied by the
 same ship/POD is therefore not a new support activation.
 
 ## Pair-level stability
@@ -73,12 +73,12 @@ which remains meaningful when block capacities differ.
 ## Time-dependent capacity and block scores
 
 Physical residual capacity is calculated for every bay and period after locked
-old inventory, actual inventory, and their release times. The initial dependency
-graph uses this physical capacity. After direct and propagated pairs are known,
-positive-demand unaffected pairs are frozen. Baseline residual capacity deducts
-their inherited, time-dependent reservation commitments. Final candidate
-ranking and allowed-region construction use this baseline capacity. Affected
-pairs remain adjustable and are not deducted as frozen commitments.
+old inventory, actual inventory, and their release times. The optional
+dependency graph uses this physical capacity. In the first impact solve, only
+direct pairs are adjustable and positive-demand unaffected pairs are frozen.
+Baseline residual capacity deducts their inherited, time-dependent reservation
+commitments. Final candidate ranking and allowed-region construction use this
+baseline capacity.
 
 For each ship-group and block, compatible capacity is calculated only from bays
 with the correct size and a compatible live height type.
@@ -116,16 +116,13 @@ aggregated once per block-period and uses the minimum temporal weight and
 compatible capacity of both endpoints, avoiding duplicate bay capacity.
 
 Finite propagation multiplies the current path score by edge score and decay,
-subject to edge/path thresholds, neighbor limits, and maximum depth. Propagation
-from an increase/new pair is labelled `pressure`; propagation from a
-decrease/disappeared pair is labelled `release_opportunity`.
-
-Direct pairs receive historical support and leading ranked blocks. A release-
-opportunity pair additionally receives the released ancestor's historical
-blocks. Zero-demand nodes influence propagation but never create reservation or
-arrival variables. Shortage repair adds deficient pairs as pressure nodes,
-propagates one extra layer in `full`, expands candidates, and finally restores
-all compatible bays through global recovery.
+subject to edge/path thresholds, neighbor limits, and maximum depth. It is
+reactive rather than proactive: the first impact solve never releases graph
+neighbors. If its incumbent has shortage, deficient pairs become pressure
+nodes; optional `full` then propagates one layer of dependency neighbors before
+candidate expansion. Zero-demand nodes can influence the graph but never create
+reservation or arrival variables. Progressive Repair expands the local domain
+and finally restores all compatible bays through global recovery.
 
 ## Realized recourse
 
@@ -151,11 +148,8 @@ over periods, and bay concentration is weighted by its number of ship/POD
 period observations. Forecast diagnostics and plan revision metrics remain
 separate and are never interpreted as realized totals.
 
-Quality polish uses the same utilization concept as the MIP. Horizon-end
-occupancy includes locked, actual, and planned inventory that remains present,
-then divides by block capacity. Its normalized contribution combines support,
-distance, overlap, and positive utilization overload using weights from
-`config.py`.
+The former quality-polish stage is disabled by the experiment protocol after it
+showed no accepted-incumbent improvement in the Pilot matrix.
 
 ## Wall-clock and ablation contract
 

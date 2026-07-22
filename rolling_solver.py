@@ -907,7 +907,7 @@ def solve_rolling_snapshot(
     threads: int = 1,
     seed: int = 0,
     impact_threshold: float = .10,
-    configuration: str = "full",
+    configuration: str = "full_direct",
     dependency_profile: str = "current",
     verbose: bool = False,
 ) -> dict:

@@ -21,7 +21,7 @@ def run_rolling_case(
     mip_gap: float = .01,
     threads: int = 1,
     seed: int = 0,
-    configuration: str = "full",
+    configuration: str = "full_direct",
     dependency_profile: str = "current",
 ) -> dict:
     """Optimize and execute each rolling cycle under a common wall-clock limit."""

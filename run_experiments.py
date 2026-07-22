@@ -381,7 +381,10 @@ def main() -> int:
         default=[.25],
     )
     parser.add_argument(
-        "--configurations", nargs="+", choices=CONFIGURATIONS, default=["full"]
+        "--configurations",
+        nargs="+",
+        choices=CONFIGURATIONS,
+        default=["full_direct"],
     )
     parser.add_argument(
         "--pressure-levels", nargs="*", choices=("nearby", "global"), default=[]

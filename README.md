@@ -80,36 +80,33 @@ Forecast arrivals at or after planned release are rejected by snapshot
 validation. Model construction also omits their inbound-flow variables, so an
 invalid bypassed snapshot can only record that quantity as shortage.
 
-## Dependency-aware impact algorithm
+## Impact-region and progressive-repair algorithm
 
-The `full` configuration:
+The recommended `full_direct` configuration:
 
 1. identifies directly changed ship-group pairs;
 2. computes time-dependent physical residual capacity and height conflicts;
-3. builds a physical-resource dependency graph;
-4. propagates capacity pressure and resource-release opportunities;
-5. deducts frozen inherited reservations to form baseline residual capacity;
-6. ranks candidate blocks and solves the impact region with a MIP start;
-7. expands shortage pairs and dependency neighbors;
-8. restores the unrestricted compatible domain if needed;
-9. polishes a shortage-free incumbent using utilization-consistent scores.
+3. deducts frozen inherited reservations to form baseline residual capacity;
+4. ranks candidate blocks and solves the impact region with a MIP start;
+5. expands shortage pairs through progressively larger neighborhoods;
+6. restores the unrestricted compatible domain if shortage remains.
 
-The dependency graph uses physical residual capacity after locked and actual
-inventory. Candidate ranking uses baseline residual capacity, which additionally
-deducts historical reservations of unaffected frozen pairs. Quality polish
-uses horizon-end occupancy divided by each block's own capacity, including
-locked, actual, and planned inventory that remains present.
+The optional `full` ablation additionally builds a physical-resource dependency
+graph. It does not proactively release graph neighbors: only a shortage-bearing
+incumbent can add dependency neighbors to Progressive Repair. This keeps normal
+cycles aligned with `full_direct` while exposing the mechanism in controlled
+pressure tests. The retired quality-polish implementation is protocol-disabled.
 
 Configurations are:
 
 - `core`: unrestricted MIP without a start;
 - `core_start`: unrestricted MIP with inherited MIP start;
 - `core_start_impact`: direct impact region without propagation or repair;
-- `full_direct`: direct impact, repair, global recovery, and polishing;
-- `full`: identical to `full_direct`, plus dependency propagation.
+- `full_direct`: recommended direct impact, progressive repair, and global recovery;
+- `full`: optional reactive dependency propagation on top of `full_direct`.
 
-Thus `full_direct` and `full` differ only through dependency propagation and
-its downstream affected region.
+Thus `full_direct` and `full` differ only through reactive dependency
+propagation and its downstream repair region.
 
 ## Execution and realized metrics
 
@@ -139,7 +136,7 @@ short diagnostic limits retain at least half their budget for optimization.
 The reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
-The Pilot quality-polish stage is disabled in protocol `rolling-v3.8` because
+The Pilot quality-polish stage is disabled in protocol `rolling-v3.9` because
 it consumed most of the residual budget without improving any accepted Pilot
 incumbent. The switch is applied equally to `full_direct` and `full` and is
 recorded in every experiment weight profile.
@@ -170,7 +167,7 @@ explicitly `None` when the attributes are unavailable; root relaxation is also
 Run one case:
 
 ```bash
-python main.py --size small --configuration full --time 20 \
+python main.py --size small --configuration full_direct --time 20 \
   --mip-gap 0.01 --seed 0
 ```
 

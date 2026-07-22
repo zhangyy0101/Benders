@@ -1,5 +1,5 @@
 """Protocol and algorithm constants for reproducible rolling experiments."""
-PROBLEM_PROTOCOL="rolling-v3.8-dynamic-allocation-tuning"
+PROBLEM_PROTOCOL="rolling-v3.9-dynamic-allocation-tuning"
 ROLLING_CYCLE_HOURS=24
 RECEIVING_WINDOW_HOURS=72
 TIME_BUCKET_HOURS=6

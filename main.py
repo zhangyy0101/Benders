@@ -70,7 +70,11 @@ PRESETS = {
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Rolling bay-level allocation")
     result.add_argument("--size", choices=PRESETS, default="small")
-    result.add_argument("--configuration", choices=CONFIGURATIONS, default="full")
+    result.add_argument(
+        "--configuration",
+        choices=CONFIGURATIONS,
+        default="full_direct",
+    )
     result.add_argument("--pressure", choices=("nearby", "global"))
     result.add_argument("--time", type=float, default=20, help="wall-clock seconds per cycle")
     result.add_argument("--forecast-error", type=float, default=.10)
