@@ -1212,6 +1212,9 @@ def solve_rolling_snapshot(
                 cycle_first_incumbent[0] = time.perf_counter() - wall_start
             extract_started = time.perf_counter()
             candidate = extract_rolling_solution(variables, expressions)
+            candidate["components"]["predicted_shortage"] = float(
+                sum(candidate["shortage"].values())
+            )
             canonical = canonical_stability_metrics(
                 d,
                 candidate["reservation"],

@@ -497,8 +497,15 @@ def extract_rolling_solution(variables: dict, expressions: dict) -> dict:
         if hasattr(value, "X"):
             return float(value.X)
         return float(value)
+
+    def variable_value(variable) -> float | int:
+        value = float(variable.X)
+        if variable.VType in (GRB.BINARY, GRB.INTEGER):
+            return int(round(value))
+        return value
+
     components = {name: expression_value(value) for name, value in expressions.items()}
     return {
-        name: {key: float(variable.X) for key, variable in group.items()}
+        name: {key: variable_value(variable) for key, variable in group.items()}
         for name, group in variables.items()
     } | {"components": components}

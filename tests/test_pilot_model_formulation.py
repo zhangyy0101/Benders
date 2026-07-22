@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from gurobipy import GRB
 
@@ -21,6 +22,17 @@ from test_time_scores_and_release_propagation import base_snapshot
 
 
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_integer_solution_values_are_normalized_before_validation(self):
+        variables = {
+            "integer": {"i": SimpleNamespace(X=2.0000087, VType=GRB.INTEGER)},
+            "binary": {"b": SimpleNamespace(X=.9999965, VType=GRB.BINARY)},
+            "continuous": {"c": SimpleNamespace(X=2.0000087, VType=GRB.CONTINUOUS)},
+        }
+        solution = extract_rolling_solution(variables, {})
+        self.assertEqual(solution["integer"]["i"], 2)
+        self.assertEqual(solution["binary"]["b"], 1)
+        self.assertAlmostEqual(solution["continuous"]["c"], 2.0000087)
+
     def test_release_after_arrival_is_rejected_and_cannot_create_flow(self):
         snapshot = objective_snapshot()
         snapshot["ship_release_local"]["V"] = 0
