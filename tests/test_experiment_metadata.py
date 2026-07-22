@@ -187,6 +187,7 @@ class ExperimentMetadataTest(unittest.TestCase):
         profile = collect_weight_profile("conservative")
         dependency = profile["dependency"]
         self.assertEqual(dependency["profile"], "conservative")
+        self.assertEqual(dependency["trigger_mode"], "shortage_repair_only")
         self.assertEqual(
             dependency["edge_threshold"],
             config.DEPENDENCY_PROFILES["conservative"]["edge_threshold"],

@@ -81,6 +81,7 @@ def collect_weight_profile(
         },
         "dependency": {
             "enabled": config.DEPENDENCY_PROPAGATION_ENABLED,
+            "trigger_mode": config.DEPENDENCY_TRIGGER_MODE,
             "candidate_overlap": config.DEPENDENCY_WEIGHT_CANDIDATE_OVERLAP,
             "temporal_overlap": config.DEPENDENCY_WEIGHT_TEMPORAL_OVERLAP,
             "capacity_pressure": config.DEPENDENCY_WEIGHT_CAPACITY_PRESSURE,

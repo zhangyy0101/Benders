@@ -18,6 +18,7 @@ from config import (
     DEPENDENCY_PATH_THRESHOLD,
     DEPENDENCY_PROFILES,
     DEPENDENCY_PROPAGATION_ENABLED,
+    DEPENDENCY_TRIGGER_MODE,
     DEPENDENCY_WEIGHT_CANDIDATE_OVERLAP,
     DEPENDENCY_WEIGHT_CAPACITY_PRESSURE,
     DEPENDENCY_WEIGHT_HISTORICAL_OVERLAP,
@@ -969,21 +970,15 @@ def solve_rolling_snapshot(
         timing["dependency_graph_time"] = time.perf_counter() - started
 
     started = time.perf_counter()
-    if settings["dependency_propagation"] and time.perf_counter() < deadline:
-        propagation = _propagate_impact_pairs(
-            direct_pairs,
-            dependency_graph,
-            impact_direction=impact_direction,
-            edge_threshold=dependency_thresholds["edge_threshold"],
-            path_threshold=dependency_thresholds["path_threshold"],
-        )
-    else:
-        propagation = _propagate_impact_pairs(
-            direct_pairs,
-            {},
-            impact_direction=impact_direction,
-            max_depth=0,
-        )
+    # Dependency neighbors are intentionally not released in the first solve.
+    # They enter only after an incumbent exposes predicted shortage, preserving
+    # the robust direct-impact plan in ordinary rolling cycles.
+    propagation = _propagate_impact_pairs(
+        direct_pairs,
+        {},
+        impact_direction=impact_direction,
+        max_depth=0,
+    )
     timing["propagation_time"] = time.perf_counter() - started
 
     propagated_pairs = set(propagation["propagated_pairs"])
@@ -1364,6 +1359,7 @@ def solve_rolling_snapshot(
     }
     impact_diagnostics = {
         "dependency_profile": dependency_profile,
+        "dependency_trigger_mode": DEPENDENCY_TRIGGER_MODE,
         "dependency_edge_threshold": dependency_thresholds["edge_threshold"],
         "dependency_path_threshold": dependency_thresholds["path_threshold"],
         "direct_pairs": [list(pair) for pair in sorted(direct_pairs)],

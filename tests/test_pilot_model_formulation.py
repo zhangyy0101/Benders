@@ -186,6 +186,21 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertIn("final_stage_mip_gap", result)
         self.assertIn("final_stage_objective_bound", result)
 
+    def test_dependency_propagation_waits_for_shortage_repair(self):
+        result = solve_rolling_snapshot(
+            objective_snapshot(),
+            time_limit=2,
+            configuration="full",
+            seed=0,
+        )
+        self.assertTrue(result["ok"])
+        diagnostics = result["impact_diagnostics"]
+        self.assertEqual(
+            diagnostics["dependency_trigger_mode"],
+            "shortage_repair_only",
+        )
+        self.assertEqual(diagnostics["propagated_pairs"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
