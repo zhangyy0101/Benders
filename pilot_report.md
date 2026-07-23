@@ -104,7 +104,7 @@ Section A.
 ### Stage 1: 12 complete pairs
 
 The two methods had identical realized unplaced quantity, fallback rate,
-operations cost, stability cost, distance, conflict, and global-repair count.
+normalized operations score, stability cost, distance, conflict, and global-repair count.
 `full` was 0.0009 seconds slower to first incumbent and 0.019 seconds slower in
 total wall time on average. Thus propagation was active but produced no
 operational gain on `pilot_small`.
@@ -118,7 +118,7 @@ Mean paired difference (`full - full_direct`):
 | Realized unplaced | +0.0556 | slightly worse |
 | Fallback rate | +0.000154 | slightly worse |
 | First-incumbent time | -0.0542 s | faster |
-| Predicted operations cost | -0.000407 | slightly better |
+| Normalized operations score | -0.000407 | slightly better |
 | Total wall time | +0.340 s | slower |
 | Stability cost | -1.167 | slightly better |
 | Realized distance | -952.2 | better |
@@ -132,7 +132,7 @@ not show a consistent marginal advantage for dependency propagation.
 ### Stage 1: 12 complete pairs
 
 Both methods had zero unplaced and fallback. `full` reached its first incumbent
-0.031 seconds earlier and slightly improved operations cost and distance, but
+0.031 seconds earlier and slightly improved the normalized operations score and distance, but
 used 12.15 seconds more total wall time because quality polish consumed nearly
 the full remaining budget.
 
@@ -145,7 +145,7 @@ Mean paired difference (`full - core_start`):
 | Realized unplaced | +1.294 | worse |
 | Fallback rate | +0.00113 | worse |
 | First-incumbent time | -0.900 s | faster |
-| Predicted operations cost | -0.0547 | better |
+| Normalized operations score | -0.0547 | better |
 | Total wall time | +17.29 s | slower |
 | Stability cost | +3.0 | worse |
 | Realized distance | -6185.9 | better |
@@ -193,7 +193,7 @@ without improving the lexicographic incumbent.
 
 For the exact check, all four epigraph/exact pairs had identical canonical
 shortage, cancellation, discretionary cancellation, block reallocation,
-stability cost, and operations cost. Epigraph used 65--110 fewer binary
+stability cost, and normalized operations score. Epigraph used 65--110 fewer binary
 variables (mean reduction 86.5). It was not faster in the `full` runs because
 quality polish consumed the budget. Maximum raw auxiliary epigraph slack was
 50, while accepted solutions were corrected and validated using canonical
@@ -206,10 +206,10 @@ separately confirms reservation equality on its controlled snapshot.
 - `pilot_small` has almost no outcome discrimination; it is suitable for smoke
   and mechanism checks only.
 - `pilot_medium` creates meaningful differences in first-incumbent time,
-  operations cost, distance, fallback, and unplaced quantity.
+  normalized operations score, distance, fallback, and unplaced quantity.
 - Utilization `0.80` with `mixed / error=0.10` was the strongest observed
   `full` versus `core_start` separator: `full` was faster to an incumbent and
-  better on predicted operations/distance, but averaged 7.33 more realized
+  better on predicted normalized operations/distance, but averaged 7.33 more realized
   unplaced boxes in the three pairs.
 - Error `0.20 / booking_add_cancel` produced the sole retained strict
   wall-clock failure and mixed `full`/`full_direct` effects.
@@ -253,4 +253,3 @@ large-scale experiments.
 - Capacity still follows whole-vessel release.
 - The missing Stage 2 cell, absent 30-second batch, and three-seed sample prevent
   formal significance claims.
-

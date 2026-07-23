@@ -11,8 +11,9 @@ class WallClockAndGenerationTest(unittest.TestCase):
         self.assertAlmostEqual(postprocessing_reserve_seconds(.05), .025)
         self.assertAlmostEqual(postprocessing_reserve_seconds(5), .75)
         self.assertAlmostEqual(postprocessing_reserve_seconds(10), 1.5)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 3.0)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 3.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 4.5)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(60), 9.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 10.0)
 
     def test_all_forecast_modes_are_reproducible(self):
         for mode in FORECAST_ERROR_MODES:

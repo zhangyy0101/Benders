@@ -1,8 +1,9 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from analysis.summarize_experiments import _number
+from analysis.summarize_experiments import _number, artifact_audit
 from experiment_metadata import write_experiment_artifacts
 from run_experiments import (
     _resume_rows,
@@ -89,6 +90,36 @@ class PilotExperimentOutputTest(unittest.TestCase):
     def test_summary_reads_csv_booleans(self):
         self.assertEqual(_number({"ok": "True"}, "ok"), 1.0)
         self.assertEqual(_number({"ok": "False"}, "ok"), 0.0)
+
+    def test_summary_reads_legacy_normalized_score_alias(self):
+        row = {"mean_cycle_predicted_operations_cost": "0.625"}
+        self.assertEqual(
+            _number(row, "mean_cycle_normalized_operations_score"),
+            .625,
+        )
+
+    def test_artifact_audit_checks_normalized_score_identity(self):
+        row = {
+            "ok": True,
+            "git_dirty": False,
+            "weight_profile": json.dumps({
+                "operations": {
+                    "concentration": 1,
+                    "balance": 2,
+                    "distance": 3,
+                    "in_out_conflict": 4,
+                }
+            }),
+            "mean_cycle_normalized_operations_score": 3.0,
+            "mean_cycle_predicted_concentration_normalized": .1,
+            "mean_cycle_predicted_occupancy_balance_normalized": .2,
+            "mean_cycle_predicted_distance_normalized": .3,
+            "mean_cycle_predicted_in_out_conflict_normalized": .4,
+        }
+        audit = artifact_audit([row])
+        self.assertEqual(audit["score_identity_checked_rows"], 1)
+        self.assertEqual(audit["score_identity_failure_count"], 0)
+        self.assertAlmostEqual(audit["max_score_identity_error"], 0)
 
     def test_cycle_diagnostics_are_aggregated_for_pilot_analysis(self):
         result = {

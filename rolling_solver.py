@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import math
 import time
-from collections import deque
+from collections import defaultdict, deque
 from typing import TypeAlias
 
+import gurobipy as gp
 from gurobipy import GRB
 
 from config import (
     ADAPTIVE_BLOCK_BATCH_RATIO,
+    BOTTLENECK_SELECTOR_BUDGET_RATIO,
+    BOTTLENECK_SELECTOR_MAX_SECONDS,
     DEPENDENCY_CANDIDATE_BLOCK_RATIO,
     DEPENDENCY_DECAY,
     DEPENDENCY_EDGE_THRESHOLD,
@@ -61,7 +64,14 @@ from rolling_model import (
 
 Pair: TypeAlias = tuple[str, str]
 INF = 10**9
-CONFIGURATIONS = ("core", "core_start", "core_start_impact", "full_direct", "full")
+CONFIGURATIONS = (
+    "core",
+    "core_start",
+    "core_start_impact",
+    "full_direct",
+    "full_bottleneck",
+    "full",
+)
 
 
 def postprocessing_reserve_seconds(time_limit: float) -> float:
@@ -87,10 +97,15 @@ def configuration_features(configuration: str) -> dict:
         "mip_start": configuration != "core",
         "impact_region": configuration not in ("core", "core_start"),
         "dependency_propagation": configuration == "full" and DEPENDENCY_PROPAGATION_ENABLED,
-        "progressive_repair": configuration in ("full_direct", "full"),
+        "progressive_repair": configuration in (
+            "full_direct",
+            "full_bottleneck",
+            "full",
+        ),
+        "bottleneck_repair": configuration == "full_bottleneck",
         "quality_polish": (
             QUALITY_POLISH_ENABLED
-            and configuration in ("full_direct", "full")
+            and configuration in ("full_direct", "full_bottleneck", "full")
         ),
     }
 
@@ -611,6 +626,293 @@ def _allowed(
     return result
 
 
+def _solution_residual_capacity(
+    d: dict,
+    solution: dict,
+) -> tuple[dict[tuple[str, int], float], dict[tuple[str, int], set[str]]]:
+    """Reconstruct bay-period spare capacity and occupied heights after a plan."""
+    residual: dict[tuple[str, int], float] = {}
+    occupied_heights: dict[tuple[str, int], set[str]] = {}
+    attrs = d["group_attrs"]
+    planned_flow = solution.get("din", {})
+    for bay in d["bays"]:
+        for period in d["periods"]:
+            locked = sum(
+                quantity
+                for (i, old_ship), quantity in d["locked_inventory"].items()
+                if i == bay
+                and d["locked_release_local"].get((i, old_ship), INF) > period
+            )
+            actual = sum(
+                quantity
+                for (i, ship, _group), quantity in d["actual_inventory"].items()
+                if i == bay and ship_present_at(d, ship, period)
+            )
+            planned = sum(
+                quantity
+                for (i, ship, _group, arrival), quantity in planned_flow.items()
+                if i == bay
+                and arrival <= period
+                and ship_present_at(d, ship, period)
+            )
+            residual[bay, period] = max(
+                0.0,
+                float(d["capacity"][bay] - locked - actual - planned),
+            )
+            heights = {
+                height
+                for (i, old_ship), height in d["locked_height"].items()
+                if i == bay
+                and d["locked_release_local"].get((i, old_ship), INF) > period
+            }
+            heights |= {
+                attrs[group]["height"]
+                for (i, ship, group), quantity in d["actual_inventory"].items()
+                if i == bay
+                and quantity > 1e-6
+                and ship_present_at(d, ship, period)
+            }
+            heights |= {
+                attrs[group]["height"]
+                for (i, ship, group, arrival), quantity in planned_flow.items()
+                if i == bay
+                and arrival <= period
+                and quantity > 1e-6
+                and ship_present_at(d, ship, period)
+            }
+            occupied_heights[bay, period] = heights
+    return residual, occupied_heights
+
+
+def _bottleneck_minimal_expansion(
+    d: dict,
+    current_allowed: dict,
+    solution: dict,
+    shortage_pairs: set[Pair],
+    scores: dict,
+    *,
+    time_limit: float,
+    seed: int,
+) -> tuple[dict, dict]:
+    """Select a minimum set of added pair-block domains covering shortage."""
+    allowed = {pair: list(bays) for pair, bays in current_allowed.items()}
+    residual, occupied_heights = _solution_residual_capacity(d, solution)
+    attrs = d["group_attrs"]
+    deficits: dict[tuple[Pair, int], float] = {}
+    for pair in sorted(shortage_pairs):
+        ship, group = pair
+        cumulative = 0.0
+        for period in d["periods"]:
+            cumulative += float(solution["shortage"].get((ship, group, period), 0))
+            deficits[pair, period] = cumulative if ship_present_at(d, ship, period) else 0.0
+
+    current_blocks = {
+        pair: {d["bay_block"][bay] for bay in allowed.get(pair, ())}
+        for pair in shortage_pairs
+    }
+    ranked_blocks = {
+        pair: sorted(
+            d["blocks"],
+            key=lambda block: (-scores[pair[0], pair[1], block]["score"], block),
+        )
+        for pair in shortage_pairs
+    }
+    rank = {
+        (pair, block): position + 1
+        for pair in shortage_pairs
+        for position, block in enumerate(ranked_blocks[pair])
+    }
+    capacity: dict[tuple[Pair, str, int], float] = {}
+    candidate_keys: set[tuple[Pair, str]] = set()
+    for pair in sorted(shortage_pairs):
+        _ship, group = pair
+        target_height = attrs[group]["height"]
+        for block in d["blocks"]:
+            if block in current_blocks[pair]:
+                continue
+            for period in d["periods"]:
+                value = sum(
+                    residual[bay, period]
+                    for bay in d["bays_in_block"][block]
+                    if compatible(d, bay, group)
+                    and (
+                        not occupied_heights[bay, period]
+                        or target_height in occupied_heights[bay, period]
+                    )
+                )
+                capacity[pair, block, period] = value
+            if any(
+                capacity[pair, block, period] > 1e-6
+                and deficits[pair, period] > 1e-6
+                for period in d["periods"]
+            ):
+                candidate_keys.add((pair, block))
+
+    diagnostics = {
+        "selector": "granularity_guarded_minimum_pair_block_cover",
+        "shortage_pairs": [list(pair) for pair in sorted(shortage_pairs)],
+        "deficit_by_pair_period": {
+            f"{pair[0]}|{pair[1]}|{period}": value
+            for (pair, period), value in sorted(deficits.items())
+            if value > 1e-6
+        },
+        "candidate_pair_block_count": len(candidate_keys),
+        "selected_pair_blocks": {},
+        "granularity_guard_pair_blocks": {},
+        "selected_pair_block_count": 0,
+        "selector_runtime": 0.0,
+        "status": "not_run",
+    }
+    if not candidate_keys or not any(value > 1e-6 for value in deficits.values()):
+        diagnostics["status"] = "no_cover_candidates"
+        return allowed, diagnostics
+
+    model = gp.Model("bottleneck_minimal_expansion")
+    model.Params.OutputFlag = 0
+    model.Params.Threads = 1
+    model.Params.Seed = seed
+    model.Params.TimeLimit = max(.01, time_limit)
+    z_keys = sorted(
+        (pair[0], pair[1], block) for pair, block in candidate_keys
+    )
+    z = model.addVars(z_keys, vtype=GRB.BINARY, name="open_block")
+    take_keys = sorted(
+        (pair[0], pair[1], block, period)
+        for pair, block in candidate_keys
+        for period in d["periods"]
+        if capacity[pair, block, period] > 1e-6
+        and deficits[pair, period] > 1e-6
+    )
+    take = model.addVars(take_keys, lb=0.0, name="covered_capacity")
+    for ship, group, block, period in take_keys:
+        pair = (ship, group)
+        model.addConstr(
+            take[ship, group, block, period]
+            <= capacity[pair, block, period] * z[ship, group, block]
+        )
+    for pair in sorted(shortage_pairs):
+        ship, group = pair
+        for period in d["periods"]:
+            deficit = deficits[pair, period]
+            if deficit <= 1e-6:
+                continue
+            terms = [
+                take[j, g, block, n]
+                for j, g, block, n in take_keys
+                if (j, g) == pair and n == period
+            ]
+            model.addConstr(gp.quicksum(terms) >= deficit)
+    for block in d["blocks"]:
+        for period in d["periods"]:
+            for size in sorted({attrs[pair[1]]["size"] for pair in shortage_pairs}):
+                terms = [
+                    take[ship, group, candidate_block, n]
+                    for ship, group, candidate_block, n in take_keys
+                    if candidate_block == block
+                    and n == period
+                    and attrs[group]["size"] == size
+                ]
+                if not terms:
+                    continue
+                block_residual = sum(
+                    residual[bay, period]
+                    for bay in d["bays_in_block"][block]
+                    if d["bay_size"][bay] == size
+                )
+                model.addConstr(gp.quicksum(terms) <= block_residual)
+
+    maximum_rank_sum = max(1, len(candidate_keys) * len(d["blocks"]))
+    model.setObjective(
+        gp.quicksum(
+            (maximum_rank_sum + rank[pair, block])
+            * z[pair[0], pair[1], block]
+            for pair, block in candidate_keys
+        ),
+        GRB.MINIMIZE,
+    )
+    started = time.perf_counter()
+    model.optimize()
+    diagnostics["selector_runtime"] = time.perf_counter() - started
+    diagnostics["solver_status"] = int(model.Status)
+    diagnostics["status"] = "cover_found" if model.SolCount else "cover_not_found"
+    selected = {
+        (pair, block)
+        for pair, block in candidate_keys
+        if model.SolCount and z[pair[0], pair[1], block].X > .5
+    }
+    model.dispose()
+    if not selected:
+        return allowed, diagnostics
+
+    guard_additions: set[tuple[Pair, str]] = set()
+    for pair in sorted(shortage_pairs):
+        pair_selected = {
+            block for selected_pair, block in selected if selected_pair == pair
+        }
+        if not pair_selected:
+            continue
+        positive_periods = [
+            period
+            for period in d["periods"]
+            if deficits[pair, period] > 1e-6
+        ]
+        minimum_surplus = min(
+            (
+                sum(capacity[pair, block, period] for block in pair_selected)
+                - deficits[pair, period]
+                for period in positive_periods
+            ),
+            default=0.0,
+        )
+        group = pair[1]
+        bay_granularity = max(
+            (
+                d["capacity"][bay]
+                for bay in d["bays"]
+                if compatible(d, bay, group)
+            ),
+            default=0.0,
+        )
+        if minimum_surplus + 1e-6 >= bay_granularity:
+            continue
+        backup = next(
+            (
+                block
+                for block in ranked_blocks[pair]
+                if (pair, block) in candidate_keys
+                and block not in pair_selected
+            ),
+            None,
+        )
+        if backup is not None:
+            guard_additions.add((pair, backup))
+    selected |= guard_additions
+
+    selected_by_pair: dict[Pair, list[str]] = {}
+    for pair, block in sorted(selected):
+        selected_by_pair.setdefault(pair, []).append(block)
+        ship, group = pair
+        allowed[ship, group] = sorted(set(allowed[ship, group]) | {
+            bay
+            for bay in d["bays_in_block"][block]
+            if compatible(d, bay, group)
+        })
+    diagnostics["selected_pair_blocks"] = {
+        f"{pair[0]}|{pair[1]}": blocks
+        for pair, blocks in sorted(selected_by_pair.items())
+    }
+    guard_by_pair: dict[Pair, list[str]] = {}
+    for pair, block in sorted(guard_additions):
+        guard_by_pair.setdefault(pair, []).append(block)
+    diagnostics["granularity_guard_pair_blocks"] = {
+        f"{pair[0]}|{pair[1]}": blocks
+        for pair, blocks in sorted(guard_by_pair.items())
+    }
+    diagnostics["granularity_guard_pair_block_count"] = len(guard_additions)
+    diagnostics["selected_pair_block_count"] = len(selected)
+    return allowed, diagnostics
+
+
 def _horizon_end_block_utilization(d: dict, reservation: dict) -> dict[str, float]:
     """Return end-of-horizon occupancy utilization on the model's definition."""
     last = d["periods"][-1]
@@ -765,6 +1067,17 @@ def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> d
     old = d["previous_reservation"]
     old_totals, current_totals = _pair_totals(old), d["remaining_demand"]
     pairs = set(old_totals) | set(current_totals)
+    old_entries_by_pair: dict[Pair, list[tuple[str, float]]] = defaultdict(list)
+    old_blocks: dict[tuple[str, str, str], float] = defaultdict(float)
+    current_blocks: dict[tuple[str, str, str], float] = defaultdict(float)
+    shortage_totals: dict[Pair, float] = defaultdict(float)
+    for (bay, ship, group), quantity in old.items():
+        old_entries_by_pair[ship, group].append((bay, quantity))
+        old_blocks[ship, group, d["bay_block"][bay]] += quantity
+    for (bay, ship, group), quantity in reservation.items():
+        current_blocks[ship, group, d["bay_block"][bay]] += quantity
+    for (ship, group, _period), quantity in shortage.items():
+        shortage_totals[ship, group] += quantity
     pair_cancellation: dict[Pair, float] = {}
     pair_discretionary: dict[Pair, float] = {}
     pair_reallocation: dict[Pair, float] = {}
@@ -773,20 +1086,17 @@ def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> d
         pair = (j, g)
         cancellation = sum(
             max(0, quantity - reservation.get((bay, j, g), 0))
-            for (bay, ship, group), quantity in old.items()
-            if ship == j and group == g
+            for bay, quantity in old_entries_by_pair[pair]
         )
         mandatory = max(0, old_totals.get(pair, 0) - current_totals.get(pair, 0))
-        pair_shortage = sum(
-            quantity
-            for (ship, group, _period), quantity in shortage.items()
-            if ship == j and group == g
+        pair_shortage = shortage_totals[pair]
+        block_cancel = sum(
+            max(
+                0,
+                old_blocks[j, g, block] - current_blocks[j, g, block],
+            )
+            for block in d["blocks"]
         )
-        block_cancel = 0.0
-        for k in d["blocks"]:
-            old_block = _old_block_amount_for_plan(d, old, j, g, k)
-            current_block = _old_block_amount_for_plan(d, reservation, j, g, k)
-            block_cancel += max(0, old_block - current_block)
         pair_cancellation[pair] = cancellation
         mandatory_by_pair[pair] = mandatory
         pair_discretionary[pair] = max(0, cancellation - mandatory - pair_shortage)
@@ -823,46 +1133,109 @@ def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> d
     }
 
 
-def _old_block_amount_for_plan(d: dict, plan: dict, j: str, g: str, k: str) -> float:
-    return sum(
-        q for (i, jj, gg), q in plan.items()
-        if jj == j and gg == g and d["bay_block"][i] == k
-    )
-
-
 def validate_rolling_solution(d: dict, solution: dict, tol: float = 1e-6) -> dict:
     reserve, din, inv = solution["reservation"], solution["din"], solution["inventory"]
     shortage, attrs, violations = solution["shortage"], d["group_attrs"], {}
+
     def record(name: str, value: float) -> None:
         violations[name] = max(violations.get(name, 0), max(0, float(value)))
+
+    reserve_by_pair: dict[Pair, float] = defaultdict(float)
+    reserve_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (bay, ship, group), quantity in reserve.items():
+        reserve_by_pair[ship, group] += quantity
+        reserve_by_bay[bay].append((ship, group, quantity))
+
+    din_by_pair: dict[Pair, float] = defaultdict(float)
+    din_by_pair_period: dict[tuple[str, str, int], float] = defaultdict(float)
+    din_by_bay: dict[str, list[tuple[str, str, int, float]]] = defaultdict(list)
+    din_by_bay_pair: dict[
+        tuple[str, str, str], list[tuple[int, float]]
+    ] = defaultdict(list)
+    for (bay, ship, group, period), quantity in din.items():
+        din_by_pair[ship, group] += quantity
+        din_by_pair_period[ship, group, period] += quantity
+        din_by_bay[bay].append((ship, group, period, quantity))
+        din_by_bay_pair[bay, ship, group].append((period, quantity))
+
+    locked_by_bay: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for (bay, old_ship), quantity in d["locked_inventory"].items():
+        locked_by_bay[bay].append((old_ship, quantity))
+    locked_height_by_bay: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for (bay, old_ship), height in d["locked_height"].items():
+        locked_height_by_bay[bay].append((old_ship, height))
+    actual_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (bay, ship, group), quantity in d["actual_inventory"].items():
+        actual_by_bay[bay].append((ship, group, quantity))
+
     for (j, g, n), forecast in d["forecast_arrivals"].items():
-        placed = sum(q for (_i, jj, gg, nn), q in din.items() if jj == j and gg == g and nn == n)
+        placed = din_by_pair_period[j, g, n]
         record("period_arrival", abs(placed + shortage.get((j, g, n), 0) - forecast))
     for j, g in d["remaining_demand"]:
-        reserved = sum(q for (_i, jj, gg), q in reserve.items() if jj == j and gg == g)
-        flowed = sum(q for (_i, jj, gg, _n), q in din.items() if jj == j and gg == g)
-        record("reserve_flow", abs(reserved - flowed))
+        record("reserve_flow", abs(reserve_by_pair[j, g] - din_by_pair[j, g]))
     last = d["periods"][-1]
     for i in d["bays"]:
-        locked_final = sum(q for (ii, old), q in d["locked_inventory"].items() if ii == i and d["locked_release_local"].get((ii, old), INF) > last)
-        actual_final = sum(q for (ii, j, _g), q in d["actual_inventory"].items() if ii == i and ship_present_at(d, j, last))
-        planned_final = sum(q for (ii, j, _g), q in reserve.items() if ii == i and ship_present_at(d, j, last))
+        locked_final = sum(
+            quantity
+            for old_ship, quantity in locked_by_bay[i]
+            if d["locked_release_local"].get((i, old_ship), INF) > last
+        )
+        actual_final = sum(
+            quantity
+            for ship, _group, quantity in actual_by_bay[i]
+            if ship_present_at(d, ship, last)
+        )
+        planned_final = sum(
+            quantity
+            for ship, _group, quantity in reserve_by_bay[i]
+            if ship_present_at(d, ship, last)
+        )
         record("final_capacity", locked_final + actual_final + planned_final - d["capacity"][i])
         for n in d["periods"]:
-            locked = sum(q for (ii, old), q in d["locked_inventory"].items() if ii == i and d["locked_release_local"].get((ii, old), INF) > n)
-            actual = sum(q for (ii, j, _g), q in d["actual_inventory"].items() if ii == i and ship_present_at(d, j, n))
-            planned = sum(q for (ii, j, _g, t), q in din.items() if ii == i and t <= n and ship_present_at(d, j, n))
+            locked = sum(
+                quantity
+                for old_ship, quantity in locked_by_bay[i]
+                if d["locked_release_local"].get((i, old_ship), INF) > n
+            )
+            actual = sum(
+                quantity
+                for ship, _group, quantity in actual_by_bay[i]
+                if ship_present_at(d, ship, n)
+            )
+            planned = sum(
+                quantity
+                for ship, _group, period, quantity in din_by_bay[i]
+                if period <= n and ship_present_at(d, ship, n)
+            )
             record("period_capacity", locked + actual + planned - d["capacity"][i])
-            used_heights = {h for (ii, old), h in d["locked_height"].items() if ii == i and d["locked_release_local"].get((ii, old), INF) > n}
-            used_heights |= {attrs[g]["height"] for (ii, j, g), q in d["actual_inventory"].items() if ii == i and q > tol and ship_present_at(d, j, n)}
-            used_heights |= {attrs[g]["height"] for (ii, j, g, t), q in din.items() if ii == i and t <= n and q > tol and ship_present_at(d, j, n)}
+            used_heights = {
+                height
+                for old_ship, height in locked_height_by_bay[i]
+                if d["locked_release_local"].get((i, old_ship), INF) > n
+            }
+            used_heights |= {
+                attrs[group]["height"]
+                for ship, group, quantity in actual_by_bay[i]
+                if quantity > tol and ship_present_at(d, ship, n)
+            }
+            used_heights |= {
+                attrs[group]["height"]
+                for ship, group, period, quantity in din_by_bay[i]
+                if period <= n
+                and quantity > tol
+                and ship_present_at(d, ship, n)
+            }
             record("height", len(used_heights) - 1)
     for (i, _j, g), q in reserve.items():
         if q > tol:
             record("size", int(d["bay_size"][i] != attrs[g]["size"]))
         record("integrality", abs(q - round(q)))
     for (i, j, g, n), value in inv.items():
-        cumulative = sum(q for (ii, jj, gg, t), q in din.items() if ii == i and jj == j and gg == g and t <= n)
+        cumulative = sum(
+            quantity
+            for period, quantity in din_by_bay_pair[i, j, g]
+            if period <= n
+        )
         expected = d["actual_inventory"].get((i, j, g), 0) + cumulative if ship_present_at(d, j, n) else 0
         record("inventory", abs(value - expected))
         if not ship_present_at(d, j, n):
@@ -907,7 +1280,7 @@ def solve_rolling_snapshot(
     threads: int = 1,
     seed: int = 0,
     impact_threshold: float = .10,
-    configuration: str = "full_direct",
+    configuration: str = "full_bottleneck",
     dependency_profile: str = "current",
     verbose: bool = False,
 ) -> dict:
@@ -930,6 +1303,7 @@ def solve_rolling_snapshot(
         "block_score_time": 0.0,
         "dependency_graph_time": 0.0,
         "propagation_time": 0.0,
+        "bottleneck_selection_time": 0.0,
         "model_build_time": 0.0,
         "solver_time": 0.0,
         "solution_extract_time": 0.0,
@@ -1034,6 +1408,7 @@ def solve_rolling_snapshot(
     quality_triggered = False
     quality_improved = False
     repair_pairs: set[Pair] = set()
+    bottleneck_repair_plans: list[dict] = []
     stages = (
         [(3, "global_core", None)]
         if not settings["impact_region"]
@@ -1068,7 +1443,9 @@ def solve_rolling_snapshot(
             )
         if settings["progressive_repair"] and name == "impact_region":
             requested_stage_time = min(remaining_wall, max(.05, .35 * time_limit))
-        elif settings["progressive_repair"] and name.startswith("adaptive_repair"):
+        elif settings["progressive_repair"] and (
+            name.startswith("adaptive_repair") or name == "bottleneck_repair"
+        ):
             requested_stage_time = min(remaining_wall, max(.05, remaining_wall / 2))
         else:
             requested_stage_time = remaining_wall
@@ -1131,6 +1508,9 @@ def solve_rolling_snapshot(
         optimize_started = time.perf_counter()
 
         def callback(_model, where):
+            if time.perf_counter() >= stage_deadline:
+                _model.terminate()
+                return
             if where == GRB.Callback.MIPSOL and first[0] is None:
                 first[0] = time.perf_counter() - stage_wall_start
             if where == GRB.Callback.MIPSOL and cycle_first_incumbent[0] is None:
@@ -1248,7 +1628,7 @@ def solve_rolling_snapshot(
             key = (
                 round(components["predicted_shortage"], 6),
                 round(components["stability_cost"], 6),
-                round(components["operations_cost"], 9),
+                round(components["normalized_operations_score"], 9),
             )
             record.update({
                 field: components[field]
@@ -1260,9 +1640,15 @@ def solve_rolling_snapshot(
                     "new_bay_count",
                     "block_reallocation_quantity",
                     "stability_cost",
-                    "operations_cost",
+                    "normalized_operations_score",
+                    "concentration_raw",
+                    "concentration_normalized",
+                    "distance_raw",
+                    "distance_normalized",
                     "in_out_conflict_raw",
+                    "in_out_conflict_normalized",
                     "occupancy_balance_raw",
+                    "occupancy_balance_normalized",
                 )
             })
             record["stability_budget_binding"] = (
@@ -1344,7 +1730,51 @@ def solve_rolling_snapshot(
                         diagnostic_path_scores[pair] = score
                         diagnostic_depths[pair] = repair_prop["propagation_depth"][pair]
                         propagation_types[pair] = repair_prop["propagation_type"][pair]
-        if name == "impact_region":
+        if settings["bottleneck_repair"]:
+            if name == "impact_region":
+                selector_budget = min(
+                    BOTTLENECK_SELECTOR_MAX_SECONDS,
+                    max(.01, BOTTLENECK_SELECTOR_BUDGET_RATIO * time_limit),
+                    max(.01, remaining_wall - .01),
+                )
+                selection_started = time.perf_counter()
+                if incumbent and shortage_pairs and remaining_wall > .02:
+                    repair_allowed, plan = _bottleneck_minimal_expansion(
+                        d,
+                        allowed,
+                        incumbent,
+                        shortage_pairs,
+                        scores,
+                        time_limit=selector_budget,
+                        seed=seed,
+                    )
+                else:
+                    repair_allowed = allowed
+                    plan = {
+                        "selector": "granularity_guarded_minimum_pair_block_cover",
+                        "status": "no_usable_incumbent_or_time",
+                        "shortage_pairs": [
+                            list(pair) for pair in sorted(shortage_pairs)
+                        ],
+                        "selected_pair_blocks": {},
+                        "selected_pair_block_count": 0,
+                        "selector_runtime": 0.0,
+                    }
+                timing["bottleneck_selection_time"] += (
+                    time.perf_counter() - selection_started
+                )
+                plan["allocated_selector_time"] = selector_budget
+                bottleneck_repair_plans.append(plan)
+                record["bottleneck_repair_plan"] = plan
+                if plan["selected_pair_block_count"] > 0:
+                    stages.append((1, "bottleneck_repair", repair_allowed))
+                else:
+                    stages.append((3, "global_repair", None))
+                repair_expansions += 1
+            elif name == "bottleneck_repair":
+                stages.append((3, "global_repair", None))
+                repair_expansions += 1
+        elif name == "impact_region":
             stages.append((1, "adaptive_repair_1", None))
             repair_expansions += 1
         elif name == "adaptive_repair_1":
@@ -1402,6 +1832,8 @@ def solve_rolling_snapshot(
             for (ship, group), blocks in sorted(release_opportunity_blocks.items())
             if blocks
         },
+        "bottleneck_repair_enabled": settings["bottleneck_repair"],
+        "bottleneck_repair_plans": bottleneck_repair_plans,
     }
     failure_status = None
     if preprocessing_timed_out:
@@ -1432,6 +1864,11 @@ def solve_rolling_snapshot(
         "stages": trace,
         "repair_triggered": settings["progressive_repair"] and repair_expansions > 0,
         "repair_expansions": repair_expansions,
+        "bottleneck_repair_triggered": bool(bottleneck_repair_plans),
+        "bottleneck_selected_pair_block_count": sum(
+            plan.get("selected_pair_block_count", 0)
+            for plan in bottleneck_repair_plans
+        ),
         "quality_polish_triggered": quality_triggered,
         "quality_polish_improved": quality_improved,
         "preprocessing_time": preprocessing_time,
@@ -1445,7 +1882,9 @@ def solve_rolling_snapshot(
         "cycle_first_incumbent_wall_time": cycle_first_incumbent[0],
         "final_predicted_shortage": final_components.get("predicted_shortage"),
         "final_stability_cost": final_components.get("stability_cost"),
-        "final_operations_cost": final_components.get("operations_cost"),
+        "final_normalized_operations_score": final_components.get(
+            "normalized_operations_score"
+        ),
         "final_stage_objective_bound": final_trace.get("objective_bound"),
         "final_stage_mip_gap": final_trace.get("mip_gap"),
         "stability_formulation": (

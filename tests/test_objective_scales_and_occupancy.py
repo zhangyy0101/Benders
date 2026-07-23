@@ -2,6 +2,12 @@ import unittest
 
 from gurobipy import GRB
 
+from config import (
+    OPERATION_WEIGHT_BALANCE,
+    OPERATION_WEIGHT_CONCENTRATION,
+    OPERATION_WEIGHT_DISTANCE,
+    OPERATION_WEIGHT_IN_OUT_CONFLICT,
+)
 from rolling_data import _realized_space_metrics
 from rolling_model import build_rolling_model, compute_objective_scales, extract_rolling_solution
 
@@ -73,11 +79,21 @@ class ObjectiveScaleAndOccupancyTest(unittest.TestCase):
             "occupancy_balance_normalized",
             "distance_normalized",
             "in_out_conflict_normalized",
-            "operations_cost",
+            "normalized_operations_score",
         ):
             self.assertAlmostEqual(local[field], global_result[field], places=8, msg=field)
         self.assertEqual(local["concentration_scale"], 2)
         self.assertEqual(global_result["concentration_scale"], 2)
+        expected_score = (
+            OPERATION_WEIGHT_CONCENTRATION * local["concentration_normalized"]
+            + OPERATION_WEIGHT_BALANCE * local["occupancy_balance_normalized"]
+            + OPERATION_WEIGHT_DISTANCE * local["distance_normalized"]
+            + OPERATION_WEIGHT_IN_OUT_CONFLICT
+            * local["in_out_conflict_normalized"]
+        )
+        self.assertAlmostEqual(
+            local["normalized_operations_score"], expected_score, places=8
+        )
 
     def test_actual_support_prevents_mip_new_bay_charge(self):
         snapshot = objective_snapshot()

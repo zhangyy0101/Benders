@@ -65,7 +65,7 @@ The integer MIP enforces:
 - transport distance and inbound/outbound overlap costs.
 
 Its lexicographic objectives minimize predicted shortage, plan-stability cost,
-and normalized operational cost. One unrestricted set of normalization scales
+and a normalized operational score. One unrestricted set of normalization scales
 is reused by every stage.
 
 Stability is computed per `(ship, group)`, preventing one group's shortage from
@@ -80,15 +80,15 @@ Forecast arrivals at or after planned release are rejected by snapshot
 validation. Model construction also omits their inbound-flow variables, so an
 invalid bypassed snapshot can only record that quantity as shortage.
 
-## Impact-region and progressive-repair algorithm
+## Impact-region and bottleneck-guided repair algorithm
 
-The recommended `full_direct` configuration:
+The recommended `full_bottleneck` configuration:
 
 1. identifies directly changed ship-group pairs;
 2. computes time-dependent physical residual capacity and height conflicts;
 3. deducts frozen inherited reservations to form baseline residual capacity;
 4. ranks candidate blocks and solves the impact region with a MIP start;
-5. expands shortage pairs through progressively larger neighborhoods;
+5. solves a granularity-guarded minimum pair-block cover for shortage pairs;
 6. restores the unrestricted compatible domain if shortage remains.
 
 The optional `full` ablation additionally builds a physical-resource dependency
@@ -97,16 +97,22 @@ incumbent can add dependency neighbors to Progressive Repair. This keeps normal
 cycles aligned with `full_direct` while exposing the mechanism in controlled
 pressure tests. The retired quality-polish implementation is protocol-disabled.
 
+The minimum-cover repair uses the incumbent's time-dependent shortage and
+compatible residual capacity to release the smallest useful set of additional
+pair-block domains. A one-compatible-bay guard reflects integer packing
+granularity without reserving extra physical capacity.
+
 Configurations are:
 
 - `core`: unrestricted MIP without a start;
 - `core_start`: unrestricted MIP with inherited MIP start;
 - `core_start_impact`: direct impact region without propagation or repair;
-- `full_direct`: recommended direct impact, progressive repair, and global recovery;
+- `full_direct`: fixed-ratio Progressive Repair ablation;
+- `full_bottleneck`: recommended bottleneck-guided repair and global recovery;
 - `full`: optional reactive dependency propagation on top of `full_direct`.
 
-Thus `full_direct` and `full` differ only through reactive dependency
-propagation and its downstream repair region.
+`full_direct` is retained only to isolate the repair-controller contribution;
+it is not a primary external baseline.
 
 ## Execution and realized metrics
 
@@ -129,11 +135,12 @@ Every stage reports total and binary variables, constraints, nodes, solution
 count, stage first-incumbent time, and reliable bound/gap attributes. Cycle
 first-incumbent time starts before preprocessing.
 
-To enforce that contract on medium instances, every configuration reserves the
-same bounded tail for incumbent extraction and independent validation: 15% of
-the cycle limit, with a 0.5-second minimum and 3-second maximum, while very
-short diagnostic limits retain at least half their budget for optimization.
-The reserve is included in the recorded weight/runtime profile.
+To enforce that contract, every configuration reserves the same bounded tail
+for solver-limit overrun, incumbent extraction, and independent validation:
+15% of the cycle limit, with a 0.5-second minimum and 10-second maximum, while
+very short diagnostic limits retain at least half their budget for
+optimization. The callback also enforces the absolute stage deadline. The
+reserve is included in the recorded weight/runtime profile.
 Each completed stage also disposes its Gurobi model explicitly so long Pilot
 batches do not accumulate native solver resources across rolling cycles.
 The Pilot quality-polish stage is disabled in protocol `rolling-v3.9` because
@@ -167,7 +174,7 @@ explicitly `None` when the attributes are unavailable; root relaxation is also
 Run one case:
 
 ```bash
-python main.py --size small --configuration full_direct --time 20 \
+python main.py --size small --configuration full_bottleneck --time 20 \
   --mip-gap 0.01 --seed 0
 ```
 
@@ -177,7 +184,7 @@ Run controlled combinations:
 python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --forecast-error-modes multiplicative timing_shift booking_add_cancel \
   --initial-utilizations 0.25 0.55 0.70 \
-  --configurations core_start full_direct full --seeds 0 1 2 \
+  --configurations core_start full_direct full_bottleneck --seeds 0 1 2 \
   --mip-gap 0.01 --output pilot_results.csv \
   --manifest-output pilot_results.manifest.json
 ```
@@ -215,4 +222,6 @@ python analysis/summarize_experiments.py rolling_results.csv
 ```
 
 Detailed definitions are in `docs/model_assumptions.md` and
-`docs/dependency_impact_design.md`.
+`docs/dependency_impact_design.md`. The candidate-freeze rules, metric schema,
+held-out seeds, preflight gate, and required baselines are specified in
+`docs/formal_experiment_protocol.md`.

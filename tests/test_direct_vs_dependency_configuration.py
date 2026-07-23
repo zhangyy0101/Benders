@@ -19,6 +19,21 @@ class ConfigurationTest(unittest.TestCase):
         self.assertFalse(configuration_features("full_direct")["quality_polish"])
         self.assertFalse(configuration_features("full")["quality_polish"])
 
+    def test_bottleneck_configuration_only_replaces_repair_controller(self):
+        direct = configuration_features("full_direct")
+        bottleneck = configuration_features("full_bottleneck")
+        self.assertTrue(direct["progressive_repair"])
+        self.assertTrue(bottleneck["progressive_repair"])
+        self.assertFalse(direct["bottleneck_repair"])
+        self.assertTrue(bottleneck["bottleneck_repair"])
+        for feature in (
+            "mip_start",
+            "impact_region",
+            "dependency_propagation",
+            "quality_polish",
+        ):
+            self.assertEqual(direct[feature], bottleneck[feature])
+
 
 if __name__ == "__main__":
     unittest.main()

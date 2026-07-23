@@ -178,10 +178,23 @@ class ExperimentMetadataTest(unittest.TestCase):
                 time_limit=7,
             )
         self.assertEqual(metadata["problem_protocol"], config.PROBLEM_PROTOCOL)
+        self.assertEqual(metadata["algorithm_version"], config.ALGORITHM_VERSION)
+        self.assertEqual(
+            metadata["result_schema_version"], config.RESULT_SCHEMA_VERSION
+        )
+        self.assertEqual(
+            metadata["formal_core_configuration"],
+            config.FORMAL_CORE_CONFIGURATION,
+        )
+        self.assertEqual(metadata["experiment_phase"], "development")
         self.assertEqual(metadata["threads"], 3)
         self.assertEqual(metadata["mip_gap"], .02)
         self.assertEqual(metadata["time_limit"], 7.0)
         self.assertIn(metadata["stability_formulation"], ("epigraph_only", "exact_big_m"))
+        self.assertEqual(metadata["temporal_protocol"]["time_bucket_hours"], 6)
+        self.assertTrue(
+            metadata["validation_profile"]["validate_each_execution_period"]
+        )
 
     def test_dependency_sensitivity_profile_is_recorded(self):
         profile = collect_weight_profile("conservative")

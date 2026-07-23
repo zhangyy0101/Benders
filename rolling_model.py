@@ -1,6 +1,8 @@
 """Six-hour stability-aware rolling bay-slot allocation MIP."""
 from __future__ import annotations
 
+from collections import defaultdict
+
 import gurobipy as gp
 from gurobipy import GRB
 
@@ -13,7 +15,6 @@ from config import (
     STABILITY_CANCEL_WEIGHT,
     STABILITY_NEW_BAY_WEIGHT,
     USE_EXACT_STABILITY_BIG_M,
-    USE_NORMALIZED_OPERATION_OBJECTIVE,
 )
 
 INF = 10**9
@@ -94,14 +95,6 @@ def compute_objective_scales(d: dict) -> dict[str, float]:
     }
 
 
-def _old_block_amount(d: dict, ship: str, group: str, block: str) -> int:
-    return sum(
-        q
-        for (bay, j, g), q in d["previous_reservation"].items()
-        if j == ship and g == group and d["bay_block"][bay] == block
-    )
-
-
 def build_rolling_model(
     d: dict,
     *,
@@ -122,18 +115,66 @@ def build_rolling_model(
     )
 
     reserve_keys = []
+    permitted_bays_by_pair: dict[tuple[str, str], tuple[str, ...]] = {}
     for j, g in pairs:
         permitted = bays if allowed_bays is None else allowed_bays.get((j, g), ())
-        reserve_keys.extend((i, j, g) for i in permitted if compatible(d, i, g))
+        compatible_bays = tuple(
+            sorted({i for i in permitted if compatible(d, i, g)})
+        )
+        permitted_bays_by_pair[j, g] = compatible_bays
+        reserve_keys.extend((i, j, g) for i in compatible_bays)
     reserve_keys = sorted(set(reserve_keys))
+    forecast_periods_by_pair: dict[tuple[str, str], list[int]] = defaultdict(list)
+    pair_set = set(pairs)
+    for j, g, n in sorted(d["forecast_arrivals"]):
+        if (j, g) in pair_set and ship_present_at(d, j, n):
+            forecast_periods_by_pair[j, g].append(n)
     flow_keys = sorted(
         (i, j, g, n)
-        for (j, g, n) in d["forecast_arrivals"]
-        if ship_present_at(d, j, n)
-        for i, jj, gg in reserve_keys
-        if jj == j and gg == g
+        for j, g in pairs
+        for n in forecast_periods_by_pair[j, g]
+        for i in permitted_bays_by_pair[j, g]
     )
     inventory_keys = [(i, j, g, n) for i, j, g in reserve_keys for n in periods]
+
+    reserve_by_pair: dict[tuple[str, str], list[tuple[str, str, str]]] = defaultdict(list)
+    reserve_by_bay: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
+    reserve_by_pair_block: dict[
+        tuple[str, str, str], list[tuple[str, str, str]]
+    ] = defaultdict(list)
+    for key in reserve_keys:
+        i, j, g = key
+        reserve_by_pair[j, g].append(key)
+        reserve_by_bay[i].append(key)
+        reserve_by_pair_block[j, g, d["bay_block"][i]].append(key)
+
+    flow_by_pair: dict[
+        tuple[str, str], list[tuple[str, str, str, int]]
+    ] = defaultdict(list)
+    flow_by_pair_period: dict[
+        tuple[str, str, int], list[tuple[str, str, str, int]]
+    ] = defaultdict(list)
+    flow_by_bay: dict[str, list[tuple[str, str, str, int]]] = defaultdict(list)
+    flow_by_bay_height: dict[
+        tuple[str, str], list[tuple[str, str, str, int]]
+    ] = defaultdict(list)
+    flow_by_bay_pair: dict[
+        tuple[str, str, str], list[tuple[str, str, str, int]]
+    ] = defaultdict(list)
+    flow_by_pair_block_period: dict[
+        tuple[str, str, str, int], list[tuple[str, str, str, int]]
+    ] = defaultdict(list)
+    flow_by_block: dict[str, list[tuple[str, str, str, int]]] = defaultdict(list)
+    for key in flow_keys:
+        i, j, g, n = key
+        block = d["bay_block"][i]
+        flow_by_pair[j, g].append(key)
+        flow_by_pair_period[j, g, n].append(key)
+        flow_by_bay[i].append(key)
+        flow_by_bay_height[i, attrs[g]["height"]].append(key)
+        flow_by_bay_pair[i, j, g].append(key)
+        flow_by_pair_block_period[j, g, block, n].append(key)
+        flow_by_block[block].append(key)
 
     reserve = m.addVars(reserve_keys, vtype=GRB.INTEGER, lb=0, name="reservation")
     din = m.addVars(flow_keys, vtype=GRB.INTEGER, lb=0, name="din")
@@ -167,6 +208,16 @@ def build_rolling_model(
 
     old = d["previous_reservation"]
     cancellation_keys = sorted(set(reserve_keys) | set(old))
+    cancellation_by_pair: dict[
+        tuple[str, str], list[tuple[str, str, str]]
+    ] = defaultdict(list)
+    for key in cancellation_keys:
+        cancellation_by_pair[key[1], key[2]].append(key)
+    old_total_by_pair: dict[tuple[str, str], float] = defaultdict(float)
+    old_block_by_pair: dict[tuple[str, str, str], float] = defaultdict(float)
+    for (i, j, g), quantity in old.items():
+        old_total_by_pair[j, g] += quantity
+        old_block_by_pair[j, g, d["bay_block"][i]] += quantity
     cancel = m.addVars(cancellation_keys, vtype=GRB.INTEGER, lb=0, name="cancel")
     cancel_active = (
         m.addVars(cancellation_keys, vtype=GRB.BINARY, name="cancel_active")
@@ -205,78 +256,105 @@ def build_rolling_model(
         if exact_stability else {}
     )
 
-    def locked_at(i: str, n: int) -> float:
-        return sum(
-            q
-            for (ii, old_ship), q in d["locked_inventory"].items()
-            if ii == i and d["locked_release_local"].get((ii, old_ship), INF) > n
-        )
+    locked_entries_by_bay: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for (i, old_ship), quantity in d["locked_inventory"].items():
+        locked_entries_by_bay[i].append((old_ship, quantity))
+    locked_heights_by_bay: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for (i, old_ship), height_value in d["locked_height"].items():
+        locked_heights_by_bay[i].append((old_ship, height_value))
+    actual_entries_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (i, j, g), quantity in d["actual_inventory"].items():
+        actual_entries_by_bay[i].append((j, g, quantity))
 
-    def actual_at(i: str, n: int) -> float:
-        return sum(
-            q
-            for (ii, j, _g), q in d["actual_inventory"].items()
-            if ii == i and ship_present_at(d, j, n)
-        )
-
-    def planned_at(i: str, n: int):
-        return gp.quicksum(
-            din[ii, j, g, t]
-            for ii, j, g, t in flow_keys
-            if ii == i and t <= n and ship_present_at(d, j, n)
-        )
+    locked_amount: dict[tuple[str, int], float] = {}
+    actual_amount: dict[tuple[str, int], float] = {}
+    actual_height_amount: dict[tuple[str, int, str], float] = {}
+    planned_capacity_keys: dict[
+        tuple[str, int], tuple[tuple[str, str, str, int], ...]
+    ] = {}
+    planned_height_keys: dict[
+        tuple[str, int, str], tuple[tuple[str, str, str, int], ...]
+    ] = {}
+    for i in bays:
+        for n in periods:
+            locked_amount[i, n] = sum(
+                quantity
+                for old_ship, quantity in locked_entries_by_bay[i]
+                if d["locked_release_local"].get((i, old_ship), INF) > n
+            )
+            actual_amount[i, n] = sum(
+                quantity
+                for j, _g, quantity in actual_entries_by_bay[i]
+                if ship_present_at(d, j, n)
+            )
+            planned_capacity_keys[i, n] = tuple(
+                key
+                for key in flow_by_bay[i]
+                if key[3] <= n and ship_present_at(d, key[1], n)
+            )
+            for h in d["heights"]:
+                actual_height_amount[i, n, h] = sum(
+                    quantity
+                    for j, g, quantity in actual_entries_by_bay[i]
+                    if attrs[g]["height"] == h and ship_present_at(d, j, n)
+                )
+                planned_height_keys[i, n, h] = tuple(
+                    key
+                    for key in flow_by_bay_height[i, h]
+                    if key[3] <= n and ship_present_at(d, key[1], n)
+                )
 
     last = periods[-1]
     for i in bays:
-        related = [key for key in reserve_keys if key[0] == i]
-        final_planned = gp.quicksum(reserve[key] for key in related if ship_present_at(d, key[1], last))
+        related = reserve_by_bay[i]
+        final_planned = gp.quicksum(
+            reserve[key] for key in related if ship_present_at(d, key[1], last)
+        )
         m.addConstr(
-            locked_at(i, last) + actual_at(i, last) + final_planned <= d["capacity"][i],
+            locked_amount[i, last]
+            + actual_amount[i, last]
+            + final_planned
+            <= d["capacity"][i],
             name=f"final_capacity_{i}",
         )
         for _, j, g in related:
             m.addConstr(reserve[i, j, g] <= d["capacity"][i] * use[j, attrs[g]["pod"], i])
         for n in periods:
             m.addConstr(gp.quicksum(height[i, n, h] for h in d["heights"]) <= 1)
-            for (ii, old_ship), h in d["locked_height"].items():
-                if ii == i and d["locked_release_local"].get((ii, old_ship), INF) > n:
+            for old_ship, h in locked_heights_by_bay[i]:
+                if d["locked_release_local"].get((i, old_ship), INF) > n:
                     m.addConstr(height[i, n, h] == 1)
             m.addConstr(
-                locked_at(i, n) + actual_at(i, n) + planned_at(i, n) <= d["capacity"][i],
+                locked_amount[i, n]
+                + actual_amount[i, n]
+                + gp.quicksum(din[key] for key in planned_capacity_keys[i, n])
+                <= d["capacity"][i],
                 name=f"capacity_{i}_{n}",
             )
             for h in d["heights"]:
-                actual_height = sum(
-                    q
-                    for (ii, j, g), q in d["actual_inventory"].items()
-                    if ii == i and attrs[g]["height"] == h and ship_present_at(d, j, n)
-                )
                 planned_height = gp.quicksum(
-                    din[ii, j, g, t]
-                    for ii, j, g, t in flow_keys
-                    if ii == i and attrs[g]["height"] == h and t <= n and ship_present_at(d, j, n)
+                    din[key] for key in planned_height_keys[i, n, h]
                 )
-                m.addConstr(actual_height + planned_height <= d["capacity"][i] * height[i, n, h])
+                m.addConstr(
+                    actual_height_amount[i, n, h] + planned_height
+                    <= d["capacity"][i] * height[i, n, h]
+                )
 
     for j, g in pairs:
-        pair_reserve = [reserve[i, j, g] for i, jj, gg in reserve_keys if jj == j and gg == g]
-        pair_flow = [din[i, j, g, n] for i, jj, gg, n in flow_keys if jj == j and gg == g]
+        pair_reserve = [reserve[key] for key in reserve_by_pair[j, g]]
+        pair_flow = [din[key] for key in flow_by_pair[j, g]]
         m.addConstr(gp.quicksum(pair_reserve) == gp.quicksum(pair_flow), name=f"reserve_flow_{j}_{g}")
         for n in periods:
             period_flow = gp.quicksum(
-                din[i, j, g, n]
-                for i, jj, gg, nn in flow_keys
-                if jj == j and gg == g and nn == n
+                din[key] for key in flow_by_pair_period[j, g, n]
             )
             m.addConstr(period_flow + shortage[j, g, n] == d["forecast_arrivals"].get((j, g, n), 0))
-            for i, jj, gg in reserve_keys:
-                if jj != j or gg != g:
-                    continue
+            for i, _j, _g in reserve_by_pair[j, g]:
                 initial = d["actual_inventory"].get((i, j, g), 0)
                 cumulative = gp.quicksum(
-                    din[ii, jj2, gg2, t]
-                    for ii, jj2, gg2, t in flow_keys
-                    if ii == i and jj2 == j and gg2 == g and t <= n
+                    din[key]
+                    for key in flow_by_bay_pair[i, j, g]
+                    if key[3] <= n
                 )
                 if ship_present_at(d, j, n):
                     m.addConstr(inv[i, j, g, n] == initial + cumulative)
@@ -288,9 +366,8 @@ def build_rolling_model(
                 m.addConstr(
                     share[j, k, g, n]
                     == gp.quicksum(
-                        din[i, j, g, n]
-                        for i, jj, gg, nn in flow_keys
-                        if jj == j and gg == g and nn == n and d["bay_block"][i] == k
+                        din[key]
+                        for key in flow_by_pair_block_period[j, g, k, n]
                     )
                 )
 
@@ -314,12 +391,10 @@ def build_rolling_model(
 
     mandatory = {}
     for j, g in stability_pairs:
-        old_total = sum(q for (_i, jj, gg), q in old.items() if jj == j and gg == g)
+        old_total = old_total_by_pair[j, g]
         mandatory[j, g] = max(0, old_total - d["remaining_demand"].get((j, g), 0))
         pair_cancel_expression = gp.quicksum(
-            cancel[i, jj, gg]
-            for i, jj, gg in cancellation_keys
-            if jj == j and gg == g
+            cancel[key] for key in cancellation_by_pair[j, g]
         )
         m.addConstr(pair_cancellation[j, g] == pair_cancel_expression)
         pair_forecast = sum(
@@ -329,11 +404,9 @@ def build_rolling_model(
         exactness_m = max(1, old_total + pair_forecast)
         for k in d["blocks"]:
             current_block = gp.quicksum(
-                reserve[i, j, g]
-                for i, jj, gg in reserve_keys
-                if jj == j and gg == g and d["bay_block"][i] == k
+                reserve[key] for key in reserve_by_pair_block[j, g, k]
             )
-            raw_block_cancel = _old_block_amount(d, j, g, k) - current_block
+            raw_block_cancel = old_block_by_pair[j, g, k] - current_block
             m.addConstr(block_cancel[j, g, k] >= raw_block_cancel)
             if exact_stability:
                 m.addConstr(
@@ -345,10 +418,10 @@ def build_rolling_model(
                     block_cancel[j, g, k]
                     <= exactness_m * block_cancel_active[j, g, k]
                 )
-        pair_shortage = gp.quicksum(
-            shortage[jj, gg, n]
-            for jj, gg, n in shortage
-            if jj == j and gg == g
+        pair_shortage = (
+            gp.quicksum(shortage[j, g, n] for n in periods)
+            if (j, g) in pair_set
+            else gp.LinExpr()
         )
         raw_reallocation = (
             gp.quicksum(block_cancel[j, g, k] for k in d["blocks"])
@@ -385,11 +458,14 @@ def build_rolling_model(
     for k in d["blocks"]:
         block_capacity = sum(d["capacity"][i] for i in d["bays_in_block"][k])
         for n in periods:
-            base = sum(locked_at(i, n) + actual_at(i, n) for i in d["bays_in_block"][k])
+            base = sum(
+                locked_amount[i, n] + actual_amount[i, n]
+                for i in d["bays_in_block"][k]
+            )
             cumulative = gp.quicksum(
-                din[i, j, g, t]
-                for i, j, g, t in flow_keys
-                if d["bay_block"][i] == k and t <= n and ship_present_at(d, j, n)
+                din[key]
+                for key in flow_by_block[k]
+                if key[3] <= n and ship_present_at(d, key[1], n)
             )
             m.addConstr(occupancy[k, n] == base + cumulative)
             m.addConstr(block_capacity * utilization[k, n] == occupancy[k, n])
@@ -426,30 +502,21 @@ def build_rolling_model(
     )
     distance_normalized = distance_raw / scales["distance_scale"]
     conflict_normalized = conflict_raw / scales["in_out_conflict_scale"]
-    if USE_NORMALIZED_OPERATION_OBJECTIVE:
-        operation_terms = (
-            concentration_normalized,
-            occupancy_balance_normalized,
-            distance_normalized,
-            conflict_normalized,
-        )
-    else:
-        operation_terms = (
-            concentration_raw,
-            occupancy_balance_raw,
-            distance_raw,
-            conflict_raw,
-        )
-    operations_cost = (
-        OPERATION_WEIGHT_CONCENTRATION * operation_terms[0]
-        + OPERATION_WEIGHT_BALANCE * operation_terms[1]
-        + OPERATION_WEIGHT_DISTANCE * operation_terms[2]
-        + OPERATION_WEIGHT_IN_OUT_CONFLICT * operation_terms[3]
+    normalized_operations_score = (
+        OPERATION_WEIGHT_CONCENTRATION * concentration_normalized
+        + OPERATION_WEIGHT_BALANCE * occupancy_balance_normalized
+        + OPERATION_WEIGHT_DISTANCE * distance_normalized
+        + OPERATION_WEIGHT_IN_OUT_CONFLICT * conflict_normalized
     )
     m.ModelSense = GRB.MINIMIZE
     m.setObjectiveN(shortage_obj, 0, priority=3, name="shortage")
     m.setObjectiveN(stability_cost, 1, priority=2, name="stability_cost")
-    m.setObjectiveN(operations_cost, 2, priority=1, name="operations_cost")
+    m.setObjectiveN(
+        normalized_operations_score,
+        2,
+        priority=1,
+        name="normalized_operations_score",
+    )
     m.update()
     variables = {
         "reservation": reserve,
@@ -484,7 +551,7 @@ def build_rolling_model(
         "occupancy_balance_normalized": occupancy_balance_normalized,
         "distance_normalized": distance_normalized,
         "in_out_conflict_normalized": conflict_normalized,
-        "operations_cost": operations_cost,
+        "normalized_operations_score": normalized_operations_score,
         **{name: float(value) for name, value in scales.items()},
     }
     return m, variables, expressions

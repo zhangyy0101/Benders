@@ -7,6 +7,7 @@ import json
 import math
 import statistics
 from collections import defaultdict
+from pathlib import Path
 
 SCENARIO_FIELDS = (
     "instance",
@@ -25,9 +26,16 @@ DEFAULT_METRICS = (
     "mean_cycle_first_incumbent_wall_time",
     "final_global_repair_count",
     "global_repair_rate",
+    "bottleneck_repair_trigger_rate",
+    "bottleneck_selected_pair_block_count",
+    "mean_bottleneck_selection_time",
     "stability_cost",
     "revision_rate",
-    "mean_cycle_predicted_operations_cost",
+    "mean_cycle_normalized_operations_score",
+    "mean_cycle_predicted_concentration_normalized",
+    "mean_cycle_predicted_occupancy_balance_normalized",
+    "mean_cycle_predicted_distance_normalized",
+    "mean_cycle_predicted_in_out_conflict_normalized",
     "realized_distance",
     "realized_in_out_conflict",
     "mean_realized_bays_per_ship_pod",
@@ -48,10 +56,31 @@ DEFAULT_METRICS = (
     "mean_solver_time",
 )
 
+FIELD_ALIASES = {
+    # rolling-v3.x called the normalized, dimensionless score a cost.
+    "mean_cycle_normalized_operations_score": (
+        "mean_cycle_predicted_operations_cost",
+    ),
+}
+
+HIGHER_IS_BETTER = {
+    "ok",
+    "quality_polish_improvement_rate",
+}
+
 
 def _number(row: dict, field: str) -> float | None:
     try:
         value = row.get(field, "")
+        if value in (None, ""):
+            value = next(
+                (
+                    row.get(alias)
+                    for alias in FIELD_ALIASES.get(field, ())
+                    if row.get(alias) not in (None, "")
+                ),
+                "",
+            )
         if isinstance(value, str) and value.lower() in ("true", "false"):
             return 1.0 if value.lower() == "true" else 0.0
         return float(value) if value not in (None, "") else None
@@ -94,6 +123,11 @@ def paired_comparison(
         for key, configuration in sorted(indexed)
         if configuration == left and (key, right) in indexed
     ]
+    tolerance = 1e-9
+    left_lower = sum(value < -tolerance for value in differences)
+    ties = sum(abs(value) <= tolerance for value in differences)
+    left_higher = sum(value > tolerance for value in differences)
+    higher_is_better = metric in HIGHER_IS_BETTER
     result = {
         "left": left,
         "right": right,
@@ -101,6 +135,10 @@ def paired_comparison(
         "difference_definition": "left - right",
         "differences": differences,
         "summary": describe(differences),
+        "direction": "higher_is_better" if higher_is_better else "lower_is_better",
+        "left_wins": left_higher if higher_is_better else left_lower,
+        "ties": ties,
+        "left_losses": left_lower if higher_is_better else left_higher,
         "wilcoxon": None,
         "wilcoxon_note": "scipy unavailable; pure-Python paired statistics reported",
     }
@@ -114,6 +152,68 @@ def paired_comparison(
     except ImportError:
         pass
     return result
+
+
+def artifact_audit(rows: list[dict]) -> dict:
+    """Check publication-critical row consistency without solver dependencies."""
+    score_fields = (
+        "mean_cycle_predicted_concentration_normalized",
+        "mean_cycle_predicted_occupancy_balance_normalized",
+        "mean_cycle_predicted_distance_normalized",
+        "mean_cycle_predicted_in_out_conflict_normalized",
+    )
+    weight_fields = (
+        "concentration",
+        "balance",
+        "distance",
+        "in_out_conflict",
+    )
+    score_errors = []
+    for row in rows:
+        score = _number(row, "mean_cycle_normalized_operations_score")
+        components = [_number(row, field) for field in score_fields]
+        profile_value = row.get("weight_profile")
+        try:
+            profile = (
+                json.loads(profile_value)
+                if isinstance(profile_value, str)
+                else profile_value
+            ) or {}
+            weights = profile.get("operations", {})
+            coefficients = [float(weights[field]) for field in weight_fields]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            coefficients = []
+        if score is None or any(value is None for value in components) or not coefficients:
+            continue
+        expected = sum(
+            coefficient * component
+            for coefficient, component in zip(coefficients, components)
+        )
+        score_errors.append(abs(score - expected))
+
+    def unique(field: str) -> list[str]:
+        return sorted({str(row[field]) for row in rows if row.get(field) not in (None, "")})
+
+    return {
+        "row_count": len(rows),
+        "failed_row_count": sum(_number(row, "ok") == 0 for row in rows),
+        "validation_failure_count": sum(
+            _number(row, "validation_failure_count") or 0 for row in rows
+        ),
+        "wall_clock_failure_count": sum(
+            _number(row, "wall_clock_time_limit_exceeded") or 0 for row in rows
+        ),
+        "dirty_row_count": sum(
+            str(row.get("git_dirty", "")).lower() == "true" for row in rows
+        ),
+        "problem_protocols": unique("problem_protocol"),
+        "algorithm_versions": unique("algorithm_version"),
+        "result_schema_versions": unique("result_schema_version"),
+        "experiment_phases": unique("experiment_phase"),
+        "score_identity_checked_rows": len(score_errors),
+        "score_identity_failure_count": sum(error > 1e-8 for error in score_errors),
+        "max_score_identity_error": max(score_errors, default=None),
+    }
 
 
 def summarize(rows: list[dict], metrics: tuple[str, ...]) -> dict:
@@ -134,12 +234,23 @@ def summarize(rows: list[dict], metrics: tuple[str, ...]) -> dict:
             for metric in metrics
         }
         summaries.append(entry)
+    comparison_pairs = (
+        ("full_bottleneck", "core"),
+        ("full_bottleneck", "core_start"),
+        ("full_bottleneck", "core_start_impact"),
+        ("full_bottleneck", "full_direct"),
+        ("full", "full_direct"),
+    )
     comparisons = [
         paired_comparison(rows, metric, left, right)
         for metric in metrics
-        for left, right in (("full", "full_direct"), ("full", "core_start"))
+        for left, right in comparison_pairs
     ]
-    return {"group_summaries": summaries, "paired_comparisons": comparisons}
+    return {
+        "artifact_audit": artifact_audit(rows),
+        "group_summaries": summaries,
+        "paired_comparisons": comparisons,
+    }
 
 
 def main() -> int:
@@ -147,10 +258,25 @@ def main() -> int:
     parser.add_argument("input")
     parser.add_argument("--metrics", nargs="+", default=list(DEFAULT_METRICS))
     parser.add_argument("--output")
+    parser.add_argument("--manifest")
     args = parser.parse_args()
     with open(args.input, newline="", encoding="utf-8-sig") as stream:
         rows = list(csv.DictReader(stream))
     result = summarize(rows, tuple(args.metrics))
+    manifest_path = Path(args.manifest) if args.manifest else Path(args.input).with_suffix(
+        ".manifest.json"
+    )
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        result["manifest_audit"] = {
+            "path": str(manifest_path),
+            "row_count": manifest.get("row_count"),
+            "expected_row_count": manifest.get("expected_row_count"),
+            "complete": manifest.get("complete"),
+            "all_ok": manifest.get("all_ok"),
+        }
+    else:
+        result["manifest_audit"] = {"path": str(manifest_path), "present": False}
     rendered = json.dumps(result, ensure_ascii=False, indent=2)
     print(rendered)
     if args.output:

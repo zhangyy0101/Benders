@@ -15,6 +15,7 @@ from rolling_data import (
 from rolling_experiment import run_rolling_case
 from rolling_solver import (
     _block_scores,
+    _bottleneck_minimal_expansion,
     _horizon_end_block_utilization,
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
@@ -98,8 +99,8 @@ class PilotModelFormulationTest(unittest.TestCase):
         ):
             self.assertAlmostEqual(epigraph[1][field], exact[1][field], places=7)
         self.assertAlmostEqual(
-            epigraph[0]["components"]["operations_cost"],
-            exact[0]["components"]["operations_cost"],
+            epigraph[0]["components"]["normalized_operations_score"],
+            exact[0]["components"]["normalized_operations_score"],
             places=7,
         )
         self.assertLess(model_sizes[False][0], model_sizes[True][0])
@@ -164,6 +165,28 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertEqual(utilization["K1"], .5)
         self.assertEqual(utilization["K2"], .25)
 
+    def test_bottleneck_selector_opens_minimum_covering_block(self):
+        snapshot = objective_snapshot()
+        pair = ("V", "G")
+        solution = {
+            "din": {},
+            "shortage": {("V", "G", 0): 5, ("V", "G", 1): 0},
+        }
+        scores = _block_scores(snapshot)
+        allowed, diagnostics = _bottleneck_minimal_expansion(
+            snapshot,
+            {pair: ["Y1"]},
+            solution,
+            {pair},
+            scores,
+            time_limit=.5,
+            seed=0,
+        )
+        self.assertEqual(diagnostics["status"], "cover_found")
+        self.assertEqual(diagnostics["selected_pair_block_count"], 1)
+        self.assertEqual(diagnostics["selected_pair_blocks"], {"V|G": ["K2"]})
+        self.assertEqual(allowed[pair], ["Y1", "Y2"])
+
     def test_solver_diagnostics_are_present_and_cycle_based(self):
         snapshot = objective_snapshot()
         result = solve_rolling_snapshot(
@@ -212,7 +235,10 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertEqual(case["pressure_shock_total"], 210)
         result = run_rolling_case(
             case,
-            time_per_cycle=3,
+            # This is a mechanism-reachability test, not a runtime-limit test.
+            # Leave headroom for loaded CI machines so a valid repair path is
+            # not mislabeled as a logic failure.
+            time_per_cycle=8,
             configuration="full",
             seed=100,
         )

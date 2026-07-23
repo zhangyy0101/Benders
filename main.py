@@ -73,7 +73,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--configuration",
         choices=CONFIGURATIONS,
-        default="full_direct",
+        default="full_bottleneck",
     )
     result.add_argument("--pressure", choices=("nearby", "global"))
     result.add_argument("--time", type=float, default=20, help="wall-clock seconds per cycle")

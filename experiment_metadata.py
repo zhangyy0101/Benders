@@ -73,7 +73,7 @@ def collect_weight_profile(
             "change_ratio": config.STABILITY_CHANGE_RATIO,
         },
         "operations": {
-            "normalized": config.USE_NORMALIZED_OPERATION_OBJECTIVE,
+            "normalization": config.OPERATION_OBJECTIVE_NORMALIZATION,
             "concentration": config.OPERATION_WEIGHT_CONCENTRATION,
             "balance": config.OPERATION_WEIGHT_BALANCE,
             "distance": config.OPERATION_WEIGHT_DISTANCE,
@@ -106,6 +106,13 @@ def collect_weight_profile(
             "time_capacity": config.TIME_CAPACITY_WEIGHT,
             "minimum_period_capacity": config.MINIMUM_PERIOD_CAPACITY_WEIGHT,
         },
+        "bottleneck_repair": {
+            "selector": "granularity_guarded_minimum_pair_block_cover",
+            "budget_ratio": config.BOTTLENECK_SELECTOR_BUDGET_RATIO,
+            "max_seconds": config.BOTTLENECK_SELECTOR_MAX_SECONDS,
+            "packing_granularity_guard": "one_compatible_bay",
+            "fallback": "global_repair",
+        },
         "quality_polish": {
             "enabled": config.QUALITY_POLISH_ENABLED,
             "pair_ratio": config.QUALITY_POLISH_PAIR_RATIO,
@@ -134,11 +141,16 @@ def collect_experiment_metadata(
     mip_gap: float,
     time_limit: float,
     dependency_profile: str = "current",
+    experiment_phase: str = "development",
 ) -> dict[str, object]:
     """Collect one immutable metadata record for an experiment batch."""
     return {
         **collect_git_metadata(),
         "problem_protocol": config.PROBLEM_PROTOCOL,
+        "algorithm_version": config.ALGORITHM_VERSION,
+        "result_schema_version": config.RESULT_SCHEMA_VERSION,
+        "formal_core_configuration": config.FORMAL_CORE_CONFIGURATION,
+        "experiment_phase": experiment_phase,
         "python_version": platform_module.python_version(),
         "python_implementation": platform_module.python_implementation(),
         "platform": platform_module.platform(),
@@ -152,6 +164,22 @@ def collect_experiment_metadata(
             if config.USE_EXACT_STABILITY_BIG_M
             else "epigraph_only"
         ),
+        "temporal_protocol": {
+            "rolling_cycle_hours": config.ROLLING_CYCLE_HOURS,
+            "receiving_window_hours": config.RECEIVING_WINDOW_HOURS,
+            "time_bucket_hours": config.TIME_BUCKET_HOURS,
+            "lookahead_hours": config.LOOKAHEAD_HOURS,
+            "admission_lead_band_hours": list(config.ADMISSION_LEAD_BAND_HOURS),
+        },
+        "validation_profile": {
+            "validate_each_execution_period": (
+                config.VALIDATE_EACH_EXECUTION_PERIOD
+            ),
+            "integer_solver_values_normalized_before_validation": True,
+            "wall_time_tolerance_seconds": (
+                config.WALL_TIME_TOLERANCE_SECONDS
+            ),
+        },
         "weight_profile": collect_weight_profile(dependency_profile),
     }
 
@@ -163,6 +191,10 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "git_branch": metadata.get("git_branch"),
         "git_dirty": metadata.get("git_dirty"),
         "problem_protocol": metadata.get("problem_protocol"),
+        "algorithm_version": metadata.get("algorithm_version"),
+        "result_schema_version": metadata.get("result_schema_version"),
+        "formal_core_configuration": metadata.get("formal_core_configuration"),
+        "experiment_phase": metadata.get("experiment_phase"),
         "python_version": metadata.get("python_version"),
         "gurobi_version": metadata.get("gurobi_version"),
         "threads": metadata.get("threads"),

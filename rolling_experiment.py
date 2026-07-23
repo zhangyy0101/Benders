@@ -21,7 +21,7 @@ def run_rolling_case(
     mip_gap: float = .01,
     threads: int = 1,
     seed: int = 0,
-    configuration: str = "full_direct",
+    configuration: str = "full_bottleneck",
     dependency_profile: str = "current",
 ) -> dict:
     """Optimize and execute each rolling cycle under a common wall-clock limit."""
@@ -53,10 +53,23 @@ def run_rolling_case(
         components = result["solution"]["components"] if result.get("solution") else {}
         forecast = {
             "predicted_shortage": components.get("predicted_shortage"),
-            "predicted_operations_cost": components.get("operations_cost"),
-            "predicted_in_out_conflict": components.get("in_out_conflict_raw"),
-            "predicted_distance": components.get("distance_raw"),
-            "predicted_occupancy_balance": components.get("occupancy_balance_raw"),
+            "normalized_operations_score": components.get(
+                "normalized_operations_score"
+            ),
+            "concentration_raw": components.get("concentration_raw"),
+            "concentration_normalized": components.get(
+                "concentration_normalized"
+            ),
+            "occupancy_balance_raw": components.get("occupancy_balance_raw"),
+            "occupancy_balance_normalized": components.get(
+                "occupancy_balance_normalized"
+            ),
+            "distance_raw": components.get("distance_raw"),
+            "distance_normalized": components.get("distance_normalized"),
+            "in_out_conflict_raw": components.get("in_out_conflict_raw"),
+            "in_out_conflict_normalized": components.get(
+                "in_out_conflict_normalized"
+            ),
         }
         revision = {key: components.get(key) for key in REVISION_KEYS}
         cycle_row = {
@@ -108,7 +121,11 @@ def run_rolling_case(
     total_preprocessing = sum(
         (row.get("preprocessing_time", 0) or 0)
         + (row.get("model_build_time", 0) or 0)
+        + (row.get("bottleneck_selection_time", 0) or 0)
         for row in cycles
+    )
+    total_bottleneck_selection = sum(
+        row.get("bottleneck_selection_time", 0) or 0 for row in cycles
     )
     ship_pod_bay_count_sum = total(
         "execution_metrics", "realized_ship_pod_bay_count_sum"
@@ -140,6 +157,7 @@ def run_rolling_case(
         "total_wall_time": total_wall,
         "total_solver_time": total_solver,
         "total_preprocessing_time": total_preprocessing,
+        "total_bottleneck_selection_time": total_bottleneck_selection,
         "total_realized_arrivals": realized_arrivals,
         "total_planned_placement_quantity": total(
             "execution_metrics", "planned_placement_quantity"

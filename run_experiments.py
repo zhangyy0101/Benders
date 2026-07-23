@@ -7,7 +7,12 @@ import json
 import sys
 from pathlib import Path
 
-from config import DEPENDENCY_PROFILES, FORECAST_ERROR_MODES
+from config import (
+    DEPENDENCY_PROFILES,
+    FORECAST_ERROR_MODES,
+    FORMAL_SEEDS,
+    PREFLIGHT_SEEDS,
+)
 from experiment_metadata import (
     collect_experiment_metadata,
     csv_metadata_fields,
@@ -187,6 +192,17 @@ def pilot_diagnostics(result: dict) -> dict:
         for cycle in cycles
     ]
     graph_times = [float(cycle.get("dependency_graph_time", 0) or 0) for cycle in cycles]
+    bottleneck_times = [
+        float(cycle.get("bottleneck_selection_time", 0) or 0)
+        for cycle in cycles
+    ]
+    bottleneck_triggered = sum(
+        bool(cycle.get("bottleneck_repair_triggered")) for cycle in cycles
+    )
+    bottleneck_selected = sum(
+        int(cycle.get("bottleneck_selected_pair_block_count", 0) or 0)
+        for cycle in cycles
+    )
     expansion_counts = [
         max(
             (
@@ -252,6 +268,15 @@ def pilot_diagnostics(result: dict) -> dict:
         "repair_trigger_rate": repair_triggered / cycle_count if cycle_count else 0.0,
         "global_repair_count": global_repairs,
         "global_repair_rate": global_repairs / cycle_count if cycle_count else 0.0,
+        "bottleneck_repair_triggered_count": bottleneck_triggered,
+        "bottleneck_repair_trigger_rate": (
+            bottleneck_triggered / cycle_count if cycle_count else 0.0
+        ),
+        "bottleneck_selected_pair_block_count": bottleneck_selected,
+        "total_bottleneck_selection_time": sum(bottleneck_times),
+        "mean_bottleneck_selection_time": (
+            sum(bottleneck_times) / cycle_count if cycle_count else 0.0
+        ),
         "quality_polish_triggered_count": polish_triggered,
         "quality_polish_trigger_rate": (
             polish_triggered / cycle_count if cycle_count else 0.0
@@ -273,16 +298,20 @@ def result_row(
     result: dict,
     metadata: dict[str, object],
 ) -> dict:
-    predicted_shortage = [
-        (cycle.get("forecast_diagnostics") or {}).get("predicted_shortage")
-        for cycle in result["cycles"]
-    ]
-    predicted_shortage = [value for value in predicted_shortage if value is not None]
-    predicted_operations = [
-        (cycle.get("forecast_diagnostics") or {}).get("predicted_operations_cost")
-        for cycle in result["cycles"]
-    ]
-    predicted_operations = [value for value in predicted_operations if value is not None]
+    def forecast_values(field: str) -> list[float]:
+        return [
+            value
+            for cycle in result["cycles"]
+            if (
+                value := (cycle.get("forecast_diagnostics") or {}).get(field)
+            ) is not None
+        ]
+
+    def forecast_mean(field: str) -> float | None:
+        values = forecast_values(field)
+        return sum(values) / len(values) if values else None
+
+    predicted_shortage = forecast_values("predicted_shortage")
     return {
         "instance": instance,
         "num_blocks": case["num_blocks"],
@@ -354,9 +383,30 @@ def result_row(
             if predicted_shortage else None
         ),
         "max_cycle_predicted_shortage": max(predicted_shortage, default=None),
-        "mean_cycle_predicted_operations_cost": (
-            sum(predicted_operations) / len(predicted_operations)
-            if predicted_operations else None
+        "mean_cycle_normalized_operations_score": forecast_mean(
+            "normalized_operations_score"
+        ),
+        "mean_cycle_predicted_concentration_raw": forecast_mean(
+            "concentration_raw"
+        ),
+        "mean_cycle_predicted_concentration_normalized": forecast_mean(
+            "concentration_normalized"
+        ),
+        "mean_cycle_predicted_occupancy_balance_raw": forecast_mean(
+            "occupancy_balance_raw"
+        ),
+        "mean_cycle_predicted_occupancy_balance_normalized": forecast_mean(
+            "occupancy_balance_normalized"
+        ),
+        "mean_cycle_predicted_distance_raw": forecast_mean("distance_raw"),
+        "mean_cycle_predicted_distance_normalized": forecast_mean(
+            "distance_normalized"
+        ),
+        "mean_cycle_predicted_in_out_conflict_raw": forecast_mean(
+            "in_out_conflict_raw"
+        ),
+        "mean_cycle_predicted_in_out_conflict_normalized": forecast_mean(
+            "in_out_conflict_normalized"
         ),
         "stages": json.dumps(
             [cycle.get("final_stage") for cycle in result["cycles"]]
@@ -384,12 +434,23 @@ def main() -> int:
         "--configurations",
         nargs="+",
         choices=CONFIGURATIONS,
-        default=["full_direct"],
+        default=["full_bottleneck"],
     )
     parser.add_argument(
         "--pressure-levels", nargs="*", choices=("nearby", "global"), default=[]
     )
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
+    parser.add_argument(
+        "--experiment-phase",
+        choices=("development", "preflight", "formal"),
+        default="development",
+        help="record and enforce the seed/cleanliness policy for this batch",
+    )
+    parser.add_argument(
+        "--require-clean-git",
+        action="store_true",
+        help="reject the batch unless it runs from a clean Git commit",
+    )
     parser.add_argument("--time", type=float, default=20)
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--mip-gap", type=float, default=.01)
@@ -417,7 +478,27 @@ def main() -> int:
         mip_gap=args.mip_gap,
         time_limit=args.time,
         dependency_profile=args.dependency_profile,
+        experiment_phase=args.experiment_phase,
     )
+    allowed_phase_seeds = {
+        "preflight": set(PREFLIGHT_SEEDS),
+        "formal": set(FORMAL_SEEDS),
+    }
+    if args.experiment_phase in allowed_phase_seeds:
+        unexpected = sorted(
+            set(args.seeds) - allowed_phase_seeds[args.experiment_phase]
+        )
+        if unexpected:
+            parser.error(
+                f"{args.experiment_phase} seeds must come from "
+                f"{sorted(allowed_phase_seeds[args.experiment_phase])}; "
+                f"unexpected={unexpected}"
+            )
+    require_clean_git = args.require_clean_git or args.experiment_phase == "formal"
+    if require_clean_git and metadata.get("git_dirty") is not False:
+        parser.error(
+            "a clean, identifiable Git commit is required for this experiment batch"
+        )
     requested_matrix = {
         "sizes": list(args.sizes),
         "errors": list(args.errors),
@@ -426,6 +507,8 @@ def main() -> int:
         "configurations": list(args.configurations),
         "pressure_levels": list(args.pressure_levels),
         "seeds": list(args.seeds),
+        "experiment_phase": args.experiment_phase,
+        "require_clean_git": require_clean_git,
         "time_limit": args.time,
         "threads": args.threads,
         "mip_gap": args.mip_gap,
