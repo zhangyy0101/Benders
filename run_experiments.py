@@ -20,7 +20,11 @@ from experiment_metadata import (
     write_experiment_artifacts,
 )
 from main import PRESETS
-from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
+from rolling_data import (
+    build_oracle_certified_case_family,
+    build_repair_pressure_case,
+    build_synthetic_rolling_case,
+)
 from rolling_experiment import run_rolling_case
 
 
@@ -30,7 +34,10 @@ EXPERIMENT_ID_FIELDS = (
     "bays_per_block",
     "num_ships",
     "cycles",
+    "tail_execution_cycles",
     "requested_initial_utilization",
+    "ship_volume_factor",
+    "oracle_case_class",
     "forecast_error",
     "forecast_error_mode",
     "outbound_rate",
@@ -41,8 +48,14 @@ EXPERIMENT_ID_FIELDS = (
 )
 NUMERIC_EXPERIMENT_ID_FIELDS = set(EXPERIMENT_ID_FIELDS) - {
     "instance",
+    "oracle_case_class",
     "forecast_error_mode",
     "configuration",
+}
+EXPERIMENT_ID_DEFAULTS = {
+    "tail_execution_cycles": 0,
+    "ship_volume_factor": 1.0,
+    "oracle_case_class": "not_evaluated",
 }
 
 
@@ -55,7 +68,11 @@ def _identity_value(field: str, value: object) -> str:
 def experiment_identity(row: dict) -> tuple[str, ...]:
     """Return a stable identity for one scenario/configuration/seed run."""
     return tuple(
-        _identity_value(field, row.get(field)) for field in EXPERIMENT_ID_FIELDS
+        _identity_value(
+            field,
+            row.get(field, EXPERIMENT_ID_DEFAULTS.get(field)),
+        )
+        for field in EXPERIMENT_ID_FIELDS
     )
 
 
@@ -73,7 +90,10 @@ def planned_experiment_identity(
         "bays_per_block": case["bays_per_block"],
         "num_ships": case["num_ships"],
         "cycles": case["cycles"],
+        "tail_execution_cycles": case.get("tail_execution_cycles", 0),
         "requested_initial_utilization": case["requested_initial_utilization"],
+        "ship_volume_factor": case.get("ship_volume_factor", 1.0),
+        "oracle_case_class": case.get("oracle_case_class", "not_evaluated"),
         "forecast_error": case["forecast_error"],
         "forecast_error_mode": case["forecast_error_mode"],
         "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
@@ -356,15 +376,35 @@ def result_row(
         return sum(values) / len(values) if values else None
 
     predicted_shortage = forecast_values("predicted_shortage")
+    oracle = case.get("oracle_certificate", {})
+    oracle_shortage_lower_bound = oracle.get("shortage_lower_bound")
     return {
         "instance": instance,
         "num_blocks": case["num_blocks"],
         "bays_per_block": case["bays_per_block"],
         "num_ships": case["num_ships"],
         "cycles": case["cycles"],
+        "admission_cycles": case.get("admission_cycles", case["cycles"]),
+        "tail_execution_cycles": case.get("tail_execution_cycles", 0),
+        "execution_cycles": case.get("execution_cycles", case["cycles"]),
         "initial_utilization": case["requested_initial_utilization"],
         "requested_initial_utilization": case["requested_initial_utilization"],
         "realized_initial_utilization": case["realized_initial_utilization"],
+        "ship_volume_factor": case.get("ship_volume_factor", 1.0),
+        "oracle_case_class": case.get("oracle_case_class", "not_evaluated"),
+        "oracle_classification": oracle.get("classification", "not_evaluated"),
+        "oracle_minimum_shortage": oracle.get("minimum_shortage"),
+        "oracle_incumbent_shortage": oracle.get("incumbent_shortage"),
+        "oracle_shortage_lower_bound": oracle_shortage_lower_bound,
+        "oracle_zero_shortage_certificate": oracle.get(
+            "zero_shortage_certificate"
+        ),
+        "oracle_positive_shortage_certificate": oracle.get(
+            "positive_shortage_certificate"
+        ),
+        "oracle_proved_optimal": oracle.get("proved_optimal"),
+        "oracle_runtime_seconds": oracle.get("runtime_seconds"),
+        "oracle_total_demand": oracle.get("total_demand"),
         "forecast_error": case["forecast_error"],
         "forecast_error_mode": case["forecast_error_mode"],
         "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
@@ -388,6 +428,11 @@ def result_row(
         "fallback_rate": result["fallback_rate"],
         "realized_unplaced": result["total_realized_unplaced"],
         "unplaced_rate": result["unplaced_rate"],
+        "realized_arrival_coverage_of_oracle_demand": (
+            result["total_realized_arrivals"] / oracle["total_demand"]
+            if oracle.get("total_demand")
+            else None
+        ),
         "realized_distance": result["total_realized_distance"],
         "realized_in_out_conflict": result["total_realized_in_out_conflict"],
         "mean_realized_bays_per_ship_pod": result["mean_realized_bays_per_ship_pod"],
@@ -510,6 +555,25 @@ def main() -> int:
     parser.add_argument("--containers-per-ship-high", type=int)
     parser.add_argument("--active-ship-overlap", type=int)
     parser.add_argument("--pod-count", type=int)
+    parser.add_argument(
+        "--oracle-case-classes",
+        nargs="*",
+        choices=("feasible", "tight", "overloaded"),
+        default=[],
+        help=(
+            "replace each ordinary synthetic case with selected members of an "
+            "offline full-horizon-oracle-certified volume family"
+        ),
+    )
+    parser.add_argument(
+        "--oracle-factor-bounds",
+        nargs=2,
+        type=float,
+        default=(.25, 4.0),
+        metavar=("LOW", "HIGH"),
+    )
+    parser.add_argument("--oracle-search-iterations", type=int, default=8)
+    parser.add_argument("--oracle-time", type=float, default=60.0)
     parser.add_argument("--output", default="rolling_results.csv")
     parser.add_argument("--manifest-output")
     parser.add_argument(
@@ -564,7 +628,12 @@ def main() -> int:
         "containers_per_ship_high": args.containers_per_ship_high,
         "active_ship_overlap": args.active_ship_overlap,
         "pod_count": args.pod_count,
+        "oracle_case_classes": list(args.oracle_case_classes),
+        "oracle_factor_bounds": list(args.oracle_factor_bounds),
+        "oracle_search_iterations": args.oracle_search_iterations,
+        "oracle_time_limit": args.oracle_time,
     }
+    case_class_count = max(1, len(args.oracle_case_classes))
     expected_row_count = (
         len(args.sizes)
         * len(args.errors)
@@ -572,6 +641,7 @@ def main() -> int:
         * len(args.initial_utilizations)
         * len(args.seeds)
         * len(args.configurations)
+        * case_class_count
         + len(args.pressure_levels) * len(args.seeds) * len(args.configurations)
     )
     rows: list[dict] = (
@@ -607,55 +677,81 @@ def main() -> int:
             for mode in args.forecast_error_modes:
                 for utilization in args.initial_utilizations:
                     for seed in args.seeds:
-                        for configuration in args.configurations:
-                            preset = dict(PRESETS[size])
-                            current_low, current_high = preset[
-                                "containers_per_ship_range"
+                        preset = dict(PRESETS[size])
+                        current_low, current_high = preset[
+                            "containers_per_ship_range"
+                        ]
+                        preset["containers_per_ship_range"] = (
+                            args.containers_per_ship_low or current_low,
+                            args.containers_per_ship_high or current_high,
+                        )
+                        if args.active_ship_overlap is not None:
+                            preset["active_ship_overlap"] = args.active_ship_overlap
+                        if args.pod_count is not None:
+                            preset["pod_count"] = args.pod_count
+                        case_kwargs = {
+                            "seed": seed,
+                            "forecast_error": error,
+                            "forecast_error_mode": mode,
+                            "initial_utilization": utilization,
+                            "nominal_outbound_rate_per_ship_period": (
+                                args.outbound_rate
+                            ),
+                            "release_delay_periods": args.release_delay_periods,
+                            **preset,
+                        }
+                        if args.oracle_case_classes:
+                            family = build_oracle_certified_case_family(
+                                factor_bounds=tuple(args.oracle_factor_bounds),
+                                search_iterations=args.oracle_search_iterations,
+                                oracle_time_limit=args.oracle_time,
+                                oracle_threads=args.threads,
+                                oracle_seed=seed,
+                                **case_kwargs,
+                            )
+                            cases = [
+                                (f"{size}_{label}", family[label])
+                                for label in args.oracle_case_classes
                             ]
-                            preset["containers_per_ship_range"] = (
-                                args.containers_per_ship_low or current_low,
-                                args.containers_per_ship_high or current_high,
-                            )
-                            if args.active_ship_overlap is not None:
-                                preset["active_ship_overlap"] = args.active_ship_overlap
-                            if args.pod_count is not None:
-                                preset["pod_count"] = args.pod_count
+                        else:
                             case = build_synthetic_rolling_case(
-                                seed=seed,
-                                forecast_error=error,
-                                forecast_error_mode=mode,
-                                initial_utilization=utilization,
-                                nominal_outbound_rate_per_ship_period=(
-                                    args.outbound_rate
-                                ),
-                                release_delay_periods=args.release_delay_periods,
-                                **preset,
+                                **case_kwargs,
                             )
-                            identity = planned_experiment_identity(
-                                size, case, configuration, seed, args.time
-                            )
-                            if identity in completed:
-                                print(f"resume: skipping {identity}", flush=True)
-                                continue
-                            result = run_rolling_case(
-                                case,
-                                time_per_cycle=args.time,
-                                mip_gap=args.mip_gap,
-                                threads=args.threads,
-                                seed=seed,
-                                configuration=configuration,
-                                dependency_profile=args.dependency_profile,
-                            )
-                            row = result_row(
-                                size,
-                                case,
-                                configuration,
-                                seed,
-                                args.time,
-                                result,
-                                metadata,
-                            )
-                            checkpoint(row)
+                            cases = [(size, case)]
+                        for instance_name, case in cases:
+                            for configuration in args.configurations:
+                                identity = planned_experiment_identity(
+                                    instance_name,
+                                    case,
+                                    configuration,
+                                    seed,
+                                    args.time,
+                                )
+                                if identity in completed:
+                                    print(
+                                        f"resume: skipping {identity}",
+                                        flush=True,
+                                    )
+                                    continue
+                                result = run_rolling_case(
+                                    case,
+                                    time_per_cycle=args.time,
+                                    mip_gap=args.mip_gap,
+                                    threads=args.threads,
+                                    seed=seed,
+                                    configuration=configuration,
+                                    dependency_profile=args.dependency_profile,
+                                )
+                                row = result_row(
+                                    instance_name,
+                                    case,
+                                    configuration,
+                                    seed,
+                                    args.time,
+                                    result,
+                                    metadata,
+                                )
+                                checkpoint(row)
     for level in args.pressure_levels:
         for seed in args.seeds:
             for configuration in args.configurations:

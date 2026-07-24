@@ -169,6 +169,7 @@ def collect_experiment_metadata(
         "preprocessing_implementation": (
             config.PREPROCESSING_IMPLEMENTATION
         ),
+        "packing_oracle_protocol": config.PACKING_ORACLE_PROTOCOL,
         "external_baselines": literature_baseline_metadata(),
         "experiment_phase": experiment_phase,
         "python_version": platform_module.python_version(),
@@ -220,6 +221,7 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "preprocessing_implementation": metadata.get(
             "preprocessing_implementation"
         ),
+        "packing_oracle_protocol": metadata.get("packing_oracle_protocol"),
         "experiment_phase": metadata.get("experiment_phase"),
         "python_version": metadata.get("python_version"),
         "gurobi_version": metadata.get("gurobi_version"),

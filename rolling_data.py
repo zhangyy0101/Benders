@@ -391,6 +391,7 @@ def build_synthetic_rolling_case(
     bays_per_block: int = 8,
     num_ships: int = 8,
     cycles: int = 6,
+    tail_execution_cycles: int = 0,
     bay_capacity: int = 50,
     initial_utilization: float = .25,
     forecast_error: float = .10,
@@ -398,6 +399,7 @@ def build_synthetic_rolling_case(
     nominal_outbound_rate_per_ship_period: int = DEFAULT_OUTBOUND_BOXES_PER_6H,
     outbound_boxes_per_period: int | None = None,
     containers_per_ship_range: tuple[int, int] = (60, 160),
+    ship_volume_factor: float = 1.0,
     active_ship_overlap: int = 2,
     pod_count: int = 3,
     ship_operation_duration_periods: int | tuple[int, int] | None = None,
@@ -420,9 +422,13 @@ def build_synthetic_rolling_case(
         raise ValueError("initial_utilization must be between zero and one")
     if active_ship_overlap <= 0 or pod_count <= 0:
         raise ValueError("active_ship_overlap and pod_count must be positive")
+    if cycles <= 0 or tail_execution_cycles < 0:
+        raise ValueError("cycles must be positive and tail_execution_cycles nonnegative")
     low_boxes, high_boxes = containers_per_ship_range
     if low_boxes <= 0 or high_boxes < low_boxes:
         raise ValueError("containers_per_ship_range must be positive and ordered")
+    if ship_volume_factor <= 0:
+        raise ValueError("ship_volume_factor must be positive")
 
     rng = random.Random(seed)
     schedule_rng = random.Random(seed + 71_011)
@@ -445,6 +451,7 @@ def build_synthetic_rolling_case(
     }
     groups = sorted(group_attrs)
     ships = [f"V{index + 1:02d}" for index in range(num_ships)]
+    execution_cycles = cycles + tail_execution_cycles
     eta_period: dict[str, int] = {}
     receiving_start: dict[str, int] = {}
     planned_release: dict[str, int] = {}
@@ -476,7 +483,8 @@ def build_synthetic_rolling_case(
         selected = [group for group in eligible_groups if rng.random() < .78]
         if not selected:
             selected = [eligible_groups[0]]
-        ship_total = rng.randint(low_boxes, high_boxes)
+        sampled_ship_total = rng.randint(low_boxes, high_boxes)
+        ship_total = max(1, int(round(sampled_ship_total * ship_volume_factor)))
         volume_duration = math.ceil(
             ship_total / nominal_outbound_rate_per_ship_period
         )
@@ -515,7 +523,7 @@ def build_synthetic_rolling_case(
     forecasts = generate_forecast_trajectory(
         true_flow=true_flow,
         booking_flow=booking_flow,
-        cycles=cycles,
+        cycles=execution_cycles,
         forecast_error_mode=forecast_error_mode,
         error_level=forecast_error,
         seed=seed,
@@ -525,7 +533,7 @@ def build_synthetic_rolling_case(
     forecast_diagnostics = forecast_trajectory_diagnostics(
         forecasts=forecasts,
         true_flow=true_flow,
-        cycles=cycles,
+        cycles=execution_cycles,
     )
 
     locked, locked_height, initialization_diagnostics = (
@@ -582,7 +590,7 @@ def build_synthetic_rolling_case(
                 ship_outbound[ship, eta_period[ship] + offset] = quantity
 
     outbound_forecasts: dict[tuple[int, str, str, int], int] = {}
-    for cycle in range(cycles):
+    for cycle in range(execution_cycles):
         now = cycle * EXECUTION_PERIODS
         for (old_ship, block, absolute), truth in old_outbound.items():
             if absolute >= now:
@@ -627,6 +635,9 @@ def build_synthetic_rolling_case(
             nominal_outbound_rate_per_ship_period
         ),
         "cycles": cycles,
+        "admission_cycles": cycles,
+        "tail_execution_cycles": tail_execution_cycles,
+        "execution_cycles": execution_cycles,
         "period_hours": PERIOD_HOURS,
         "execution_periods": EXECUTION_PERIODS,
         "receiving_periods": RECEIVING_PERIODS,
@@ -637,12 +648,183 @@ def build_synthetic_rolling_case(
         "initial_utilization": initial_utilization,
         **initialization_diagnostics,
         "containers_per_ship_range": containers_per_ship_range,
+        "ship_volume_factor": float(ship_volume_factor),
+        "effective_containers_per_ship_range": (
+            max(1, int(round(low_boxes * ship_volume_factor))),
+            max(1, int(round(high_boxes * ship_volume_factor))),
+        ),
         "active_ship_overlap": active_ship_overlap,
         "pod_count": pod_count,
         "num_blocks": num_blocks,
         "bays_per_block": bays_per_block,
         "num_ships": num_ships,
     }
+
+
+def build_oracle_certified_case_family(
+    *,
+    factor_bounds: tuple[float, float] = (.25, 4.0),
+    feasible_fraction: float = .75,
+    boundary_relative_tolerance: float = .05,
+    search_iterations: int = 8,
+    oracle_time_limit: float = 60.0,
+    oracle_threads: int = 1,
+    oracle_seed: int | None = None,
+    **synthetic_case_kwargs,
+) -> dict:
+    """Build ordinary-feasible, tight-feasible, and overloaded sister cases.
+
+    Every returned label is backed by the independent full-information integer
+    packing oracle.  The tight case is the largest certified-feasible volume
+    factor found immediately below a certified-overloaded factor.  Unknown
+    oracle results stop calibration instead of being treated as infeasibility.
+    """
+    if "ship_volume_factor" in synthetic_case_kwargs:
+        raise ValueError(
+            "ship_volume_factor is calibrated internally and must not be supplied"
+        )
+    lower_factor, upper_factor = map(float, factor_bounds)
+    if lower_factor <= 0 or upper_factor <= lower_factor:
+        raise ValueError("factor_bounds must be positive and increasing")
+    if not 0 < feasible_fraction < 1:
+        raise ValueError("feasible_fraction must be strictly between zero and one")
+    if not 0 < boundary_relative_tolerance < 1:
+        raise ValueError(
+            "boundary_relative_tolerance must be strictly between zero and one"
+        )
+    if search_iterations <= 0:
+        raise ValueError("search_iterations must be positive")
+    synthetic_case_kwargs.setdefault(
+        "tail_execution_cycles",
+        math.ceil(RECEIVING_PERIODS / EXECUTION_PERIODS),
+    )
+
+    from rolling_model import solve_full_horizon_packing_oracle
+
+    seed = int(
+        synthetic_case_kwargs.get("seed", 0)
+        if oracle_seed is None
+        else oracle_seed
+    )
+    cache: dict[float, tuple[dict, dict]] = {}
+    evaluation_order: list[dict] = []
+
+    def evaluate(factor: float) -> tuple[dict, dict]:
+        normalized_factor = round(float(factor), 8)
+        if normalized_factor in cache:
+            return cache[normalized_factor]
+        case = build_synthetic_rolling_case(
+            ship_volume_factor=normalized_factor,
+            **synthetic_case_kwargs,
+        )
+        certificate = solve_full_horizon_packing_oracle(
+            case,
+            release_basis="realized",
+            time_limit=oracle_time_limit,
+            threads=oracle_threads,
+            seed=seed,
+        )
+        record = {
+            "ship_volume_factor": normalized_factor,
+            **certificate,
+        }
+        evaluation_order.append(record)
+        cache[normalized_factor] = case, certificate
+        return case, certificate
+
+    lower_case, lower_certificate = evaluate(lower_factor)
+    if lower_certificate["classification"] != "feasible":
+        raise RuntimeError(
+            "lower factor is not certified feasible; reduce factor_bounds[0]"
+        )
+    upper_case, upper_certificate = evaluate(upper_factor)
+    if upper_certificate["classification"] != "overloaded":
+        raise RuntimeError(
+            "upper factor is not certified overloaded; increase factor_bounds[1]"
+        )
+
+    search_stopped_due_unknown = False
+    for _iteration in range(search_iterations):
+        relative_width = (
+            upper_factor - lower_factor
+        ) / max(lower_factor, 1e-9)
+        if relative_width <= boundary_relative_tolerance:
+            break
+        midpoint = (lower_factor + upper_factor) / 2
+        midpoint_case, midpoint_certificate = evaluate(midpoint)
+        if midpoint_certificate["classification"] == "feasible":
+            lower_factor = midpoint
+            lower_case = midpoint_case
+            lower_certificate = midpoint_certificate
+        elif midpoint_certificate["classification"] == "overloaded":
+            upper_factor = midpoint
+            upper_case = midpoint_case
+            upper_certificate = midpoint_certificate
+        else:
+            previous_bounds = lower_factor, upper_factor
+            for probe in (
+                (lower_factor + midpoint) / 2,
+                (midpoint + upper_factor) / 2,
+            ):
+                probe_case, probe_certificate = evaluate(probe)
+                if (
+                    probe_certificate["classification"] == "feasible"
+                    and probe > lower_factor
+                ):
+                    lower_factor = probe
+                    lower_case = probe_case
+                    lower_certificate = probe_certificate
+                elif (
+                    probe_certificate["classification"] == "overloaded"
+                    and probe < upper_factor
+                ):
+                    upper_factor = probe
+                    upper_case = probe_case
+                    upper_certificate = probe_certificate
+            if previous_bounds == (lower_factor, upper_factor):
+                search_stopped_due_unknown = True
+                break
+
+    ordinary_factor = round(lower_factor * feasible_fraction, 8)
+    ordinary_case, ordinary_certificate = evaluate(ordinary_factor)
+    if ordinary_certificate["classification"] != "feasible":
+        raise RuntimeError("ordinary factor unexpectedly lacks a feasible certificate")
+
+    calibration = {
+        "method": "full_horizon_integer_packing_volume_bisection",
+        "feasible_fraction": feasible_fraction,
+        "boundary_relative_tolerance": boundary_relative_tolerance,
+        "certified_feasible_factor": lower_factor,
+        "certified_overloaded_factor": upper_factor,
+        "relative_boundary_width": (
+            upper_factor - lower_factor
+        ) / max(lower_factor, 1e-9),
+        "boundary_tolerance_met": (
+            (upper_factor - lower_factor) / max(lower_factor, 1e-9)
+            <= boundary_relative_tolerance
+        ),
+        "search_stopped_due_unknown": search_stopped_due_unknown,
+        "unknown_evaluation_count": sum(
+            record["classification"] == "unknown"
+            for record in evaluation_order
+        ),
+        "oracle_time_limit": oracle_time_limit,
+        "evaluations": evaluation_order,
+    }
+    labeled = {
+        "feasible": (ordinary_case, ordinary_certificate),
+        "tight": (lower_case, lower_certificate),
+        "overloaded": (upper_case, upper_certificate),
+    }
+    for label, (case, certificate) in labeled.items():
+        case["oracle_case_class"] = label
+        case["oracle_certificate"] = dict(certificate)
+        case["oracle_calibration"] = {
+            key: value for key, value in calibration.items() if key != "evaluations"
+        }
+    return {
+        label: case for label, (case, _certificate) in labeled.items()
+    } | {"calibration": calibration}
 
 
 def build_repair_pressure_case(*, level: str = "nearby", seed: int = 0) -> dict:

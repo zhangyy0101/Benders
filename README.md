@@ -49,8 +49,18 @@ The generator records both requested and realized initial utilization. A
 deterministic seeded allocator places the exact rounded target quantity, caps
 each bay at 95%, preserves one height type per bay, distributes inventory over
 multiple old vessels, and raises an exception if the requested level is
-physically unreachable. Standard scenarios through 80% utilization are
-supported.
+physically unreachable. This certifies only the initial inventory placement;
+an 80% initial state can still make later vessel demand structurally
+unplaceable.
+
+For publication experiments, an independent full-information integer packing
+oracle classifies sister instances as ordinary feasible, tight feasible, or
+overloaded. It uses true arrivals only offline and is never visible to the
+rolling optimizer. Zero shortage certifies feasibility, while a strictly
+positive objective lower bound certifies overload; unresolved time-limited
+cases remain `unknown`. Oracle-certified cases add three terminal execution
+cycles with no new admissions so all admitted vessels' 72-hour receiving tails
+are executed and realized-arrival coverage equals the certified demand.
 
 ## Model and stability
 
@@ -198,6 +208,19 @@ python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --mip-gap 0.01 --output pilot_results.csv \
   --manifest-output pilot_results.manifest.json
 ```
+
+Generate ordinary-feasible, tight-feasible, and overloaded sister cases with
+offline integer certificates:
+
+```bash
+python run_experiments.py --sizes small \
+  --oracle-case-classes feasible tight overloaded \
+  --configurations core core_start core_start_impact full_bottleneck \
+  --seeds 100 --time 20 --output oracle_certified_development.csv
+```
+
+Oracle calibration time is recorded separately and excluded from each online
+method's time limit.
 
 The unified experiment interface also exposes three adapted literature
 baselines:

@@ -32,7 +32,7 @@ def run_rolling_case(
     state = initial_simulation_state(case)
     method_state: dict = {}
     cycles: list[dict] = []
-    for _ in range(case["cycles"]):
+    for _ in range(case.get("execution_cycles", case["cycles"])):
         snapshot = optimization_snapshot(case, state)
         if not snapshot["active_ships"]:
             cycle_index = state["cycle"]

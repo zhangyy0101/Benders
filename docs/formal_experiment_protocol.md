@@ -4,9 +4,12 @@ The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
 Those 36 rows are retained as historical development evidence. Version 1.2
 then used the protocol-authorized final preflight adjustment to add a
 state-based high-pressure route. Its candidate-only small/medium/large check
-completed 9/9 rows without validation or wall-clock failure. A new complete
-36-row preflight from a clean tagged commit is still required before formal
-execution.
+completed 9/9 rows without validation or wall-clock failure. Subsequent
+independent packing certification proved that the former 80% large development
+profile can be structurally overloaded (seed 100 has an integer-shortage lower
+bound of 816 boxes). It is therefore historical stress evidence, not a valid
+zero-shortage algorithm benchmark. A new oracle-certified preflight from a
+clean tagged commit is required before formal execution.
 
 ## Status and immutable identifiers
 
@@ -14,9 +17,10 @@ This document defines the publication-oriented interface before public-data
 calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
-- Problem protocol: `rolling-v4.2-safeguarded-adaptive-development`
+- Problem protocol: `rolling-v4.3-oracle-certified-development`
 - Algorithm: `safeguarded-adaptive-bottleneck-repair-v1.2`
-- Result schema: `rolling-results-v3`
+- Result schema: `rolling-results-v4`
+- Packing oracle: `full-horizon-integer-packing-v1`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
 - Preprocessing implementation: `adaptive-pressure-sparse-indexed-v2`
@@ -36,6 +40,14 @@ remains disabled.
 Any change to constraints, objective priorities, stage triggers, domain
 expansion, or validation semantics requires a new problem or algorithm version.
 Any incompatible CSV-field change requires a new result-schema version.
+
+The packing oracle is an offline data-certification tool, not an algorithm
+component and not part of timed candidate execution. It uses realized integer
+arrivals, realized whole-ship release periods, old-vessel release periods, bay
+size, bay capacity, and the no-mixed-height rule. A zero-shortage incumbent
+certifies structural feasibility. A positive shortage lower bound certifies
+structural overload. A time-limited run with neither certificate is recorded as
+`unknown` and must never be relabeled infeasible.
 
 ## Experiment phases and data separation
 
@@ -133,16 +145,25 @@ preflight seeds; formal seeds 1000--1004 remain uninspected.
 
 ## Preflight gate
 
-Before the complete formal matrix, run the four required methods on three
-representative profiles with all preflight seeds:
+Before the complete formal matrix, run the four required methods on
+oracle-certified ordinary-feasible and tight-feasible members of three scale
+profiles with all preflight seeds:
 
-1. small, 10% booking-add/cancel error, 55% initial utilization;
-2. medium, 20% mixed error, 55% initial utilization;
-3. large, 20% mixed error, 80% initial utilization.
+1. small, 10% booking-add/cancel error;
+2. medium, 20% mixed error;
+3. large, 20% mixed error.
 
 Use identical time limits within each profile.  Recommended initial limits are
-20 seconds per cycle for small and medium and 60 seconds for large.  This is a
-36-row gate rather than a full Cartesian sweep.
+20 seconds per cycle for small and medium and 60 seconds for large. Initial
+utilization is a recorded scenario factor, not a surrogate feasibility label.
+Certified-overloaded members are reported separately as mechanism/stress cases
+and are not pooled into zero-shortage performance claims.
+
+Every certified case separates admission cycles from three terminal execution
+cycles. The terminal cycles admit no additional vessels and execute the
+remaining 72-hour receiving tails, so `realized_arrivals` covers the same demand
+that the full-horizon oracle certifies. Oracle construction time is recorded
+separately and excluded from timed online solution performance.
 
 The gate passes only if:
 

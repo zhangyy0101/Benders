@@ -49,3 +49,10 @@
 23. Realized peak utilization, utilization deviation, support activation, and
     bay concentration are sampled after every executed 6-hour period rather
     than inferred only from the cycle-end state.
+24. Oracle-certified experiments separate vessel-admission cycles from three
+    terminal execution cycles. No new vessel is admitted in the terminal
+    cycles; they execute the complete receiving tails of already admitted
+    vessels and remove right-censoring from realized arrival metrics.
+25. The full-information integer packing oracle is used only for offline
+    instance certification. Its true-flow and realized-release inputs are not
+    exposed to any rolling optimization method.

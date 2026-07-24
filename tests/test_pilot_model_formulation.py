@@ -8,9 +8,11 @@ from rolling_model import (
     build_rolling_model,
     compute_objective_scales,
     extract_rolling_solution,
+    solve_full_horizon_packing_oracle,
     validate_snapshot_temporal_consistency,
 )
 from rolling_data import (
+    build_oracle_certified_case_family,
     build_repair_pressure_case,
     build_synthetic_rolling_case,
     initial_simulation_state,
@@ -33,7 +35,214 @@ from test_objective_scales_and_occupancy import objective_snapshot
 from test_time_scores_and_release_propagation import base_snapshot
 
 
+def packing_oracle_case(
+    *,
+    bays: int = 1,
+    flow: dict[tuple[str, str, int], int] | None = None,
+    releases: dict[str, int] | None = None,
+) -> dict:
+    bay_names = [f"B01_Y{index + 1:02d}" for index in range(bays)]
+    return {
+        "bays": bay_names,
+        "bay_size": {bay: 20 for bay in bay_names},
+        "capacity": {bay: 50 for bay in bay_names},
+        "heights": ("STD", "HIGH"),
+        "group_attrs": {
+            "P1_20_STD": {"pod": "P1", "size": 20, "height": "STD"},
+            "P2_20_HIGH": {"pod": "P2", "size": 20, "height": "HIGH"},
+        },
+        "true_flow": flow or {("V01", "P1_20_STD", 0): 40},
+        "planned_ship_release_period": releases or {"V01": 3},
+        "realized_ship_release_period": releases or {"V01": 3},
+        "locked_initial": {},
+        "locked_height_initial": {},
+        "old_release_period": {},
+    }
+
+
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_oracle_family_keeps_unknown_boundary_unclassified(self):
+        def certificate(case, **_kwargs):
+            factor = case["ship_volume_factor"]
+            classification = (
+                "feasible"
+                if factor < 2
+                else "overloaded"
+                if factor > 3
+                else "unknown"
+            )
+            return {
+                "classification": classification,
+                "minimum_shortage": 0 if classification == "feasible" else None,
+                "incumbent_shortage": 1 if classification == "overloaded" else None,
+                "objective_bound": 1 if classification == "overloaded" else 0,
+                "shortage_lower_bound": 1 if classification == "overloaded" else 0,
+                "proved_optimal": classification == "feasible",
+                "zero_shortage_certificate": classification == "feasible",
+                "positive_shortage_certificate": classification == "overloaded",
+                "solver_status": GRB.TIME_LIMIT,
+                "solution_count": 1,
+                "runtime_seconds": 0,
+                "node_count": 0,
+                "total_demand": sum(case["true_flow"].values()),
+                "late_flow_quantity": 0,
+                "horizon_periods": 1,
+                "placement_variable_count": 0,
+                "model_variable_count": 0,
+                "model_constraint_count": 0,
+                "release_basis": "realized",
+            }
+
+        with patch(
+            "rolling_model.solve_full_horizon_packing_oracle",
+            side_effect=certificate,
+        ):
+            family = build_oracle_certified_case_family(
+                seed=1,
+                num_blocks=1,
+                bays_per_block=4,
+                num_ships=1,
+                cycles=1,
+                initial_utilization=0,
+                forecast_error=0,
+                containers_per_ship_range=(20, 20),
+                active_ship_overlap=1,
+                pod_count=1,
+                factor_bounds=(1, 4),
+                search_iterations=4,
+                oracle_time_limit=1,
+            )
+
+        self.assertEqual(
+            family["tight"]["oracle_certificate"]["classification"],
+            "feasible",
+        )
+        self.assertEqual(
+            family["overloaded"]["oracle_certificate"]["classification"],
+            "overloaded",
+        )
+        self.assertTrue(family["calibration"]["search_stopped_due_unknown"])
+        self.assertGreater(family["calibration"]["unknown_evaluation_count"], 0)
+
+    def test_oracle_certified_family_separates_pressure_classes(self):
+        family = build_oracle_certified_case_family(
+            seed=11,
+            num_blocks=1,
+            bays_per_block=4,
+            num_ships=2,
+            cycles=2,
+            bay_capacity=50,
+            initial_utilization=0,
+            forecast_error=0,
+            containers_per_ship_range=(20, 20),
+            active_ship_overlap=2,
+            pod_count=1,
+            factor_bounds=(.25, 10),
+            search_iterations=5,
+            oracle_time_limit=5,
+        )
+
+        self.assertEqual(
+            family["feasible"]["oracle_certificate"]["classification"],
+            "feasible",
+        )
+        self.assertEqual(
+            family["tight"]["oracle_certificate"]["classification"],
+            "feasible",
+        )
+        self.assertEqual(
+            family["overloaded"]["oracle_certificate"]["classification"],
+            "overloaded",
+        )
+        self.assertLess(
+            family["feasible"]["ship_volume_factor"],
+            family["tight"]["ship_volume_factor"],
+        )
+        self.assertLess(
+            family["tight"]["ship_volume_factor"],
+            family["overloaded"]["ship_volume_factor"],
+        )
+        self.assertEqual(
+            family["tight"]["execution_cycles"],
+            family["tight"]["admission_cycles"] + 3,
+        )
+        self.assertLess(
+            max(period for _ship, _group, period in family["tight"]["true_flow"]),
+            family["tight"]["execution_cycles"]
+            * family["tight"]["execution_periods"],
+        )
+
+    def test_full_horizon_packing_oracle_certifies_integer_feasibility(self):
+        result = solve_full_horizon_packing_oracle(
+            packing_oracle_case(),
+            time_limit=5,
+            return_witness=True,
+        )
+
+        self.assertEqual(result["classification"], "feasible")
+        self.assertTrue(result["zero_shortage_certificate"])
+        self.assertEqual(result["minimum_shortage"], 0)
+        self.assertEqual(sum(result["placement"].values()), 40)
+
+    def test_full_horizon_packing_oracle_proves_capacity_overload(self):
+        case = packing_oracle_case(
+            flow={("V01", "P1_20_STD", 0): 60},
+        )
+        result = solve_full_horizon_packing_oracle(
+            case,
+            time_limit=5,
+            stop_after_classification=False,
+        )
+
+        self.assertEqual(result["classification"], "overloaded")
+        self.assertTrue(result["proved_optimal"])
+        self.assertEqual(result["minimum_shortage"], 10)
+
+    def test_full_horizon_packing_oracle_enforces_height_and_release(self):
+        mixed = packing_oracle_case(
+            flow={
+                ("V01", "P1_20_STD", 0): 30,
+                ("V02", "P2_20_HIGH", 0): 30,
+            },
+            releases={"V01": 3, "V02": 3},
+        )
+        mixed_result = solve_full_horizon_packing_oracle(
+            mixed,
+            time_limit=5,
+            stop_after_classification=False,
+        )
+        self.assertEqual(mixed_result["classification"], "overloaded")
+        self.assertEqual(mixed_result["minimum_shortage"], 30)
+
+        reusable = packing_oracle_case(
+            flow={
+                ("V01", "P1_20_STD", 0): 50,
+                ("V02", "P2_20_HIGH", 2): 50,
+            },
+            releases={"V01": 2, "V02": 4},
+        )
+        reusable_result = solve_full_horizon_packing_oracle(
+            reusable,
+            time_limit=5,
+        )
+        self.assertEqual(reusable_result["classification"], "feasible")
+        self.assertEqual(reusable_result["minimum_shortage"], 0)
+
+    def test_full_horizon_packing_oracle_rejects_flow_at_release(self):
+        case = packing_oracle_case(
+            flow={("V01", "P1_20_STD", 2): 5},
+            releases={"V01": 2},
+        )
+        result = solve_full_horizon_packing_oracle(
+            case,
+            time_limit=5,
+            stop_after_classification=False,
+        )
+
+        self.assertEqual(result["classification"], "overloaded")
+        self.assertEqual(result["minimum_shortage"], 5)
+        self.assertEqual(result["late_flow_quantity"], 5)
+
     def test_adaptive_pressure_routes_by_snapshot_state_not_size_label(self):
         common = dict(
             seed=700,

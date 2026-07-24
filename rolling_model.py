@@ -44,6 +44,274 @@ def validate_snapshot_temporal_consistency(d: dict) -> None:
         )
 
 
+def solve_full_horizon_packing_oracle(
+    case: dict,
+    *,
+    flow: dict[tuple[str, str, int], int] | None = None,
+    release_basis: str = "realized",
+    time_limit: float = 60.0,
+    threads: int = 1,
+    seed: int = 0,
+    return_witness: bool = False,
+    stop_after_classification: bool = True,
+) -> dict:
+    """Certify full-information integer packing feasibility over the case horizon.
+
+    The oracle is deliberately independent of forecasts, rolling decisions, and
+    repair logic.  It minimizes integer unplaced demand using the realized or
+    planned whole-ship release dates.  A zero-shortage incumbent is a feasibility
+    certificate because shortage is nonnegative; a positive value establishes
+    structural overload only after optimality has been proved.
+    """
+    if release_basis not in {"realized", "planned"}:
+        raise ValueError("release_basis must be 'realized' or 'planned'")
+    if time_limit <= 0:
+        raise ValueError("time_limit must be positive")
+    if threads <= 0:
+        raise ValueError("threads must be positive")
+
+    release_key = (
+        "realized_ship_release_period"
+        if release_basis == "realized"
+        else "planned_ship_release_period"
+    )
+    releases = case[release_key]
+    raw_demand = flow if flow is not None else case["true_flow"]
+    if any(
+        int(quantity) != quantity or quantity < 0
+        for quantity in raw_demand.values()
+    ):
+        raise ValueError("oracle flow quantities must be nonnegative integers")
+    demand = {
+        (ship, group, int(period)): int(quantity)
+        for (ship, group, period), quantity in raw_demand.items()
+        if int(quantity) > 0
+    }
+
+    bays = tuple(case["bays"])
+    heights = tuple(case["heights"])
+    attrs = case["group_attrs"]
+    old_releases = case.get("old_release_period", {})
+    locked = case.get("locked_initial", {})
+    locked_height = case.get("locked_height_initial", {})
+    for bay in bays:
+        if case["capacity"][bay] <= 0:
+            raise ValueError(f"bay capacity must be positive: {bay}")
+    for ship, group, _period in demand:
+        if ship not in releases:
+            raise ValueError(f"missing {release_basis} release for ship {ship}")
+        if group not in attrs:
+            raise ValueError(f"missing attributes for group {group}")
+        if attrs[group]["height"] not in heights:
+            raise ValueError(f"unsupported height for group {group}")
+
+    locked_by_bay: dict[str, list[tuple[str, int, str, int]]] = defaultdict(list)
+    for (bay, old_ship), raw_quantity in locked.items():
+        quantity = int(raw_quantity)
+        if quantity <= 0:
+            continue
+        if bay not in case["capacity"]:
+            raise ValueError(f"locked inventory references unknown bay {bay}")
+        height = locked_height.get((bay, old_ship))
+        if height not in heights:
+            raise ValueError(
+                f"locked inventory lacks a valid height: {(bay, old_ship)}"
+            )
+        release = int(old_releases.get(old_ship, INF))
+        locked_by_bay[bay].append((old_ship, quantity, height, release))
+
+    for bay, records in locked_by_bay.items():
+        live_at_zero = [record for record in records if record[3] > 0]
+        if sum(record[1] for record in live_at_zero) > case["capacity"][bay]:
+            raise ValueError(f"locked inventory exceeds capacity in bay {bay}")
+        if len({record[2] for record in live_at_zero}) > 1:
+            raise ValueError(f"locked inventory mixes heights in bay {bay}")
+
+    last_arrival = max((period for _ship, _group, period in demand), default=0)
+    horizon = tuple(range(0, max(0, last_arrival) + 1))
+    compatible_bays: dict[tuple[str, str, int], tuple[str, ...]] = {}
+    late_flow_quantity = 0
+    place_keys: list[tuple[str, str, str, int]] = []
+    for key in sorted(demand):
+        ship, group, arrival = key
+        if arrival < 0:
+            raise ValueError("oracle arrival periods must be nonnegative")
+        if arrival >= int(releases[ship]):
+            compatible_bays[key] = ()
+            late_flow_quantity += demand[key]
+            continue
+        permitted = tuple(
+            bay
+            for bay in bays
+            if case["bay_size"][bay] == attrs[group]["size"]
+        )
+        compatible_bays[key] = permitted
+        place_keys.extend((bay, ship, group, arrival) for bay in permitted)
+
+    model = gp.Model("full_horizon_integer_packing_oracle")
+    model.Params.OutputFlag = 0
+    model.Params.Threads = int(threads)
+    model.Params.Seed = int(seed)
+    model.Params.TimeLimit = float(time_limit)
+    model.Params.MIPGap = 0.0
+
+    placement = model.addVars(
+        place_keys,
+        vtype=GRB.INTEGER,
+        lb=0,
+        name="place",
+    )
+    shortage = model.addVars(
+        sorted(demand),
+        vtype=GRB.INTEGER,
+        lb=0,
+        name="shortage",
+    )
+    height_choice = model.addVars(
+        [(bay, period, height) for bay in bays for period in horizon for height in heights],
+        vtype=GRB.BINARY,
+        name="height",
+    )
+
+    placement_by_bay: dict[str, list[tuple[str, str, str, int]]] = defaultdict(list)
+    for key in place_keys:
+        placement_by_bay[key[0]].append(key)
+    for demand_key, quantity in demand.items():
+        ship, group, arrival = demand_key
+        model.addConstr(
+            gp.quicksum(
+                placement[bay, ship, group, arrival]
+                for bay in compatible_bays[demand_key]
+            )
+            + shortage[demand_key]
+            == quantity,
+            name=f"flow[{ship},{group},{arrival}]",
+        )
+
+    for bay in bays:
+        bay_placements = placement_by_bay[bay]
+        for period in horizon:
+            live_locked = [
+                record for record in locked_by_bay.get(bay, ()) if record[3] > period
+            ]
+            locked_quantity = sum(record[1] for record in live_locked)
+            live_placements = [
+                key
+                for key in bay_placements
+                if key[3] <= period < int(releases[key[1]])
+            ]
+            model.addConstr(
+                locked_quantity
+                + gp.quicksum(placement[key] for key in live_placements)
+                <= case["capacity"][bay],
+                name=f"capacity[{bay},{period}]",
+            )
+            model.addConstr(
+                gp.quicksum(
+                    height_choice[bay, period, height] for height in heights
+                )
+                <= 1,
+                name=f"one_height[{bay},{period}]",
+            )
+            locked_heights = {record[2] for record in live_locked}
+            if locked_heights:
+                locked_value = next(iter(locked_heights))
+                model.addConstr(
+                    height_choice[bay, period, locked_value] == 1,
+                    name=f"locked_height[{bay},{period}]",
+                )
+            for height in heights:
+                same_height = [
+                    key
+                    for key in live_placements
+                    if attrs[key[2]]["height"] == height
+                ]
+                model.addConstr(
+                    gp.quicksum(placement[key] for key in same_height)
+                    <= case["capacity"][bay]
+                    * height_choice[bay, period, height],
+                    name=f"height_capacity[{bay},{period},{height}]",
+                )
+
+    total_shortage = shortage.sum()
+    model.setObjective(total_shortage, GRB.MINIMIZE)
+
+    def classification_callback(active_model: gp.Model, where: int) -> None:
+        if not stop_after_classification:
+            return
+        if where == GRB.Callback.MIPSOL:
+            incumbent = active_model.cbGet(GRB.Callback.MIPSOL_OBJ)
+            if incumbent <= 0.5:
+                active_model.terminate()
+        elif where == GRB.Callback.MIP:
+            lower_bound = active_model.cbGet(GRB.Callback.MIP_OBJBND)
+            if lower_bound > 0.5:
+                active_model.terminate()
+
+    model.optimize(classification_callback)
+
+    status = int(model.Status)
+    solution_count = int(model.SolCount)
+    objective = float(model.ObjVal) if solution_count else None
+    objective_bound = (
+        float(model.ObjBound)
+        if status not in {GRB.INFEASIBLE, GRB.INF_OR_UNBD}
+        else None
+    )
+    zero_shortage = objective is not None and objective <= 0.5
+    positive_shortage = objective_bound is not None and objective_bound > 0.5
+    proved_optimal = status == GRB.OPTIMAL or zero_shortage
+    if zero_shortage:
+        classification = "feasible"
+    elif positive_shortage:
+        classification = "overloaded"
+    else:
+        classification = "unknown"
+
+    result = {
+        "classification": classification,
+        "release_basis": release_basis,
+        "minimum_shortage": (
+            int(round(objective)) if objective is not None and proved_optimal else None
+        ),
+        "incumbent_shortage": (
+            int(round(objective)) if objective is not None else None
+        ),
+        "objective_bound": objective_bound,
+        "shortage_lower_bound": (
+            max(0, int(objective_bound - 1e-6) + 1)
+            if positive_shortage
+            else 0 if objective_bound is not None else None
+        ),
+        "proved_optimal": proved_optimal,
+        "zero_shortage_certificate": zero_shortage,
+        "positive_shortage_certificate": positive_shortage,
+        "solver_status": status,
+        "solution_count": solution_count,
+        "runtime_seconds": float(model.Runtime),
+        "node_count": float(model.NodeCount),
+        "total_demand": int(sum(demand.values())),
+        "late_flow_quantity": int(late_flow_quantity),
+        "horizon_periods": len(horizon),
+        "placement_variable_count": len(place_keys),
+        "model_variable_count": int(model.NumVars),
+        "model_constraint_count": int(model.NumConstrs),
+    }
+    if return_witness and solution_count:
+        result["placement"] = {
+            key: int(round(variable.X))
+            for key, variable in placement.items()
+            if variable.X > 0.5
+        }
+        result["shortage"] = {
+            key: int(round(variable.X))
+            for key, variable in shortage.items()
+            if variable.X > 0.5
+        }
+    model.dispose()
+    return result
+
+
 def existing_support(d: dict, period: int = 0) -> set[tuple[str, str, str]]:
     """Return existing ``(ship, POD, bay)`` support from plans and live inventory."""
     attrs = d["group_attrs"]

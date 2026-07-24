@@ -2,12 +2,13 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.2-safeguarded-adaptive-development"
+PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified-development"
 ALGORITHM_VERSION = "safeguarded-adaptive-bottleneck-repair-v1.2"
-RESULT_SCHEMA_VERSION = "rolling-results-v3"
+RESULT_SCHEMA_VERSION = "rolling-results-v4"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "adaptive-pressure-sparse-indexed-v2"
+PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v1"
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
 # are a held-out set and must not be used for tuning before the final freeze.
