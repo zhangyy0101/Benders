@@ -25,6 +25,8 @@ from rolling_solver import (
     _direct_impact_pairs,
     _horizon_end_block_utilization,
     _incumbent_decision,
+    _restricted_domain_aggregate_capacity_margin,
+    _select_aggregate_domain_ladder,
     _snapshot_pressure_diagnostics,
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
@@ -61,6 +63,149 @@ def packing_oracle_case(
 
 
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_aggregate_domain_ladder_selects_smallest_screened_domain(self):
+        snapshot = objective_snapshot()
+        scores = {
+            ("V", "G", block): {"score": 2 - index}
+            for index, block in enumerate(snapshot["blocks"])
+        }
+        level, diagnostics = _select_aggregate_domain_ladder(
+            snapshot,
+            {("V", "G")},
+            set(),
+            scores,
+            uncertainty_radius=.10,
+            time_limit=2,
+        )
+
+        self.assertEqual(level, 0)
+        self.assertEqual(diagnostics["selected_domain"], "N0")
+        self.assertEqual(
+            diagnostics["selection_reason"],
+            "smallest_aggregate_lp_screened_domain",
+        )
+        self.assertTrue(diagnostics["screen_is_relaxation"])
+
+    def test_aggregate_domain_ladder_falls_back_to_global_safely(self):
+        snapshot = objective_snapshot()
+        snapshot["remaining_demand"] = {("V", "G"): 30}
+        snapshot["forecast_arrivals"] = {("V", "G", 0): 30}
+        scores = {
+            ("V", "G", block): {"score": 2 - index}
+            for index, block in enumerate(snapshot["blocks"])
+        }
+        level, diagnostics = _select_aggregate_domain_ladder(
+            snapshot,
+            {("V", "G")},
+            set(),
+            scores,
+            uncertainty_radius=.10,
+            time_limit=2,
+        )
+
+        self.assertEqual(level, 3)
+        self.assertEqual(diagnostics["selected_domain"], "Global")
+        self.assertEqual(
+            diagnostics["selection_reason"],
+            "global_safety_fallback_without_buffered_domain",
+        )
+
+    def test_aggregate_screen_defers_expansion_until_integer_shortage(self):
+        snapshot = objective_snapshot()
+        diagnostics = {
+            "policy": "buffered_aggregate_lp_domain_ladder",
+            "selected_level": 1,
+            "selected_domain": "N1",
+            "selection_reason": "smallest_aggregate_lp_screened_domain",
+            "evaluations": [],
+            "runtime_seconds": 0.0,
+        }
+        with patch(
+            "rolling_solver._select_aggregate_domain_ladder",
+            return_value=(1, diagnostics),
+        ):
+            result = solve_rolling_snapshot(
+                snapshot,
+                time_limit=2,
+                configuration="full_bottleneck",
+                seed=0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            [stage["stage"] for stage in result["stages"]],
+            ["aggregate_screened_impact_region"],
+        )
+        self.assertFalse(result["repair_triggered"])
+
+    def test_aggregate_capacity_margin_distinguishes_robust_and_deficit_domains(self):
+        snapshot = objective_snapshot()
+        allowed = {("V", "G"): ["Y1"]}
+        robust = _restricted_domain_aggregate_capacity_margin(
+            snapshot,
+            allowed,
+            uncertainty_radius=.10,
+            time_limit=2,
+        )
+        self.assertEqual(robust["classification"], "aggregate_margin_pass")
+        self.assertFalse(robust["route_to_global"])
+        self.assertAlmostEqual(robust["maximum_scale"], 2)
+
+        snapshot["remaining_demand"] = {("V", "G"): 15}
+        snapshot["forecast_arrivals"] = {("V", "G", 0): 15}
+        deficit = _restricted_domain_aggregate_capacity_margin(
+            snapshot,
+            allowed,
+            uncertainty_radius=.10,
+            time_limit=2,
+        )
+        self.assertEqual(deficit["classification"], "aggregate_nominal_deficit")
+        self.assertTrue(deficit["route_to_global"])
+        self.assertLess(deficit["maximum_scale_bound"], 1)
+
+    def test_aggregate_capacity_margin_respects_existing_height_lock(self):
+        snapshot = objective_snapshot()
+        snapshot["group_attrs"]["G"]["height"] = "HIGH"
+        snapshot["locked_inventory"] = {("Y1", "OLD"): 1}
+        snapshot["locked_height"] = {("Y1", "OLD"): "STD"}
+        snapshot["locked_release_local"] = {("Y1", "OLD"): 10}
+        result = _restricted_domain_aggregate_capacity_margin(
+            snapshot,
+            {("V", "G"): ["Y1"]},
+            uncertainty_radius=0,
+            time_limit=2,
+        )
+
+        self.assertEqual(result["classification"], "aggregate_nominal_deficit")
+        self.assertAlmostEqual(result["maximum_scale"], 0)
+
+    def test_aggregate_capacity_is_shared_across_ship_groups(self):
+        snapshot = objective_snapshot()
+        snapshot["remaining_demand"] = {
+            ("V", "G"): 6,
+            ("V2", "G"): 6,
+        }
+        snapshot["forecast_arrivals"] = {
+            ("V", "G", 0): 6,
+            ("V2", "G", 0): 6,
+        }
+        snapshot["ship_release_local"]["V2"] = 10
+        result = _restricted_domain_aggregate_capacity_margin(
+            snapshot,
+            {
+                ("V", "G"): ["Y1"],
+                ("V2", "G"): ["Y1"],
+            },
+            uncertainty_radius=0,
+            time_limit=2,
+        )
+
+        self.assertEqual(
+            result["classification"],
+            "aggregate_nominal_deficit",
+        )
+        self.assertAlmostEqual(result["maximum_scale"], 10 / 12)
+
     def test_oracle_family_keeps_unknown_boundary_unclassified(self):
         def certificate(case, **_kwargs):
             factor = case["ship_volume_factor"]

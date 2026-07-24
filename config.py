@@ -3,11 +3,11 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified-development"
-ALGORITHM_VERSION = "safeguarded-adaptive-bottleneck-repair-v1.2"
-RESULT_SCHEMA_VERSION = "rolling-results-v4"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3"
+RESULT_SCHEMA_VERSION = "rolling-results-v5"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
-PREPROCESSING_IMPLEMENTATION = "adaptive-pressure-sparse-indexed-v2"
+PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
 PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v1"
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
@@ -64,6 +64,14 @@ ADAPTIVE_GLOBAL_BYPASS_ENABLED=True
 # snapshot state rather than instance-size labels.
 ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD=.80
 ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD=1.0
+AGGREGATE_DOMAIN_LADDER_ENABLED=True
+AGGREGATE_DOMAIN_LADDER_BUDGET_RATIO=.05
+AGGREGATE_DOMAIN_LADDER_MAX_SECONDS=1.0
+AGGREGATE_DOMAIN_LADDER_LEVELS=(0,1,2)
+# The declared forecast-error magnitude is combined with the maximum visible
+# lead-time sigma and used as a conservative screening buffer. It is not
+# presented as a probabilistic confidence radius.
+AGGREGATE_DOMAIN_LADDER_BUFFER_MULTIPLIER=1.0
 BOTTLENECK_SELECTOR_BUDGET_RATIO=.05
 BOTTLENECK_SELECTOR_MAX_SECONDS=1.0
 QUALITY_POLISH_ENABLED=False

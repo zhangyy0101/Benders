@@ -1072,6 +1072,21 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         for group in case["group_attrs"]
     }
     remaining = {pair: quantity for pair, quantity in remaining.items() if quantity > 0}
+    maximum_forecast_lead_sigma = max(
+        (
+            max(
+                FORECAST_MIN_SIGMA_RATIO,
+                min(1.0, period / max(1, case["receiving_periods"])),
+            )
+            for (_ship, _group, period), quantity in forecast.items()
+            if quantity > 0
+        ),
+        default=0.0,
+    )
+    forecast_uncertainty_buffer = (
+        float(case.get("forecast_error", 0.0))
+        * maximum_forecast_lead_sigma
+    )
     locked_release = {
         (bay, old_ship): case["old_release_period"].get(old_ship, INF) - now
         for bay, old_ship in state["locked_inventory"]
@@ -1132,6 +1147,14 @@ def optimization_snapshot(case: dict, state: dict) -> dict:
         "locked_release_local": locked_release,
         "ship_release_local": ship_release_local,
         "forecast_arrivals": forecast,
+        "forecast_uncertainty_buffer": forecast_uncertainty_buffer,
+        "forecast_uncertainty_base_error": float(
+            case.get("forecast_error", 0.0)
+        ),
+        "forecast_uncertainty_lead_sigma": maximum_forecast_lead_sigma,
+        "forecast_uncertainty_basis": (
+            "declared_error_times_max_visible_forecast_lead_sigma"
+        ),
         "forecast_outbound": outbound,
         "remaining_demand": remaining,
         "release_period_basis": case["release_period_basis"],

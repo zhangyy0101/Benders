@@ -222,6 +222,57 @@ def pilot_diagnostics(result: dict) -> dict:
     adaptive_bypass = sum(
         bool(cycle.get("adaptive_global_bypass")) for cycle in cycles
     )
+    aggregate_ladders = [
+        cycle.get("aggregate_domain_ladder") or {}
+        for cycle in cycles
+        if (cycle.get("aggregate_domain_ladder") or {}).get("policy")
+        != "disabled"
+    ]
+    aggregate_domains = [
+        ladder.get("selected_domain")
+        for ladder in aggregate_ladders
+        if ladder.get("selected_domain") is not None
+    ]
+    aggregate_ladder_times = [
+        float(cycle.get("aggregate_domain_ladder_time", 0) or 0)
+        for cycle in cycles
+    ]
+    selected_aggregate_scales = []
+    for ladder in aggregate_ladders:
+        selected_domain = ladder.get("selected_domain")
+        selected_evaluation = next(
+            (
+                evaluation
+                for evaluation in ladder.get("evaluations", [])
+                if evaluation.get("domain") == selected_domain
+            ),
+            None,
+        )
+        if (
+            selected_evaluation is not None
+            and selected_evaluation.get("maximum_scale") is not None
+        ):
+            selected_aggregate_scales.append(
+                float(selected_evaluation["maximum_scale"])
+            )
+    aggregate_safety_fallbacks = sum(
+        ladder.get("selection_reason")
+        == "global_safety_fallback_without_buffered_domain"
+        for ladder in aggregate_ladders
+    )
+    aggregate_legacy_disagreements = 0
+    for cycle in cycles:
+        ladder = cycle.get("aggregate_domain_ladder") or {}
+        if ladder.get("policy") == "disabled":
+            continue
+        selected_global = ladder.get("selected_domain") == "Global"
+        legacy_global = bool(
+            (cycle.get("adaptive_pressure") or {}).get(
+                "legacy_route_to_global",
+                selected_global,
+            )
+        )
+        aggregate_legacy_disagreements += selected_global != legacy_global
     pressure_ratios = [
         float((cycle.get("adaptive_pressure") or {}).get("pressure_index", 0) or 0)
         for cycle in cycles
@@ -316,6 +367,27 @@ def pilot_diagnostics(result: dict) -> dict:
         "adaptive_global_bypass_count": adaptive_bypass,
         "adaptive_global_bypass_rate": (
             adaptive_bypass / cycle_count if cycle_count else 0.0
+        ),
+        "aggregate_ladder_cycle_count": len(aggregate_ladders),
+        "aggregate_ladder_n0_count": aggregate_domains.count("N0"),
+        "aggregate_ladder_n1_count": aggregate_domains.count("N1"),
+        "aggregate_ladder_n2_count": aggregate_domains.count("N2"),
+        "aggregate_ladder_global_count": aggregate_domains.count("Global"),
+        "aggregate_ladder_global_rate": (
+            aggregate_domains.count("Global") / len(aggregate_domains)
+            if aggregate_domains else 0.0
+        ),
+        "aggregate_ladder_safety_fallback_count": aggregate_safety_fallbacks,
+        "aggregate_ladder_legacy_disagreement_count": (
+            aggregate_legacy_disagreements
+        ),
+        "total_aggregate_ladder_time": sum(aggregate_ladder_times),
+        "mean_aggregate_ladder_time": (
+            sum(aggregate_ladder_times) / cycle_count if cycle_count else 0.0
+        ),
+        "mean_selected_aggregate_capacity_scale": (
+            sum(selected_aggregate_scales) / len(selected_aggregate_scales)
+            if selected_aggregate_scales else None
         ),
         "mean_adaptive_pressure_index": (
             sum(pressure_ratios) / len(pressure_ratios)

@@ -14,6 +14,11 @@ from config import (
     ADAPTIVE_GLOBAL_BYPASS_ENABLED,
     ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD,
     ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD,
+    AGGREGATE_DOMAIN_LADDER_BUDGET_RATIO,
+    AGGREGATE_DOMAIN_LADDER_BUFFER_MULTIPLIER,
+    AGGREGATE_DOMAIN_LADDER_ENABLED,
+    AGGREGATE_DOMAIN_LADDER_LEVELS,
+    AGGREGATE_DOMAIN_LADDER_MAX_SECONDS,
     BOTTLENECK_SELECTOR_BUDGET_RATIO,
     BOTTLENECK_SELECTOR_MAX_SECONDS,
     DEPENDENCY_CANDIDATE_BLOCK_RATIO,
@@ -110,6 +115,10 @@ def configuration_features(configuration: str) -> dict:
             configuration == "full_bottleneck"
             and ADAPTIVE_GLOBAL_BYPASS_ENABLED
         ),
+        "aggregate_domain_ladder": (
+            configuration == "full_bottleneck"
+            and AGGREGATE_DOMAIN_LADDER_ENABLED
+        ),
         "quality_polish": (
             QUALITY_POLISH_ENABLED
             and configuration in ("full_direct", "full_bottleneck", "full")
@@ -194,6 +203,402 @@ def _snapshot_pressure_diagnostics(
             ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD
         ),
     }
+
+
+def _restricted_domain_aggregate_capacity_margin(
+    d: dict,
+    allowed_bays: dict[Pair, list[str]],
+    *,
+    uncertainty_radius: float,
+    time_limit: float,
+    threads: int = 1,
+) -> dict:
+    """Measure a restricted domain's aggregate forecast-capacity margin.
+
+    The LP maximizes a common demand multiplier while aggregating flow to
+    block-size-height resources. Existing bay heights split residual capacity
+    into fixed-height and flexible pools. This is a relaxation of bay-level
+    integer packing: passing the screen selects a candidate domain, while the
+    downstream integer MIP and independent validation remain the exact guards.
+    ``uncertainty_radius`` is therefore a deterministic screening buffer, not a
+    claimed probabilistic confidence radius.
+    """
+    if uncertainty_radius < 0:
+        raise ValueError("uncertainty_radius must be nonnegative")
+    required_scale = 1.0 + float(uncertainty_radius)
+    if time_limit <= 0:
+        return {
+            "classification": "unknown",
+            "route_to_global": None,
+            "required_scale": required_scale,
+            "maximum_scale": None,
+            "maximum_scale_bound": None,
+            "reason": "no_time_budget",
+        }
+    attrs = d["group_attrs"]
+    periods = tuple(d["periods"])
+    demand = {
+        key: float(quantity)
+        for key, quantity in d["forecast_arrivals"].items()
+        if quantity > 0 and ship_present_at(d, key[0], key[2])
+    }
+    if not demand:
+        return {
+            "classification": "aggregate_margin_pass",
+            "route_to_global": False,
+            "required_scale": required_scale,
+            "maximum_scale": None,
+            "maximum_scale_bound": None,
+            "reason": "no_positive_forecast_demand",
+        }
+
+    allowed_blocks = {
+        pair: {
+            d["bay_block"][bay]
+            for bay in allowed_bays.get(pair, ())
+            if compatible(d, bay, pair[1])
+        }
+        for pair in d["remaining_demand"]
+    }
+    flow_keys = [
+        (block, ship, group, arrival)
+        for ship, group, arrival in sorted(demand)
+        for block in sorted(allowed_blocks.get((ship, group), ()))
+    ]
+
+    model = gp.Model("restricted_domain_aggregate_capacity_margin")
+    model.Params.OutputFlag = 0
+    model.Params.Threads = max(1, int(threads))
+    model.Params.TimeLimit = max(.001, float(time_limit))
+    model.Params.Method = 1
+    scale = model.addVar(
+        lb=0,
+        ub=100,
+        vtype=GRB.CONTINUOUS,
+        name="uniform_demand_scale",
+    )
+    flow = model.addVars(
+        flow_keys,
+        lb=0,
+        vtype=GRB.CONTINUOUS,
+        name="flow",
+    )
+    sizes = tuple(sorted(set(d["bay_size"].values())))
+    flexible_capacity = model.addVars(
+        [
+            (block, size, height, period)
+            for block in d["blocks"]
+            for size in sizes
+            for height in d["heights"]
+            for period in periods
+        ],
+        lb=0,
+        vtype=GRB.CONTINUOUS,
+        name="flex_capacity",
+    )
+
+    for demand_key, quantity in demand.items():
+        ship, group, arrival = demand_key
+        model.addConstr(
+            gp.quicksum(
+                flow[block, ship, group, arrival]
+                for block in allowed_blocks.get((ship, group), ())
+            )
+            == quantity * scale
+        )
+
+    flow_by_resource: dict[
+        tuple[str, int, str, int],
+        list[tuple[str, str, str, int]],
+    ] = defaultdict(list)
+    for key in flow_keys:
+        block, ship, group, arrival = key
+        size = attrs[group]["size"]
+        height = attrs[group]["height"]
+        for period in periods:
+            if arrival <= period and ship_present_at(d, ship, period):
+                flow_by_resource[block, size, height, period].append(key)
+
+    locked_by_bay: dict[str, list[tuple[str, float, str]]] = defaultdict(list)
+    for (bay, old_ship), quantity in d["locked_inventory"].items():
+        locked_by_bay[bay].append(
+            (old_ship, quantity, d["locked_height"][bay, old_ship])
+        )
+    actual_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (bay, ship, group), quantity in d["actual_inventory"].items():
+        actual_by_bay[bay].append((ship, group, quantity))
+
+    for block in d["blocks"]:
+        for size in sizes:
+            resource_bays = [
+                bay
+                for bay in d["bays_in_block"][block]
+                if d["bay_size"][bay] == size
+            ]
+            for period in periods:
+                fixed_remaining = {
+                    height: 0.0 for height in d["heights"]
+                }
+                flexible_total = 0.0
+                for bay in resource_bays:
+                    occupied = 0.0
+                    occupied_heights: set[str] = set()
+                    for old_ship, quantity, height in locked_by_bay[bay]:
+                        if d["locked_release_local"].get((bay, old_ship), INF) > period:
+                            occupied += quantity
+                            occupied_heights.add(height)
+                    for ship, group, quantity in actual_by_bay[bay]:
+                        if ship_present_at(d, ship, period):
+                            occupied += quantity
+                            occupied_heights.add(attrs[group]["height"])
+                    if len(occupied_heights) > 1:
+                        model.dispose()
+                        return {
+                            "classification": "unknown",
+                            "route_to_global": None,
+                            "required_scale": required_scale,
+                            "maximum_scale": None,
+                            "maximum_scale_bound": None,
+                            "reason": "inconsistent_existing_height_state",
+                        }
+                    residual = max(0.0, d["capacity"][bay] - occupied)
+                    if occupied_heights:
+                        fixed_remaining[next(iter(occupied_heights))] += residual
+                    else:
+                        flexible_total += residual
+                model.addConstr(
+                    gp.quicksum(
+                        flexible_capacity[block, size, height, period]
+                        for height in d["heights"]
+                    )
+                    <= flexible_total
+                )
+                for height in d["heights"]:
+                    model.addConstr(
+                        gp.quicksum(
+                            flow[key]
+                            for key in flow_by_resource[
+                                block, size, height, period
+                            ]
+                        )
+                        <= fixed_remaining[height]
+                        + flexible_capacity[block, size, height, period]
+                    )
+
+    model.setObjective(scale, GRB.MAXIMIZE)
+    model.optimize()
+    status = int(model.Status)
+    solution_count = int(model.SolCount)
+    incumbent_scale = float(model.ObjVal) if solution_count else None
+    try:
+        scale_bound = float(model.ObjBound)
+        if not math.isfinite(scale_bound):
+            scale_bound = None
+    except (AttributeError, ValueError):
+        scale_bound = None
+
+    tolerance = 1e-7
+    if incumbent_scale is not None and incumbent_scale + tolerance >= required_scale:
+        classification = "aggregate_margin_pass"
+        route_to_global = False
+    elif scale_bound is not None and scale_bound < required_scale - tolerance:
+        classification = (
+            "aggregate_nominal_deficit"
+            if scale_bound < 1.0 - tolerance
+            else "aggregate_buffer_shortfall"
+        )
+        route_to_global = True
+    else:
+        classification = "unknown"
+        route_to_global = None
+    result = {
+        "classification": classification,
+        "route_to_global": route_to_global,
+        "required_scale": required_scale,
+        "maximum_scale": incumbent_scale,
+        "maximum_scale_bound": scale_bound,
+        "uncertainty_buffer": float(uncertainty_radius),
+        "solver_status": status,
+        "solution_count": solution_count,
+        "runtime_seconds": float(model.Runtime),
+        "flow_variable_count": len(flow_keys),
+        "model_variable_count": int(model.NumVars),
+        "model_constraint_count": int(model.NumConstrs),
+        "reason": "uniform_block_size_height_capacity_relaxation",
+        "screen_is_relaxation": True,
+        "exact_feasibility_guard": "downstream_integer_mip_and_validation",
+    }
+    model.dispose()
+    return result
+
+
+def _select_aggregate_domain_ladder(
+    d: dict,
+    direct_pairs: set[Pair],
+    propagated_pairs: set[Pair],
+    scores: dict,
+    *,
+    uncertainty_radius: float,
+    time_limit: float,
+    threads: int = 1,
+    release_opportunity_blocks: dict[Pair, set[str]] | None = None,
+) -> tuple[int, dict]:
+    """Choose the smallest domain that passes the buffered aggregate-LP screen."""
+    started = time.perf_counter()
+    deadline = started + max(0.0, time_limit)
+    evaluations: list[dict] = []
+    seen_domains: dict[tuple, dict] = {}
+    selected_level = 3
+    selection_reason = "global_safety_fallback"
+
+    for level in AGGREGATE_DOMAIN_LADDER_LEVELS:
+        allowed = _allowed(
+            d,
+            level,
+            direct_pairs,
+            propagated_pairs,
+            scores,
+            repair_pairs=direct_pairs if level > 0 else set(),
+            release_opportunity_blocks=release_opportunity_blocks,
+        )
+        signature = tuple(
+            (pair, tuple(allowed[pair])) for pair in sorted(allowed)
+        )
+        if signature in seen_domains:
+            margin = dict(seen_domains[signature])
+            duplicate_of = next(
+                record["level"]
+                for record in evaluations
+                if record.get("domain_signature") == signature
+            )
+        else:
+            remaining = deadline - time.perf_counter()
+            if remaining <= .005:
+                margin = {
+                    "classification": "unknown",
+                    "route_to_global": None,
+                    "required_scale": 1.0 + uncertainty_radius,
+                    "maximum_scale": None,
+                    "maximum_scale_bound": None,
+                    "reason": "ladder_time_budget_exhausted",
+                }
+            else:
+                margin = _restricted_domain_aggregate_capacity_margin(
+                    d,
+                    allowed,
+                    uncertainty_radius=uncertainty_radius,
+                    time_limit=remaining,
+                    threads=threads,
+                )
+            seen_domains[signature] = dict(margin)
+            duplicate_of = None
+        record = {
+            "level": level,
+            "domain": f"N{level}",
+            "allowed_pair_bay_count": sum(
+                len(bays) for bays in allowed.values()
+            ),
+            "duplicate_of_level": duplicate_of,
+            "domain_signature": signature,
+            **margin,
+        }
+        evaluations.append(record)
+        if margin["classification"] == "aggregate_margin_pass":
+            selected_level = level
+            selection_reason = "smallest_aggregate_lp_screened_domain"
+            break
+
+    if selected_level == 3:
+        global_allowed = {
+            pair: [
+                bay
+                for bay in d["bays"]
+                if compatible(d, bay, pair[1])
+            ]
+            for pair in sorted(d["remaining_demand"])
+        }
+        signature = tuple(
+            (pair, tuple(global_allowed[pair]))
+            for pair in sorted(global_allowed)
+        )
+        if signature in seen_domains:
+            global_margin = dict(seen_domains[signature])
+            duplicate_of = next(
+                record["level"]
+                for record in evaluations
+                if record.get("domain_signature") == signature
+            )
+        else:
+            remaining = deadline - time.perf_counter()
+            if remaining <= .005:
+                global_margin = {
+                    "classification": "unknown",
+                    "route_to_global": None,
+                    "required_scale": 1.0 + uncertainty_radius,
+                    "maximum_scale": None,
+                    "maximum_scale_bound": None,
+                    "reason": "ladder_time_budget_exhausted",
+                }
+            else:
+                global_margin = _restricted_domain_aggregate_capacity_margin(
+                    d,
+                    global_allowed,
+                    uncertainty_radius=uncertainty_radius,
+                    time_limit=remaining,
+                    threads=threads,
+                )
+            seen_domains[signature] = dict(global_margin)
+            duplicate_of = None
+        evaluations.append({
+            "level": 3,
+            "domain": "Global",
+            "allowed_pair_bay_count": sum(
+                len(bays) for bays in global_allowed.values()
+            ),
+            "duplicate_of_level": duplicate_of,
+            "domain_signature": signature,
+            **global_margin,
+        })
+        selected_level = 3
+        selection_reason = (
+            "global_is_first_aggregate_lp_screened_domain"
+            if global_margin["classification"] == "aggregate_margin_pass"
+            else "global_safety_fallback_without_buffered_domain"
+        )
+
+    finite_scales = [
+        record["maximum_scale"]
+        for record in evaluations
+        if record.get("maximum_scale") is not None
+        and record.get("duplicate_of_level") is None
+    ]
+    diagnostics = {
+        "policy": "buffered_aggregate_lp_domain_ladder",
+        "uncertainty_buffer": float(uncertainty_radius),
+        "required_scale": 1.0 + float(uncertainty_radius),
+        "selected_level": selected_level,
+        "selected_domain": (
+            "Global" if selected_level == 3 else f"N{selected_level}"
+        ),
+        "selection_reason": selection_reason,
+        "screen_is_relaxation": True,
+        "exact_feasibility_guard": "downstream_integer_mip_and_validation",
+        "evaluations": [
+            {
+                key: value
+                for key, value in record.items()
+                if key != "domain_signature"
+            }
+            for record in evaluations
+        ],
+        "evaluated_unique_domain_count": len(seen_domains),
+        "margin_monotonic": all(
+            right + 1e-7 >= left
+            for left, right in zip(finite_scales, finite_scales[1:])
+        ),
+        "runtime_seconds": time.perf_counter() - started,
+    }
+    return selected_level, diagnostics
 
 
 def _incumbent_key(components: dict) -> tuple[float, float, float]:
@@ -1507,6 +1912,7 @@ def solve_rolling_snapshot(
     timing = {
         "direct_impact_time": 0.0,
         "pressure_diagnostic_time": 0.0,
+        "aggregate_domain_ladder_time": 0.0,
         "objective_scale_time": 0.0,
         "block_score_time": 0.0,
         "dependency_graph_time": 0.0,
@@ -1536,12 +1942,18 @@ def solve_rolling_snapshot(
         started = time.perf_counter()
         pressure_diagnostics = _snapshot_pressure_diagnostics(d, direct_pairs)
         timing["pressure_diagnostic_time"] = time.perf_counter() - started
+    legacy_pressure_route = bool(pressure_diagnostics["route_to_global"])
     adaptive_global_bypass = bool(
         settings["adaptive_global_bypass"]
-        and pressure_diagnostics["route_to_global"]
+        and legacy_pressure_route
+        and not settings["aggregate_domain_ladder"]
     )
     impact_preprocessing_enabled = (
-        settings["impact_region"] and not adaptive_global_bypass
+        settings["impact_region"]
+        and (
+            settings["aggregate_domain_ladder"]
+            or not adaptive_global_bypass
+        )
     )
 
     objective_scales: dict[str, float] = {}
@@ -1617,12 +2029,74 @@ def solve_rolling_snapshot(
             ancestor = propagation["parent_pair"][ancestor]
         release_opportunity_blocks[pair] = existing_blocks(d, ancestor[0], ancestor[1])
 
+    selected_initial_level = 0
+    aggregate_ladder_diagnostics = {
+        "policy": "disabled",
+        "selected_level": None,
+        "selected_domain": None,
+        "runtime_seconds": 0.0,
+        "evaluations": [],
+    }
+    if (
+        settings["aggregate_domain_ladder"]
+        and scores
+        and time.perf_counter() < optimization_deadline
+    ):
+        remaining_for_ladder = optimization_deadline - time.perf_counter()
+        ladder_budget = min(
+            AGGREGATE_DOMAIN_LADDER_MAX_SECONDS,
+            max(.01, AGGREGATE_DOMAIN_LADDER_BUDGET_RATIO * time_limit),
+            max(.01, remaining_for_ladder - .02),
+        )
+        started = time.perf_counter()
+        (
+            selected_initial_level,
+            aggregate_ladder_diagnostics,
+        ) = _select_aggregate_domain_ladder(
+            d,
+            direct_pairs,
+            propagated_pairs,
+            scores,
+            uncertainty_radius=(
+                AGGREGATE_DOMAIN_LADDER_BUFFER_MULTIPLIER
+                * float(d.get("forecast_uncertainty_buffer", 0.0))
+            ),
+            time_limit=ladder_budget,
+            threads=threads,
+            release_opportunity_blocks=release_opportunity_blocks,
+        )
+        timing["aggregate_domain_ladder_time"] = (
+            time.perf_counter() - started
+        )
+        aggregate_ladder_diagnostics["allocated_time"] = ladder_budget
+        adaptive_global_bypass = selected_initial_level == 3
+        pressure_diagnostics = {
+            **pressure_diagnostics,
+            "legacy_policy": pressure_diagnostics["policy"],
+            "legacy_route_to_global": legacy_pressure_route,
+            "legacy_route": pressure_diagnostics["route"],
+            "policy": "buffered_aggregate_lp_domain_ladder",
+            "route_to_global": adaptive_global_bypass,
+            "route": (
+                "global_core"
+                if adaptive_global_bypass
+                else "aggregate_screened_local_repair"
+            ),
+            "screened_recovery_level": (
+                None
+                if adaptive_global_bypass
+                else selected_initial_level
+            ),
+            "decision_uses_legacy_thresholds": False,
+        }
+
     budget_info = _dynamic_stability_budget(d)
     preprocessing_time = sum(
         timing[name]
         for name in (
             "direct_impact_time",
             "pressure_diagnostic_time",
+            "aggregate_domain_ladder_time",
             "objective_scale_time",
             "block_score_time",
             "dependency_graph_time",
@@ -1643,7 +2117,23 @@ def solve_rolling_snapshot(
     quality_improved = False
     repair_pairs: set[Pair] = set()
     bottleneck_repair_plans: list[dict] = []
-    if adaptive_global_bypass:
+    if settings["aggregate_domain_ladder"] and selected_initial_level == 3:
+        stages = [(3, "aggregate_ladder_global_core", None)]
+    elif settings["aggregate_domain_ladder"]:
+        screened_local_allowed = _allowed(
+            d,
+            0,
+            direct_pairs,
+            propagated_pairs,
+            scores,
+            release_opportunity_blocks=release_opportunity_blocks,
+        )
+        stages = [(
+            0,
+            "aggregate_screened_impact_region",
+            screened_local_allowed,
+        )]
+    elif adaptive_global_bypass:
         stages = [(3, "adaptive_global_core", None)]
     elif not settings["impact_region"]:
         stages = [(3, "global_core", None)]
@@ -1676,7 +2166,11 @@ def solve_rolling_snapshot(
             budget = math.ceil(
                 budget_info["allowance"] * (1, 1.5, 2.5)[min(level, 2)]
             )
-        if settings["progressive_repair"] and name == "impact_region":
+        initial_impact_stage = (
+            name == "impact_region"
+            or name == "aggregate_screened_impact_region"
+        )
+        if settings["progressive_repair"] and initial_impact_stage:
             requested_stage_time = min(remaining_wall, max(.05, .35 * time_limit))
         elif settings["progressive_repair"] and (
             name.startswith("adaptive_repair") or name == "bottleneck_repair"
@@ -1976,7 +2470,7 @@ def solve_rolling_snapshot(
                         diagnostic_depths[pair] = repair_prop["propagation_depth"][pair]
                         propagation_types[pair] = repair_prop["propagation_type"][pair]
         if settings["bottleneck_repair"]:
-            if name == "impact_region":
+            if initial_impact_stage:
                 selector_budget = min(
                     BOTTLENECK_SELECTOR_MAX_SECONDS,
                     max(.01, BOTTLENECK_SELECTOR_BUDGET_RATIO * time_limit),
@@ -2081,6 +2575,8 @@ def solve_rolling_snapshot(
         "bottleneck_repair_plans": bottleneck_repair_plans,
         "adaptive_global_bypass_enabled": settings["adaptive_global_bypass"],
         "adaptive_pressure": pressure_diagnostics,
+        "aggregate_domain_ladder_enabled": settings["aggregate_domain_ladder"],
+        "aggregate_domain_ladder": aggregate_ladder_diagnostics,
     }
     failure_status = None
     if preprocessing_timed_out:
@@ -2113,6 +2609,7 @@ def solve_rolling_snapshot(
         "repair_expansions": repair_expansions,
         "adaptive_global_bypass": adaptive_global_bypass,
         "adaptive_pressure": pressure_diagnostics,
+        "aggregate_domain_ladder": aggregate_ladder_diagnostics,
         "bottleneck_repair_triggered": bool(bottleneck_repair_plans),
         "bottleneck_selected_pair_block_count": sum(
             plan.get("selected_pair_block_count", 0)

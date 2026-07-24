@@ -139,6 +139,18 @@ class PilotExperimentOutputTest(unittest.TestCase):
                         "pressure_index": 1.2,
                         "peak_load_ratio": .9,
                         "demand_free_capacity_ratio": 1.3,
+                        "legacy_route_to_global": False,
+                    },
+                    "aggregate_domain_ladder_time": .04,
+                    "aggregate_domain_ladder": {
+                        "policy": "buffered_aggregate_lp_domain_ladder",
+                        "selected_domain": "Global",
+                        "selection_reason": (
+                            "global_safety_fallback_without_buffered_domain"
+                        ),
+                        "evaluations": [
+                            {"domain": "Global", "maximum_scale": 1.05}
+                        ],
                     },
                     "repair_triggered": True,
                     "quality_polish_triggered": True,
@@ -166,6 +178,18 @@ class PilotExperimentOutputTest(unittest.TestCase):
                         "pressure_index": .4,
                         "peak_load_ratio": .6,
                         "demand_free_capacity_ratio": .4,
+                        "legacy_route_to_global": False,
+                    },
+                    "aggregate_domain_ladder_time": .02,
+                    "aggregate_domain_ladder": {
+                        "policy": "buffered_aggregate_lp_domain_ladder",
+                        "selected_domain": "N1",
+                        "selection_reason": (
+                            "smallest_aggregate_lp_screened_domain"
+                        ),
+                        "evaluations": [
+                            {"domain": "N1", "maximum_scale": 1.3}
+                        ],
                     },
                     "repair_triggered": False,
                     "quality_polish_triggered": True,
@@ -194,6 +218,19 @@ class PilotExperimentOutputTest(unittest.TestCase):
         self.assertEqual(diagnostics["global_repair_count"], 1)
         self.assertEqual(diagnostics["adaptive_global_bypass_count"], 1)
         self.assertAlmostEqual(diagnostics["adaptive_global_bypass_rate"], .5)
+        self.assertEqual(diagnostics["aggregate_ladder_cycle_count"], 2)
+        self.assertEqual(diagnostics["aggregate_ladder_n1_count"], 1)
+        self.assertEqual(diagnostics["aggregate_ladder_global_count"], 1)
+        self.assertEqual(
+            diagnostics["aggregate_ladder_safety_fallback_count"], 1
+        )
+        self.assertEqual(
+            diagnostics["aggregate_ladder_legacy_disagreement_count"], 1
+        )
+        self.assertAlmostEqual(diagnostics["total_aggregate_ladder_time"], .06)
+        self.assertAlmostEqual(
+            diagnostics["mean_selected_aggregate_capacity_scale"], 1.175
+        )
         self.assertAlmostEqual(diagnostics["mean_adaptive_pressure_index"], .8)
         self.assertAlmostEqual(diagnostics["max_peak_forecast_load_ratio"], .9)
         self.assertAlmostEqual(

@@ -3,8 +3,9 @@
 The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
 Those 36 rows are retained as historical development evidence. Version 1.2
 then used the protocol-authorized final preflight adjustment to add a
-state-based high-pressure route. Its candidate-only small/medium/large check
-completed 9/9 rows without validation or wall-clock failure. Subsequent
+state-based high-pressure route. Version 1.3 is the current development
+candidate and replaces that empirical route with a lead-aware aggregate-LP
+screen; it has not yet consumed formal seeds. Subsequent
 independent packing certification proved that the former 80% large development
 profile can be structurally overloaded (seed 100 has an integer-shortage lower
 bound of 816 boxes). It is therefore historical stress evidence, not a valid
@@ -18,24 +19,25 @@ calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
 - Problem protocol: `rolling-v4.3-oracle-certified-development`
-- Algorithm: `safeguarded-adaptive-bottleneck-repair-v1.2`
-- Result schema: `rolling-results-v4`
+- Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
+- Result schema: `rolling-results-v5`
 - Packing oracle: `full-horizon-integer-packing-v1`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
-- Preprocessing implementation: `adaptive-pressure-sparse-indexed-v2`
+- Preprocessing implementation: `lead-aware-aggregate-lp-sparse-indexed-v3`
 
-The candidate core first computes a size-label-free pressure diagnostic. When
-both horizon peak load is at least 0.80 and remaining demand is at least the
-current free capacity, it bypasses impact scoring and runs the unrestricted
-Global MIP with the common MIP start. Otherwise it uses direct Impact Region,
-granularity-guarded minimum pair-block repair, and unrestricted global
-recovery. Stage solutions are protected by one strict lexicographic incumbent
-key: predicted shortage, stability cost, then normalized operations score.
-Independent execution validation remains mandatory. Fixed-ratio Progressive
-Repair (`full_direct`) is a controller ablation; reactive dependency
-propagation (`full`) is historical development evidence. Quality polish
-remains disabled.
+The candidate core computes a lead-aware forecast buffer and evaluates nested
+`N0`--`N2` domains with a continuous block-size-height-period capacity LP.
+When no restricted domain covers the buffered common demand scale, it runs the
+unrestricted Global MIP with the common MIP start. Otherwise it starts with the
+exact integer `N0` Impact Region and lets an integer shortage incumbent trigger
+the granularity-guarded minimum pair-block repair. The aggregate LP is a route
+screen, not an integer-feasibility claim. Stage solutions are protected by one
+strict lexicographic incumbent key: predicted shortage, stability cost, then
+normalized operations score. Independent execution validation remains
+mandatory. Fixed-ratio Progressive Repair (`full_direct`) is a controller
+ablation; reactive dependency propagation (`full`) is historical development
+evidence. Quality polish remains disabled.
 
 Any change to constraints, objective priorities, stage triggers, domain
 expansion, or validation semantics requires a new problem or algorithm version.
@@ -142,6 +144,15 @@ forecast load, vessel presence, physical capacity, and visible remaining
 demand. Severe-pressure snapshots skip score construction and enter the
 unrestricted Global MIP immediately. The threshold was finalized on reserved
 preflight seeds; formal seeds 1000--1004 remain uninspected.
+
+Version 1.3 also leaves the bay-level mathematical model and objective
+priorities unchanged. It removes the two empirical routing thresholds from the
+candidate decision and uses a timed aggregate LP relaxation instead. Its
+lead-aware buffer uses only the declared error level and visible forecast
+timestamps. Passing the relaxation selects the local exact-and-repair path;
+failure to pass through `N2` selects Global. Development trials use seeds
+100--102 only. A clean tagged preflight on seeds 700--702 is required before
+this version can be frozen for formal runs.
 
 ## Preflight gate
 

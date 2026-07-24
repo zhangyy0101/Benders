@@ -80,6 +80,42 @@ class InformationBoundaryTest(unittest.TestCase):
             case["planned_ship_release_period"][ship],
         )
 
+    def test_uncertainty_buffer_uses_visible_lead_time_only(self):
+        case = build_synthetic_rolling_case(
+            seed=13,
+            num_blocks=2,
+            bays_per_block=4,
+            num_ships=1,
+            cycles=1,
+            forecast_error=.20,
+            containers_per_ship_range=(40, 40),
+        )
+        snapshot = optimization_snapshot(
+            case,
+            initial_simulation_state(case),
+        )
+        visible_periods = [
+            period
+            for (_ship, _group, period), quantity in snapshot[
+                "forecast_arrivals"
+            ].items()
+            if quantity > 0
+        ]
+        expected_sigma = max(
+            max(.05, min(1.0, period / case["receiving_periods"]))
+            for period in visible_periods
+        )
+
+        self.assertAlmostEqual(
+            snapshot["forecast_uncertainty_lead_sigma"],
+            expected_sigma,
+        )
+        self.assertAlmostEqual(
+            snapshot["forecast_uncertainty_buffer"],
+            .20 * expected_sigma,
+        )
+        self.assertNotIn("true_flow", snapshot)
+
     def test_outbound_forecast_does_not_require_hidden_outbound_truth(self):
         case = build_synthetic_rolling_case(
             seed=12,

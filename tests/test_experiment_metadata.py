@@ -222,6 +222,22 @@ class ExperimentMetadataTest(unittest.TestCase):
             config.DEPENDENCY_PROFILES["conservative"]["path_threshold"],
         )
 
+    def test_aggregate_domain_ladder_protocol_is_recorded(self):
+        profile = collect_weight_profile()
+        ladder = profile["aggregate_domain_ladder"]
+        self.assertEqual(
+            ladder["enabled"],
+            config.AGGREGATE_DOMAIN_LADDER_ENABLED,
+        )
+        self.assertEqual(
+            ladder["levels"],
+            list(config.AGGREGATE_DOMAIN_LADDER_LEVELS),
+        )
+        self.assertEqual(
+            ladder["exact_feasibility_guard"],
+            "downstream_integer_mip_and_independent_validation",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

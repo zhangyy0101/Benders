@@ -116,16 +116,44 @@ def collect_weight_profile(
         },
         "adaptive_controller": {
             "enabled": config.ADAPTIVE_GLOBAL_BYPASS_ENABLED,
-            "policy": "joint_peak_load_and_demand_free_capacity",
+            "policy": (
+                "buffered_aggregate_lp_domain_ladder"
+                if config.AGGREGATE_DOMAIN_LADDER_ENABLED
+                else "joint_peak_load_and_demand_free_capacity"
+            ),
             "peak_load_threshold": config.ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD,
             "demand_free_capacity_threshold": (
                 config.ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD
+            ),
+            "legacy_pressure_rule_used_for_decision": (
+                not config.AGGREGATE_DOMAIN_LADDER_ENABLED
             ),
             "instance_size_label_used": False,
             "high_pressure_route": "global_core_with_common_mip_start",
             "ordinary_route": "bottleneck_guided_progressive_repair",
             "incumbent_guard": (
                 "predicted_shortage_then_stability_then_normalized_operations"
+            ),
+        },
+        "aggregate_domain_ladder": {
+            "enabled": config.AGGREGATE_DOMAIN_LADDER_ENABLED,
+            "levels": list(config.AGGREGATE_DOMAIN_LADDER_LEVELS),
+            "budget_ratio": config.AGGREGATE_DOMAIN_LADDER_BUDGET_RATIO,
+            "max_seconds": config.AGGREGATE_DOMAIN_LADDER_MAX_SECONDS,
+            "forecast_error_buffer_multiplier": (
+                config.AGGREGATE_DOMAIN_LADDER_BUFFER_MULTIPLIER
+            ),
+            "uncertainty_buffer_basis": (
+                "declared_error_times_max_visible_forecast_lead_sigma"
+            ),
+            "screen": "block_size_height_time_capacity_relaxation",
+            "selection": (
+                "smallest_screened_recovery_level; local levels enter "
+                "incumbent-triggered minimum bottleneck repair"
+            ),
+            "safety_fallback": "global_domain",
+            "exact_feasibility_guard": (
+                "downstream_integer_mip_and_independent_validation"
             ),
         },
         "quality_polish": {

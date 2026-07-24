@@ -102,18 +102,26 @@ therefore not treated as available for early arrivals.
 
 ## Safeguarded adaptive routing
 
-Before constructing pair-block scores, `full_bottleneck` calculates two
-snapshot-state measures. Horizon peak load includes locked inventory, live
-actual inventory, cumulative visible arrivals, and vessel presence. The second
-measure divides visible remaining demand by physical free capacity at the
-start of the snapshot. If peak load is at least 80% of total capacity and the
-demand/free-capacity ratio is at least one, the restricted path is unlikely to
-remain local; the algorithm therefore skips score construction and sends the
-common MIP start directly to the unrestricted Global MIP.
+`full_bottleneck` now replaces the empirical two-threshold route with a
+lead-aware aggregate-LP screen. After pair-block scores are available, it
+constructs the nested domains `N0`, `N1`, and `N2`. For each domain, a
+continuous relaxation maximizes one common multiplier on all visible forecast
+arrivals subject to shared block-size-height-period capacity. Existing occupied
+bays contribute residual capacity only to their fixed height; empty bays form a
+shared flexible-height pool.
 
-This controller does not read the instance-size or utilization label. Ordinary
-snapshots retain the Impact Region and bottleneck-guided minimum-cover repair.
-Every extracted stage solution receives the same key
+The required multiplier is one plus the declared forecast-error magnitude
+times the maximum visible lead-time sigma. The first restricted domain reaching
+that multiplier identifies a locally recoverable snapshot. The exact integer
+solver still starts from `N0`, and only an integer shortage incumbent can
+activate the minimum pair-block repair. If none of `N0`--`N2` passes, the
+controller enters the unrestricted Global MIP. Thus the LP decides local versus
+global routing but does not claim integer packing feasibility.
+
+The screen uses no instance-size or utilization label and no hidden
+realization. The former peak-load and demand/free-capacity measures remain
+diagnostics for development comparisons only. Every extracted exact-stage
+solution receives the same key
 
 ```text
 (predicted shortage, stability cost, normalized operations score).

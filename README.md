@@ -95,21 +95,26 @@ invalid bypassed snapshot can only record that quantity as shortage.
 The recommended `full_bottleneck` configuration:
 
 1. identifies directly changed ship-group pairs;
-2. diagnoses snapshot pressure from horizon peak load and remaining demand
-   relative to current free capacity;
-3. routes severe-pressure snapshots directly to the unrestricted Global MIP
-   with the common MIP start;
-4. otherwise computes time-dependent residual capacity and height conflicts;
-5. deducts frozen inherited reservations to form baseline residual capacity;
-6. ranks candidate blocks and solves the impact region with a MIP start;
-7. solves a granularity-guarded minimum pair-block cover for shortage pairs;
+2. computes time-dependent residual capacity, height conflicts, and the frozen
+   inherited-plan baseline used to rank candidate blocks;
+3. builds the lead-aware forecast buffer from the declared error magnitude and
+   the maximum visible forecast lead-time coefficient;
+4. solves a continuous block-size-height-period aggregate LP on domains
+   `N0`, `N1`, and `N2`, stopping at the smallest domain whose uniform capacity
+   scale covers the buffered forecast;
+5. sends the snapshot directly to the unrestricted Global MIP if no restricted
+   domain passes the aggregate screen;
+6. otherwise solves the exact integer `N0` Impact Region with a MIP start;
+7. solves a granularity-guarded minimum pair-block cover only after the integer
+   incumbent exposes shortage;
 8. restores the unrestricted compatible domain if shortage remains.
 
-The adaptive route never reads the instance-size label. It uses the same
-snapshot fields available to every method and bypasses impact scoring before it
-is built when both pressure tests bind. Across all stages, an incumbent is
-replaced only by a strict lexicographic improvement in predicted shortage,
-stability cost, and normalized operations score.
+The aggregate LP is explicitly a screening relaxation, not a bay-level
+feasibility certificate. Integer bay packing, no-mixed-height constraints, and
+independent validation remain in the downstream MIP path. The controller never
+reads an instance-size label or hidden realized demand. Across all exact stages,
+an incumbent is replaced only by a strict lexicographic improvement in
+predicted shortage, stability cost, and normalized operations score.
 
 The optional `full` ablation additionally builds a physical-resource dependency
 graph. It does not proactively release graph neighbors: only a shortage-bearing
@@ -128,7 +133,8 @@ Configurations are:
 - `core_start`: unrestricted MIP with inherited MIP start;
 - `core_start_impact`: direct impact region without propagation or repair;
 - `full_direct`: fixed-ratio Progressive Repair ablation;
-- `full_bottleneck`: safeguarded adaptive bottleneck repair and global recovery;
+- `full_bottleneck`: lead-aware aggregate-LP screening, minimum bottleneck
+  repair, and global recovery;
 - `full`: optional reactive dependency propagation on top of `full_direct`.
 
 `full_direct` is retained only to isolate the repair-controller contribution;
