@@ -186,6 +186,18 @@ class ExperimentMetadataTest(unittest.TestCase):
             metadata["formal_core_configuration"],
             config.FORMAL_CORE_CONFIGURATION,
         )
+        self.assertEqual(
+            metadata["external_baseline_protocol"],
+            config.EXTERNAL_BASELINE_PROTOCOL,
+        )
+        self.assertEqual(
+            metadata["preprocessing_implementation"],
+            config.PREPROCESSING_IMPLEMENTATION,
+        )
+        self.assertEqual(
+            set(metadata["external_baselines"]["methods"]),
+            {"kp_dos", "kp_sg", "dra_rpm"},
+        )
         self.assertEqual(metadata["experiment_phase"], "development")
         self.assertEqual(metadata["threads"], 3)
         self.assertEqual(metadata["mip_gap"], .02)

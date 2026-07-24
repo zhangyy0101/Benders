@@ -1,6 +1,10 @@
 """Multi-cycle simulator with distinct forecast, revision, and execution metrics."""
 from __future__ import annotations
 
+from external_baselines import (
+    LITERATURE_CONFIGURATIONS,
+    solve_literature_baseline,
+)
 from rolling_data import advance_state, initial_simulation_state, optimization_snapshot
 from rolling_solver import solve_rolling_snapshot
 
@@ -26,6 +30,7 @@ def run_rolling_case(
 ) -> dict:
     """Optimize and execute each rolling cycle under a common wall-clock limit."""
     state = initial_simulation_state(case)
+    method_state: dict = {}
     cycles: list[dict] = []
     for _ in range(case["cycles"]):
         snapshot = optimization_snapshot(case, state)
@@ -41,15 +46,25 @@ def run_rolling_case(
                 "execution_metrics": execution,
             })
             continue
-        result = solve_rolling_snapshot(
-            snapshot,
-            time_limit=time_per_cycle,
-            mip_gap=mip_gap,
-            threads=threads,
-            seed=seed + state["cycle"],
-            configuration=configuration,
-            dependency_profile=dependency_profile,
-        )
+        if configuration in LITERATURE_CONFIGURATIONS:
+            result = solve_literature_baseline(
+                snapshot,
+                time_limit=time_per_cycle,
+                seed=seed + state["cycle"],
+                configuration=configuration,
+                method_state=method_state,
+            )
+            method_state = result.get("method_state", {})
+        else:
+            result = solve_rolling_snapshot(
+                snapshot,
+                time_limit=time_per_cycle,
+                mip_gap=mip_gap,
+                threads=threads,
+                seed=seed + state["cycle"],
+                configuration=configuration,
+                dependency_profile=dependency_profile,
+            )
         components = result["solution"]["components"] if result.get("solution") else {}
         forecast = {
             "predicted_shortage": components.get("predicted_shortage"),
@@ -77,7 +92,11 @@ def run_rolling_case(
             "active_ships": snapshot["active_ships"],
             "new_ships": snapshot["new_ships"],
             "continuing_ships": snapshot["continuing_ships"],
-            **{key: value for key, value in result.items() if key != "solution"},
+            **{
+                key: value
+                for key, value in result.items()
+                if key not in {"solution", "method_state"}
+            },
             "forecast_diagnostics": forecast,
             "plan_revision_metrics": revision,
         }

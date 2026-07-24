@@ -5,9 +5,9 @@ import argparse
 import json
 
 from config import DEPENDENCY_PROFILES, FORECAST_ERROR_MODES
+from external_baselines import CONFIGURATIONS
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
-from rolling_solver import CONFIGURATIONS
 
 PRESETS = {
     "pilot_small": dict(

@@ -189,6 +189,28 @@ python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --manifest-output pilot_results.manifest.json
 ```
 
+The unified experiment interface also exposes three adapted literature
+baselines:
+
+- `kp_dos`: Kim--Park least-duration-of-stay allocation;
+- `kp_sg`: Kim--Park Lagrangian/subgradient allocation;
+- `dra_rpm`: Xuan et al. dynamic reward-penalty reservation.
+
+For a paired development comparison:
+
+```bash
+python run_experiments.py --sizes small medium large --errors 0.1 \
+  --forecast-error-modes mixed --initial-utilizations 0.55 \
+  --configurations full_bottleneck full_direct kp_dos kp_sg dra_rpm \
+  --seeds 0 --time 20 --output external_baseline_development.csv
+```
+
+These are adapted rather than code-identical reproductions. They share the
+same visible rolling snapshot, integer bay decoder, hard constraints,
+realized execution path and evaluator. Source mappings, missing source
+parameters and fidelity labels are frozen in
+`docs/external_baseline_adaptation_protocol.md`.
+
 Each completed row atomically checkpoints both files. An interrupted batch can
 be continued with the identical command plus `--resume`; incompatible Git,
 protocol, runtime, weight-profile, or matrix metadata is rejected instead of

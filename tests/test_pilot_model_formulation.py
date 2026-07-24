@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from gurobipy import GRB
 
@@ -27,6 +28,23 @@ from test_time_scores_and_release_propagation import base_snapshot
 
 
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_non_dependency_candidate_skips_overwritten_physical_scores(self):
+        with patch(
+            "rolling_solver._block_scores", wraps=_block_scores
+        ) as scorer:
+            result = solve_rolling_snapshot(
+                objective_snapshot(),
+                time_limit=2,
+                configuration="full_bottleneck",
+                seed=0,
+            )
+        self.assertTrue(result["ok"])
+        self.assertEqual(scorer.call_count, 1)
+        self.assertEqual(
+            scorer.call_args.kwargs["capacity_basis"],
+            "frozen_plan_baseline",
+        )
+
     def test_unknown_dependency_profile_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "dependency_profile"):
             solve_rolling_snapshot(

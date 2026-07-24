@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
+from external_baselines import literature_baseline_metadata
 
 try:
     import gurobipy as gp
@@ -150,6 +151,11 @@ def collect_experiment_metadata(
         "algorithm_version": config.ALGORITHM_VERSION,
         "result_schema_version": config.RESULT_SCHEMA_VERSION,
         "formal_core_configuration": config.FORMAL_CORE_CONFIGURATION,
+        "external_baseline_protocol": config.EXTERNAL_BASELINE_PROTOCOL,
+        "preprocessing_implementation": (
+            config.PREPROCESSING_IMPLEMENTATION
+        ),
+        "external_baselines": literature_baseline_metadata(),
         "experiment_phase": experiment_phase,
         "python_version": platform_module.python_version(),
         "python_implementation": platform_module.python_implementation(),
@@ -194,6 +200,12 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "algorithm_version": metadata.get("algorithm_version"),
         "result_schema_version": metadata.get("result_schema_version"),
         "formal_core_configuration": metadata.get("formal_core_configuration"),
+        "external_baseline_protocol": metadata.get(
+            "external_baseline_protocol"
+        ),
+        "preprocessing_implementation": metadata.get(
+            "preprocessing_implementation"
+        ),
         "experiment_phase": metadata.get("experiment_phase"),
         "python_version": metadata.get("python_version"),
         "gurobi_version": metadata.get("gurobi_version"),

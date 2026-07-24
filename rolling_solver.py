@@ -195,19 +195,33 @@ def physical_residual_capacity_by_bay_period(
     d: dict,
 ) -> dict[tuple[str, int], float]:
     """Return physical capacity after locked and currently realized inventory."""
+    locked_by_bay: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    for (bay, old_ship), quantity in d["locked_inventory"].items():
+        locked_by_bay[bay].append((
+            d["locked_release_local"].get((bay, old_ship), INF),
+            quantity,
+        ))
+    actual_by_bay: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for (bay, ship, _group), quantity in d["actual_inventory"].items():
+        actual_by_bay[bay].append((ship, quantity))
+    presence = {
+        (ship, period): ship_present_at(d, ship, period)
+        for entries in actual_by_bay.values()
+        for ship, _quantity in entries
+        for period in d["periods"]
+    }
     residual: dict[tuple[str, int], float] = {}
     for bay in d["bays"]:
         for period in d["periods"]:
             locked = sum(
                 quantity
-                for (i, old_ship), quantity in d["locked_inventory"].items()
-                if i == bay
-                and d["locked_release_local"].get((i, old_ship), INF) > period
+                for release, quantity in locked_by_bay[bay]
+                if release > period
             )
             actual = sum(
                 quantity
-                for (i, ship, _group), quantity in d["actual_inventory"].items()
-                if i == bay and ship_present_at(d, ship, period)
+                for ship, quantity in actual_by_bay[bay]
+                if presence[ship, period]
             )
             residual[bay, period] = max(0.0, d["capacity"][bay] - locked - actual)
     return residual
@@ -226,30 +240,57 @@ def baseline_residual_capacity_by_bay_period(
     """Deduct time-dependent commitments of inherited, unaffected plans."""
     physical = physical or physical_residual_capacity_by_bay_period(d)
     previous_din = d.get("previous_din", {})
+    schedules: dict[
+        tuple[str, str, str], list[tuple[int, float]]
+    ] = defaultdict(list)
+    for (bay, ship, group, arrival), quantity in previous_din.items():
+        schedules[bay, ship, group].append((arrival, quantity))
+    commitment_keys = {
+        key
+        for key in schedules
+        if (key[1], key[2]) in frozen_pairs
+    } | {
+        (bay, ship, group)
+        for (bay, ship, group), _quantity
+        in d["previous_reservation"].items()
+        if (
+            (ship, group) in frozen_pairs
+            and (bay, ship, group) not in schedules
+        )
+    }
+    commitments_by_bay: dict[
+        str, list[tuple[str, str, dict[int, float]]]
+    ] = defaultdict(list)
+    for bay, ship, group in sorted(commitment_keys):
+        if (bay, ship, group) in schedules:
+            by_period = {
+                period: sum(
+                    quantity
+                    for arrival, quantity in schedules[bay, ship, group]
+                    if arrival <= period
+                )
+                for period in d["periods"]
+            }
+        else:
+            value = d["previous_reservation"].get(
+                (bay, ship, group), 0
+            )
+            by_period = {period: value for period in d["periods"]}
+        commitments_by_bay[bay].append((ship, group, by_period))
+    presence = {
+        (ship, period): ship_present_at(d, ship, period)
+        for entries in commitments_by_bay.values()
+        for ship, _group, _by_period in entries
+        for period in d["periods"]
+    }
     result: dict[tuple[str, int], float] = {}
     for bay in d["bays"]:
         for period in d["periods"]:
-            committed = 0.0
-            for ship, group in frozen_pairs:
-                if not ship_present_at(d, ship, period):
-                    continue
-                scheduled = sum(
-                    quantity
-                    for (i, j, g, arrival), quantity in previous_din.items()
-                    if i == bay
-                    and j == ship
-                    and g == group
-                    and arrival <= period
-                )
-                has_schedule = any(
-                    i == bay and j == ship and g == group
-                    for i, j, g, _arrival in previous_din
-                )
-                committed += (
-                    scheduled
-                    if has_schedule
-                    else d["previous_reservation"].get((bay, ship, group), 0)
-                )
+            committed = 0.0 + sum(
+                by_period[period]
+                for ship, _group, by_period in commitments_by_bay[bay]
+                if presence[ship, period]
+            )
             result[bay, period] = max(0.0, physical[bay, period] - committed)
     return result
 
@@ -264,6 +305,44 @@ def _base_heights(d: dict, bay: str, period: int) -> set[str]:
         attrs[group]["height"]
         for (i, ship, group), quantity in d["actual_inventory"].items()
         if i == bay and quantity > 0 and ship_present_at(d, ship, period)
+    }
+
+
+def _base_heights_by_bay_period(
+    d: dict,
+) -> dict[tuple[str, int], set[str]]:
+    """Index immutable height occupancy once for all pair-block scores."""
+    locked_by_bay: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    for (bay, old_ship), height in d["locked_height"].items():
+        locked_by_bay[bay].append((
+            d["locked_release_local"].get((bay, old_ship), INF),
+            height,
+        ))
+    actual_by_bay: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for (bay, ship, group), quantity in d["actual_inventory"].items():
+        if quantity > 0:
+            actual_by_bay[bay].append((
+                ship,
+                d["group_attrs"][group]["height"],
+            ))
+    presence = {
+        (ship, period): ship_present_at(d, ship, period)
+        for entries in actual_by_bay.values()
+        for ship, _height in entries
+        for period in d["periods"]
+    }
+    return {
+        (bay, period): {
+            height
+            for release, height in locked_by_bay[bay]
+            if release > period
+        } | {
+            height
+            for ship, height in actual_by_bay[bay]
+            if presence[ship, period]
+        }
+        for bay in d["bays"]
+        for period in d["periods"]
     }
 
 
@@ -320,6 +399,16 @@ def _block_scores(
         for period in periods
     }
     old_totals = _pair_totals(d["previous_reservation"])
+    base_heights = _base_heights_by_bay_period(d)
+    compatible_bays_by_group_block = {
+        (group, block): tuple(
+            bay
+            for bay in d["bays_in_block"][block]
+            if compatible(d, bay, group)
+        )
+        for group in attrs
+        for block in d["blocks"]
+    }
 
     for ship, group in sorted(_dependency_pairs(d)):
         pair = (ship, group)
@@ -332,14 +421,12 @@ def _block_scores(
         for block in d["blocks"]:
             capacity_by_period: dict[int, float] = {}
             conflict_by_period: dict[int, int] = {}
-            compatible_bays = [
-                bay for bay in d["bays_in_block"][block] if compatible(d, bay, group)
-            ]
+            compatible_bays = compatible_bays_by_group_block[group, block]
             for period in periods:
                 capacity = 0.0
                 conflicts = 0
                 for bay in compatible_bays:
-                    fixed_heights = _base_heights(d, bay, period)
+                    fixed_heights = base_heights[bay, period]
                     if fixed_heights and height not in fixed_heights:
                         conflicts += 1
                     else:
@@ -1327,7 +1414,11 @@ def solve_rolling_snapshot(
 
     scores: dict = {}
     physical_scores: dict = {}
-    if settings["impact_region"] and time.perf_counter() < deadline:
+    if (
+        settings["impact_region"]
+        and settings["dependency_propagation"]
+        and time.perf_counter() < deadline
+    ):
         started = time.perf_counter()
         physical_scores = _block_scores(d, capacity_basis="physical")
         scores = physical_scores

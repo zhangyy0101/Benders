@@ -13,6 +13,7 @@ from config import (
     FORMAL_SEEDS,
     PREFLIGHT_SEEDS,
 )
+from external_baselines import CONFIGURATIONS, baseline_row_metadata
 from experiment_metadata import (
     collect_experiment_metadata,
     csv_metadata_fields,
@@ -21,7 +22,6 @@ from experiment_metadata import (
 from main import PRESETS
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
-from rolling_solver import CONFIGURATIONS
 
 
 EXPERIMENT_ID_FIELDS = (
@@ -327,6 +327,7 @@ def result_row(
         "release_delay_periods": case["release_delay_periods"],
         "initial_total_capacity": case["initial_total_capacity"],
         "configuration": configuration,
+        **baseline_row_metadata(configuration),
         "seed": seed,
         "time_limit": time_limit,
         **csv_metadata_fields(metadata),

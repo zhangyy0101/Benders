@@ -3,9 +3,11 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.1-bottleneck-repair-freeze-candidate"
-ALGORITHM_VERSION = "bottleneck-guided-progressive-repair-v1.0"
-RESULT_SCHEMA_VERSION = "rolling-results-v1"
+ALGORITHM_VERSION = "bottleneck-guided-progressive-repair-v1.1"
+RESULT_SCHEMA_VERSION = "rolling-results-v2"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
+EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
+PREPROCESSING_IMPLEMENTATION = "sparse-indexed-score-v1"
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
 # are a held-out set and must not be used for tuning before the final freeze.
