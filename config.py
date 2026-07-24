@@ -2,12 +2,12 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.1-bottleneck-repair-freeze-candidate"
-ALGORITHM_VERSION = "bottleneck-guided-progressive-repair-v1.1"
-RESULT_SCHEMA_VERSION = "rolling-results-v2"
+PROBLEM_PROTOCOL = "rolling-v4.2-safeguarded-adaptive-development"
+ALGORITHM_VERSION = "safeguarded-adaptive-bottleneck-repair-v1.2"
+RESULT_SCHEMA_VERSION = "rolling-results-v3"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
-PREPROCESSING_IMPLEMENTATION = "sparse-indexed-score-v1"
+PREPROCESSING_IMPLEMENTATION = "adaptive-pressure-sparse-indexed-v2"
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
 # are a held-out set and must not be used for tuning before the final freeze.
@@ -57,6 +57,12 @@ OPERATION_WEIGHT_DISTANCE=1.0
 OPERATION_WEIGHT_IN_OUT_CONFLICT=1.0
 
 ADAPTIVE_BLOCK_BATCH_RATIO=.20
+ADAPTIVE_GLOBAL_BYPASS_ENABLED=True
+# Bypass the restricted repair path only when both a horizon-wide load measure
+# and a current free-capacity measure indicate severe pressure.  These tests use
+# snapshot state rather than instance-size labels.
+ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD=.80
+ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD=1.0
 BOTTLENECK_SELECTOR_BUDGET_RATIO=.05
 BOTTLENECK_SELECTOR_MAX_SECONDS=1.0
 QUALITY_POLISH_ENABLED=False

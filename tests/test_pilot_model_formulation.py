@@ -12,12 +12,18 @@ from rolling_model import (
 )
 from rolling_data import (
     build_repair_pressure_case,
+    build_synthetic_rolling_case,
+    initial_simulation_state,
+    optimization_snapshot,
 )
 from rolling_experiment import run_rolling_case
 from rolling_solver import (
     _block_scores,
     _bottleneck_minimal_expansion,
+    _direct_impact_pairs,
     _horizon_end_block_utilization,
+    _incumbent_decision,
+    _snapshot_pressure_diagnostics,
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
     physical_residual_capacity_by_bay_period,
@@ -28,6 +34,65 @@ from test_time_scores_and_release_propagation import base_snapshot
 
 
 class PilotModelFormulationTest(unittest.TestCase):
+    def test_adaptive_pressure_routes_by_snapshot_state_not_size_label(self):
+        common = dict(
+            seed=700,
+            num_blocks=12,
+            bays_per_block=10,
+            num_ships=16,
+            cycles=8,
+            containers_per_ship_range=(250, 600),
+            active_ship_overlap=4,
+            pod_count=8,
+            forecast_error=.2,
+            forecast_error_mode="mixed",
+        )
+        ordinary_case = build_synthetic_rolling_case(
+            initial_utilization=.55,
+            **common,
+        )
+        severe_case = build_synthetic_rolling_case(
+            initial_utilization=.80,
+            **common,
+        )
+
+        diagnostics = []
+        for case in (ordinary_case, severe_case):
+            snapshot = optimization_snapshot(
+                case,
+                initial_simulation_state(case),
+            )
+            direct, _reasons = _direct_impact_pairs(snapshot, .10)
+            diagnostics.append(
+                _snapshot_pressure_diagnostics(snapshot, direct)
+            )
+
+        self.assertEqual(diagnostics[0]["route"], "bottleneck_repair")
+        self.assertEqual(diagnostics[1]["route"], "global_core")
+        self.assertGreater(
+            diagnostics[1]["pressure_index"],
+            diagnostics[0]["pressure_index"],
+        )
+
+    def test_incumbent_guard_is_strictly_lexicographic(self):
+        incumbent = (10.0, 100.0, 1.0)
+        self.assertEqual(
+            _incumbent_decision((9.0, 1000.0, 2.0), incumbent),
+            (True, "improved_predicted_shortage"),
+        )
+        self.assertEqual(
+            _incumbent_decision((10.0, 99.0, 2.0), incumbent),
+            (True, "improved_stability"),
+        )
+        self.assertEqual(
+            _incumbent_decision((10.0, 100.0, .9), incumbent),
+            (True, "improved_normalized_operations"),
+        )
+        self.assertEqual(
+            _incumbent_decision((10.0, 101.0, .5), incumbent),
+            (False, "not_lexicographically_better"),
+        )
+
     def test_non_dependency_candidate_skips_overwritten_physical_scores(self):
         with patch(
             "rolling_solver._block_scores", wraps=_block_scores

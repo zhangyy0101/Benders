@@ -100,6 +100,30 @@ minimum positive-arrival-period capacity ratio. Height conflict is also weighted
 by the arrival profile. A block that is empty only at the end of the horizon is
 therefore not treated as available for early arrivals.
 
+## Safeguarded adaptive routing
+
+Before constructing pair-block scores, `full_bottleneck` calculates two
+snapshot-state measures. Horizon peak load includes locked inventory, live
+actual inventory, cumulative visible arrivals, and vessel presence. The second
+measure divides visible remaining demand by physical free capacity at the
+start of the snapshot. If peak load is at least 80% of total capacity and the
+demand/free-capacity ratio is at least one, the restricted path is unlikely to
+remain local; the algorithm therefore skips score construction and sends the
+common MIP start directly to the unrestricted Global MIP.
+
+This controller does not read the instance-size or utilization label. Ordinary
+snapshots retain the Impact Region and bottleneck-guided minimum-cover repair.
+Every extracted stage solution receives the same key
+
+```text
+(predicted shortage, stability cost, normalized operations score).
+```
+
+It replaces the incumbent only if this key improves strictly and
+lexicographically. This guard prevents later repair stages from replacing an
+equally feasible plan by one with worse stability or operating quality. It
+does not claim dominance over a separately time-limited Global run.
+
 ## Dependency graph and propagation
 
 Nodes are the union of positive-demand and historical-reservation pairs.

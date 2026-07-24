@@ -154,3 +154,40 @@ the unrestricted Global MIP.
 The technical preflight gate is passed. Before formal execution, commit and
 tag the freeze candidate, require a clean worktree, and do not inspect or tune
 on formal seeds 1000--1004.
+
+## Safeguarded adaptive high-pressure route (2026-07-24)
+
+The v1.1 preflight showed that the bottleneck controller was fast on the
+medium profile but spent most stressed large cycles in local repair followed
+by Global recovery. Version 1.2 adds a state-based early route: snapshots with
+at least 80% horizon peak load and remaining demand no smaller than current
+free capacity enter Global Core with the common MIP start before pair-block
+scores are constructed. No mathematical constraint, objective priority, block
+score, or external baseline was changed.
+
+Candidate-only checks used the same reserved seeds and budgets. The comparison
+rows for `core_start` are unchanged v1.1 rows because its switch set and model
+path are unaffected.
+
+| Mean metric | profile | `core_start` | v1.1 candidate | v1.2 candidate |
+|---|---|---:|---:|---:|
+| total wall time (s) | small | 2.527 | 1.057 | 1.129 |
+| realized unplaced, three seeds | small | 0 | 0 | 0 |
+| total wall time (s) | medium | 61.536 | 38.420 | 38.211 |
+| realized unplaced, three seeds | medium | 9 | 9 | 9 |
+| stability cost | medium | 1200.3 | 1569.3 | 1569.3 |
+| total wall time (s) | large, 80% | 253.776 | 257.348 | 250.682 |
+| realized unplaced, three seeds | large, 80% | 2323 | 2329 | 2324 |
+| stability cost | large, 80% | 12123.3 | 18758.0 | 12123.7 |
+| normalized operations score | large, 80% | 1.2130 | 1.2422 | 1.2131 |
+
+Thus the severe-pressure stability regression is removed and pair-block
+preprocessing falls from 54.09 to 26.71 seconds per large rolling run. The
+medium profile retains its speed/secondary-quality trade-off. A bounded
+three-second Global stability-polish experiment was also tested: on seed 700
+it increased wall time from 39.9 to 46.9 seconds, realized unplaced boxes from
+4 to 7, and cumulative stability cost from 1560 to 1566. That stage was
+removed completely rather than retained as an inactive component.
+
+This is development evidence. Version 1.2 still requires a clean-commit
+36-row preflight before a new formal freeze tag is created.

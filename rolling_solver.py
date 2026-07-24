@@ -11,6 +11,9 @@ from gurobipy import GRB
 
 from config import (
     ADAPTIVE_BLOCK_BATCH_RATIO,
+    ADAPTIVE_GLOBAL_BYPASS_ENABLED,
+    ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD,
+    ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD,
     BOTTLENECK_SELECTOR_BUDGET_RATIO,
     BOTTLENECK_SELECTOR_MAX_SECONDS,
     DEPENDENCY_CANDIDATE_BLOCK_RATIO,
@@ -103,11 +106,128 @@ def configuration_features(configuration: str) -> dict:
             "full",
         ),
         "bottleneck_repair": configuration == "full_bottleneck",
+        "adaptive_global_bypass": (
+            configuration == "full_bottleneck"
+            and ADAPTIVE_GLOBAL_BYPASS_ENABLED
+        ),
         "quality_polish": (
             QUALITY_POLISH_ENABLED
             and configuration in ("full_direct", "full_bottleneck", "full")
         ),
     }
+
+
+def _snapshot_pressure_diagnostics(
+    d: dict,
+    direct_pairs: set[Pair],
+) -> dict:
+    """Diagnose severe snapshot pressure without using instance-size labels.
+
+    The peak-load term respects the forecast arrival path and vessel presence.
+    The demand/free-capacity term detects snapshots where restricted repair is
+    likely to consume most of the domain before falling back to the Global MIP.
+    Requiring both tests keeps ordinary rolling cycles on the fast local path.
+    """
+    total_capacity = float(sum(d["capacity"].values()))
+    remaining_demand = float(sum(d["remaining_demand"].values()))
+    period_load: dict[int, float] = {}
+    for period in d["periods"]:
+        locked = sum(
+            quantity
+            for (bay, old_ship), quantity in d["locked_inventory"].items()
+            if d["locked_release_local"].get((bay, old_ship), INF) > period
+        )
+        actual = sum(
+            quantity
+            for (_bay, ship, _group), quantity in d["actual_inventory"].items()
+            if ship_present_at(d, ship, period)
+        )
+        forecast = sum(
+            quantity
+            for (ship, _group, arrival), quantity in d["forecast_arrivals"].items()
+            if arrival <= period and ship_present_at(d, ship, period)
+        )
+        period_load[period] = float(locked + actual + forecast)
+
+    peak_period, peak_load = max(
+        period_load.items(),
+        key=lambda item: (item[1], -item[0]),
+        default=(None, 0.0),
+    )
+    first_period = d["periods"][0]
+    initial_occupied = period_load.get(first_period, 0.0) - sum(
+        quantity
+        for (ship, _group, arrival), quantity in d["forecast_arrivals"].items()
+        if arrival <= first_period and ship_present_at(d, ship, first_period)
+    )
+    initial_free_capacity = max(0.0, total_capacity - initial_occupied)
+    peak_load_ratio = peak_load / max(1.0, total_capacity)
+    demand_free_ratio = remaining_demand / max(1.0, initial_free_capacity)
+    active_pair_count = len(d["remaining_demand"])
+    direct_pair_ratio = len(direct_pairs) / max(1, active_pair_count)
+    pressure_index = min(
+        peak_load_ratio / max(1e-9, ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD),
+        demand_free_ratio
+        / max(1e-9, ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD),
+    )
+    route_to_global = (
+        peak_load_ratio + 1e-12 >= ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD
+        and demand_free_ratio + 1e-12
+        >= ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD
+    )
+    return {
+        "policy": "joint_peak_load_and_demand_free_capacity",
+        "route": "global_core" if route_to_global else "bottleneck_repair",
+        "route_to_global": route_to_global,
+        "peak_period": peak_period,
+        "peak_forecast_load": peak_load,
+        "peak_load_ratio": peak_load_ratio,
+        "remaining_demand": remaining_demand,
+        "initial_free_capacity": initial_free_capacity,
+        "demand_free_capacity_ratio": demand_free_ratio,
+        "direct_pair_count": len(direct_pairs),
+        "active_pair_count": active_pair_count,
+        "direct_pair_ratio": direct_pair_ratio,
+        "pressure_index": pressure_index,
+        "peak_load_threshold": ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD,
+        "demand_free_capacity_threshold": (
+            ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD
+        ),
+    }
+
+
+def _incumbent_key(components: dict) -> tuple[float, float, float]:
+    """Return the common protected lexicographic quality key."""
+    return (
+        round(components["predicted_shortage"], 6),
+        round(components["stability_cost"], 6),
+        round(components["normalized_operations_score"], 9),
+    )
+
+
+def _incumbent_decision(
+    candidate_key: tuple[float, float, float],
+    best_key: tuple[float, float, float] | None,
+) -> tuple[bool, str]:
+    """Accept only a strict lexicographic improvement over the incumbent."""
+    if best_key is None:
+        return True, "first_feasible_incumbent"
+    if candidate_key < best_key:
+        improved_index = next(
+            index
+            for index, (candidate, incumbent) in enumerate(
+                zip(candidate_key, best_key)
+            )
+            if candidate != incumbent
+        )
+        return True, (
+            "improved_predicted_shortage"
+            if improved_index == 0
+            else "improved_stability"
+            if improved_index == 1
+            else "improved_normalized_operations"
+        )
+    return False, "not_lexicographically_better"
 
 
 def _pair_totals(reservation: dict) -> dict[Pair, float]:
@@ -1386,6 +1506,7 @@ def solve_rolling_snapshot(
     optimization_deadline = max(wall_start, deadline - postprocessing_reserve)
     timing = {
         "direct_impact_time": 0.0,
+        "pressure_diagnostic_time": 0.0,
         "objective_scale_time": 0.0,
         "block_score_time": 0.0,
         "dependency_graph_time": 0.0,
@@ -1406,6 +1527,23 @@ def solve_rolling_snapshot(
         impact_direction = _impact_directions(d)
         timing["direct_impact_time"] = time.perf_counter() - started
 
+    pressure_diagnostics = {
+        "policy": "disabled",
+        "route": "configured_stage_path",
+        "route_to_global": False,
+    }
+    if settings["adaptive_global_bypass"] and time.perf_counter() < deadline:
+        started = time.perf_counter()
+        pressure_diagnostics = _snapshot_pressure_diagnostics(d, direct_pairs)
+        timing["pressure_diagnostic_time"] = time.perf_counter() - started
+    adaptive_global_bypass = bool(
+        settings["adaptive_global_bypass"]
+        and pressure_diagnostics["route_to_global"]
+    )
+    impact_preprocessing_enabled = (
+        settings["impact_region"] and not adaptive_global_bypass
+    )
+
     objective_scales: dict[str, float] = {}
     if time.perf_counter() < deadline:
         started = time.perf_counter()
@@ -1415,7 +1553,7 @@ def solve_rolling_snapshot(
     scores: dict = {}
     physical_scores: dict = {}
     if (
-        settings["impact_region"]
+        impact_preprocessing_enabled
         and settings["dependency_propagation"]
         and time.perf_counter() < deadline
     ):
@@ -1426,7 +1564,11 @@ def solve_rolling_snapshot(
 
     dependency_graph: dict = {}
     dependency_edges: list[dict] = []
-    if settings["dependency_propagation"] and time.perf_counter() < deadline:
+    if (
+        impact_preprocessing_enabled
+        and settings["dependency_propagation"]
+        and time.perf_counter() < deadline
+    ):
         started = time.perf_counter()
         dependency_graph, dependency_edges, _resource = _build_dependency_graph(
             d,
@@ -1449,7 +1591,7 @@ def solve_rolling_snapshot(
     propagated_pairs = set(propagation["propagated_pairs"])
     affected_pairs = set(propagation["affected_pairs"])
     frozen_pairs = set(d["remaining_demand"]) - affected_pairs
-    if settings["impact_region"] and time.perf_counter() < deadline:
+    if impact_preprocessing_enabled and time.perf_counter() < deadline:
         started = time.perf_counter()
         physical_residual = physical_residual_capacity_by_bay_period(d)
         baseline_residual = baseline_residual_capacity_by_bay_period(
@@ -1480,6 +1622,7 @@ def solve_rolling_snapshot(
         timing[name]
         for name in (
             "direct_impact_time",
+            "pressure_diagnostic_time",
             "objective_scale_time",
             "block_score_time",
             "dependency_graph_time",
@@ -1489,7 +1632,7 @@ def solve_rolling_snapshot(
     preprocessing_timed_out = (
         time.perf_counter() >= optimization_deadline
         or not objective_scales
-        or (settings["impact_region"] and not scores)
+        or (impact_preprocessing_enabled and not scores)
     )
     incumbent = None
     best_key = None
@@ -1500,11 +1643,12 @@ def solve_rolling_snapshot(
     quality_improved = False
     repair_pairs: set[Pair] = set()
     bottleneck_repair_plans: list[dict] = []
-    stages = (
-        [(3, "global_core", None)]
-        if not settings["impact_region"]
-        else [(0, "impact_region", None)]
-    )
+    if adaptive_global_bypass:
+        stages = [(3, "adaptive_global_core", None)]
+    elif not settings["impact_region"]:
+        stages = [(3, "global_core", None)]
+    else:
+        stages = [(0, "impact_region", None)]
     position = 0
 
     while position < len(stages) and not preprocessing_timed_out:
@@ -1609,7 +1753,11 @@ def solve_rolling_snapshot(
 
         diagnostic_pairs = repair_pairs or affected_pairs
         ranking = {}
-        for ship, group in sorted(diagnostic_pairs & set(d["remaining_demand"])):
+        for ship, group in sorted(
+            diagnostic_pairs & set(d["remaining_demand"])
+            if scores
+            else ()
+        ):
             entries = []
             for block in sorted(
                 d["blocks"],
@@ -1716,11 +1864,7 @@ def solve_rolling_snapshot(
                     candidate[auxiliary_name] = dict(expected)
             timing["solution_extract_time"] += time.perf_counter() - extract_started
             components = candidate["components"]
-            key = (
-                round(components["predicted_shortage"], 6),
-                round(components["stability_cost"], 6),
-                round(components["normalized_operations_score"], 9),
-            )
+            key = _incumbent_key(components)
             record.update({
                 field: components[field]
                 for field in (
@@ -1746,8 +1890,18 @@ def solve_rolling_snapshot(
                 budget is not None
                 and components["discretionary_cancel"] >= budget - 1e-6
             )
-            if best_key is None or key < best_key:
+            accepted, acceptance_reason = _incumbent_decision(key, best_key)
+            record["candidate_quality_key"] = list(key)
+            record["incumbent_quality_key_before"] = (
+                list(best_key) if best_key is not None else None
+            )
+            record["candidate_accepted"] = accepted
+            record["incumbent_acceptance_reason"] = acceptance_reason
+            if accepted:
                 incumbent, best_key = candidate, key
+            record["incumbent_quality_key_after"] = (
+                list(best_key) if best_key is not None else None
+            )
             if name == "quality_polish":
                 quality_improved = previous_key is None or best_key < previous_key
         record["stage_wall_time"] = time.perf_counter() - stage_wall_start
@@ -1925,6 +2079,8 @@ def solve_rolling_snapshot(
         },
         "bottleneck_repair_enabled": settings["bottleneck_repair"],
         "bottleneck_repair_plans": bottleneck_repair_plans,
+        "adaptive_global_bypass_enabled": settings["adaptive_global_bypass"],
+        "adaptive_pressure": pressure_diagnostics,
     }
     failure_status = None
     if preprocessing_timed_out:
@@ -1955,6 +2111,8 @@ def solve_rolling_snapshot(
         "stages": trace,
         "repair_triggered": settings["progressive_repair"] and repair_expansions > 0,
         "repair_expansions": repair_expansions,
+        "adaptive_global_bypass": adaptive_global_bypass,
+        "adaptive_pressure": pressure_diagnostics,
         "bottleneck_repair_triggered": bool(bottleneck_repair_plans),
         "bottleneck_selected_pair_block_count": sum(
             plan.get("selected_pair_block_count", 0)

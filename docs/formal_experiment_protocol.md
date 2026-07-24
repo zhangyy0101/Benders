@@ -1,10 +1,12 @@
 # Formal experiment protocol
 
-Preflight status: passed on 2026-07-23 with reserved seeds 700--702. All 36
-requested rows completed under the freeze-candidate code with no wall-clock,
-validation, or no-incumbent failure. These dirty-worktree preflight artifacts
-are development gates, not publication results; formal runs still require a
-clean tagged commit.
+The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
+Those 36 rows are retained as historical development evidence. Version 1.2
+then used the protocol-authorized final preflight adjustment to add a
+state-based high-pressure route. Its candidate-only small/medium/large check
+completed 9/9 rows without validation or wall-clock failure. A new complete
+36-row preflight from a clean tagged commit is still required before formal
+execution.
 
 ## Status and immutable identifiers
 
@@ -12,19 +14,24 @@ This document defines the publication-oriented interface before public-data
 calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
-- Problem protocol: `rolling-v4.1-bottleneck-repair-freeze-candidate`
-- Algorithm: `bottleneck-guided-progressive-repair-v1.1`
-- Result schema: `rolling-results-v2`
+- Problem protocol: `rolling-v4.2-safeguarded-adaptive-development`
+- Algorithm: `safeguarded-adaptive-bottleneck-repair-v1.2`
+- Result schema: `rolling-results-v3`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
-- Preprocessing implementation: `sparse-indexed-score-v1`
+- Preprocessing implementation: `adaptive-pressure-sparse-indexed-v2`
 
-The candidate core is MIP start, direct Impact Region, granularity-guarded
-minimum pair-block repair, unrestricted global recovery, and independent
-execution validation. Fixed-ratio Progressive Repair (`full_direct`) is a
-repair-controller ablation. Reactive dependency propagation (`full`) is
-historical development evidence and is not part of the candidate core.
-Quality polish remains disabled.
+The candidate core first computes a size-label-free pressure diagnostic. When
+both horizon peak load is at least 0.80 and remaining demand is at least the
+current free capacity, it bypasses impact scoring and runs the unrestricted
+Global MIP with the common MIP start. Otherwise it uses direct Impact Region,
+granularity-guarded minimum pair-block repair, and unrestricted global
+recovery. Stage solutions are protected by one strict lexicographic incumbent
+key: predicted shortage, stability cost, then normalized operations score.
+Independent execution validation remains mandatory. Fixed-ratio Progressive
+Repair (`full_direct`) is a controller ablation; reactive dependency
+propagation (`full`) is historical development evidence. Quality polish
+remains disabled.
 
 Any change to constraints, objective priorities, stage triggers, domain
 expansion, or validation semantics requires a new problem or algorithm version.
@@ -106,9 +113,8 @@ information boundary, rolling windows, end-to-end time limit, common hard
 constraints, realized execution path, objective evaluator, and independent
 validator. Candidate-only MIP starts and repair stages are not shared.
 
-The external-baseline extension changes only the experiment interface and
-result schema. It does not reopen or alter the frozen `full_bottleneck`
-mathematical model or algorithm.
+The external-baseline methods remain unchanged by later candidate-controller
+development and still share the common information boundary and evaluator.
 
 Version 1.1 replaces repeated full-table scans in residual-capacity and
 height indexing with sparse bay/pair indexes. When dependency propagation is
@@ -117,6 +123,13 @@ immediately by frozen-plan-baseline scores. The score equations, candidate
 ordering and mathematical model are unchanged. Pre/post deterministic hashes
 for physical capacity, baseline residual capacity and all pair-block scores
 match exactly on the development small and large instances.
+
+Version 1.2 leaves the mathematical model, objective priorities, candidate
+scores, and external baselines unchanged. Its pressure diagnostic uses only
+forecast load, vessel presence, physical capacity, and visible remaining
+demand. Severe-pressure snapshots skip score construction and enter the
+unrestricted Global MIP immediately. The threshold was finalized on reserved
+preflight seeds; formal seeds 1000--1004 remain uninspected.
 
 ## Preflight gate
 

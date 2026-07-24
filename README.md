@@ -85,11 +85,21 @@ invalid bypassed snapshot can only record that quantity as shortage.
 The recommended `full_bottleneck` configuration:
 
 1. identifies directly changed ship-group pairs;
-2. computes time-dependent physical residual capacity and height conflicts;
-3. deducts frozen inherited reservations to form baseline residual capacity;
-4. ranks candidate blocks and solves the impact region with a MIP start;
-5. solves a granularity-guarded minimum pair-block cover for shortage pairs;
-6. restores the unrestricted compatible domain if shortage remains.
+2. diagnoses snapshot pressure from horizon peak load and remaining demand
+   relative to current free capacity;
+3. routes severe-pressure snapshots directly to the unrestricted Global MIP
+   with the common MIP start;
+4. otherwise computes time-dependent residual capacity and height conflicts;
+5. deducts frozen inherited reservations to form baseline residual capacity;
+6. ranks candidate blocks and solves the impact region with a MIP start;
+7. solves a granularity-guarded minimum pair-block cover for shortage pairs;
+8. restores the unrestricted compatible domain if shortage remains.
+
+The adaptive route never reads the instance-size label. It uses the same
+snapshot fields available to every method and bypasses impact scoring before it
+is built when both pressure tests bind. Across all stages, an incumbent is
+replaced only by a strict lexicographic improvement in predicted shortage,
+stability cost, and normalized operations score.
 
 The optional `full` ablation additionally builds a physical-resource dependency
 graph. It does not proactively release graph neighbors: only a shortage-bearing
@@ -108,7 +118,7 @@ Configurations are:
 - `core_start`: unrestricted MIP with inherited MIP start;
 - `core_start_impact`: direct impact region without propagation or repair;
 - `full_direct`: fixed-ratio Progressive Repair ablation;
-- `full_bottleneck`: recommended bottleneck-guided repair and global recovery;
+- `full_bottleneck`: safeguarded adaptive bottleneck repair and global recovery;
 - `full`: optional reactive dependency propagation on top of `full_direct`.
 
 `full_direct` is retained only to isolate the repair-controller contribution;

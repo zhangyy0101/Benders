@@ -114,6 +114,20 @@ def collect_weight_profile(
             "packing_granularity_guard": "one_compatible_bay",
             "fallback": "global_repair",
         },
+        "adaptive_controller": {
+            "enabled": config.ADAPTIVE_GLOBAL_BYPASS_ENABLED,
+            "policy": "joint_peak_load_and_demand_free_capacity",
+            "peak_load_threshold": config.ADAPTIVE_GLOBAL_PEAK_LOAD_THRESHOLD,
+            "demand_free_capacity_threshold": (
+                config.ADAPTIVE_GLOBAL_DEMAND_FREE_CAPACITY_THRESHOLD
+            ),
+            "instance_size_label_used": False,
+            "high_pressure_route": "global_core_with_common_mip_start",
+            "ordinary_route": "bottleneck_guided_progressive_repair",
+            "incumbent_guard": (
+                "predicted_shortage_then_stability_then_normalized_operations"
+            ),
+        },
         "quality_polish": {
             "enabled": config.QUALITY_POLISH_ENABLED,
             "pair_ratio": config.QUALITY_POLISH_PAIR_RATIO,

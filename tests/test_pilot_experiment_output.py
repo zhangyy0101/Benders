@@ -134,6 +134,12 @@ class PilotExperimentOutputTest(unittest.TestCase):
                         "dependency_edge_count": 4,
                     },
                     "dependency_graph_time": .2,
+                    "adaptive_global_bypass": True,
+                    "adaptive_pressure": {
+                        "pressure_index": 1.2,
+                        "peak_load_ratio": .9,
+                        "demand_free_capacity_ratio": 1.3,
+                    },
                     "repair_triggered": True,
                     "quality_polish_triggered": True,
                     "quality_polish_improved": False,
@@ -155,6 +161,12 @@ class PilotExperimentOutputTest(unittest.TestCase):
                         "dependency_edge_count": 2,
                     },
                     "dependency_graph_time": .1,
+                    "adaptive_global_bypass": False,
+                    "adaptive_pressure": {
+                        "pressure_index": .4,
+                        "peak_load_ratio": .6,
+                        "demand_free_capacity_ratio": .4,
+                    },
                     "repair_triggered": False,
                     "quality_polish_triggered": True,
                     "quality_polish_improved": True,
@@ -180,6 +192,13 @@ class PilotExperimentOutputTest(unittest.TestCase):
         self.assertEqual(diagnostics["pressure_propagation_count"], 1)
         self.assertEqual(diagnostics["release_opportunity_propagation_count"], 1)
         self.assertEqual(diagnostics["global_repair_count"], 1)
+        self.assertEqual(diagnostics["adaptive_global_bypass_count"], 1)
+        self.assertAlmostEqual(diagnostics["adaptive_global_bypass_rate"], .5)
+        self.assertAlmostEqual(diagnostics["mean_adaptive_pressure_index"], .8)
+        self.assertAlmostEqual(diagnostics["max_peak_forecast_load_ratio"], .9)
+        self.assertAlmostEqual(
+            diagnostics["max_demand_free_capacity_ratio"], 1.3
+        )
         self.assertEqual(diagnostics["quality_polish_triggered_count"], 2)
         self.assertEqual(diagnostics["quality_polish_improved_count"], 1)
         self.assertAlmostEqual(diagnostics["quality_polish_improvement_rate"], .5)

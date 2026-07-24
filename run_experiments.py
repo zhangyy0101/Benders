@@ -199,6 +199,31 @@ def pilot_diagnostics(result: dict) -> dict:
     bottleneck_triggered = sum(
         bool(cycle.get("bottleneck_repair_triggered")) for cycle in cycles
     )
+    adaptive_bypass = sum(
+        bool(cycle.get("adaptive_global_bypass")) for cycle in cycles
+    )
+    pressure_ratios = [
+        float((cycle.get("adaptive_pressure") or {}).get("pressure_index", 0) or 0)
+        for cycle in cycles
+        if (cycle.get("adaptive_pressure") or {}).get("pressure_index") is not None
+    ]
+    peak_load_ratios = [
+        float((cycle.get("adaptive_pressure") or {}).get("peak_load_ratio", 0) or 0)
+        for cycle in cycles
+        if (cycle.get("adaptive_pressure") or {}).get("peak_load_ratio") is not None
+    ]
+    demand_free_ratios = [
+        float(
+            (cycle.get("adaptive_pressure") or {}).get(
+                "demand_free_capacity_ratio", 0
+            )
+            or 0
+        )
+        for cycle in cycles
+        if (
+            cycle.get("adaptive_pressure") or {}
+        ).get("demand_free_capacity_ratio") is not None
+    ]
     bottleneck_selected = sum(
         int(cycle.get("bottleneck_selected_pair_block_count", 0) or 0)
         for cycle in cycles
@@ -268,6 +293,25 @@ def pilot_diagnostics(result: dict) -> dict:
         "repair_trigger_rate": repair_triggered / cycle_count if cycle_count else 0.0,
         "global_repair_count": global_repairs,
         "global_repair_rate": global_repairs / cycle_count if cycle_count else 0.0,
+        "adaptive_global_bypass_count": adaptive_bypass,
+        "adaptive_global_bypass_rate": (
+            adaptive_bypass / cycle_count if cycle_count else 0.0
+        ),
+        "mean_adaptive_pressure_index": (
+            sum(pressure_ratios) / len(pressure_ratios)
+            if pressure_ratios else 0.0
+        ),
+        "max_adaptive_pressure_index": max(pressure_ratios, default=0.0),
+        "mean_peak_forecast_load_ratio": (
+            sum(peak_load_ratios) / len(peak_load_ratios)
+            if peak_load_ratios else 0.0
+        ),
+        "max_peak_forecast_load_ratio": max(peak_load_ratios, default=0.0),
+        "mean_demand_free_capacity_ratio": (
+            sum(demand_free_ratios) / len(demand_free_ratios)
+            if demand_free_ratios else 0.0
+        ),
+        "max_demand_free_capacity_ratio": max(demand_free_ratios, default=0.0),
         "bottleneck_repair_triggered_count": bottleneck_triggered,
         "bottleneck_repair_trigger_rate": (
             bottleneck_triggered / cycle_count if cycle_count else 0.0

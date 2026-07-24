@@ -26,6 +26,8 @@ class ConfigurationTest(unittest.TestCase):
         self.assertTrue(bottleneck["progressive_repair"])
         self.assertFalse(direct["bottleneck_repair"])
         self.assertTrue(bottleneck["bottleneck_repair"])
+        self.assertFalse(direct["adaptive_global_bypass"])
+        self.assertTrue(bottleneck["adaptive_global_bypass"])
         for feature in (
             "mip_start",
             "impact_region",
