@@ -2,7 +2,7 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified-development"
+PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
 ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3"
 RESULT_SCHEMA_VERSION = "rolling-results-v5"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"

@@ -3,14 +3,14 @@
 The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
 Those 36 rows are retained as historical development evidence. Version 1.2
 then used the protocol-authorized final preflight adjustment to add a
-state-based high-pressure route. Version 1.3 is the current development
-candidate and replaces that empirical route with a lead-aware aggregate-LP
-screen; it has not yet consumed formal seeds. Subsequent
-independent packing certification proved that the former 80% large development
+state-based high-pressure route. Version 1.3 replaces that empirical route
+with a lead-aware aggregate-LP screen. Its oracle-certified preflight passed
+on 2026-07-24 from the clean tag
+`rolling-v4.3-aggregate-v1.3-preflight-rc1`; formal seeds remain uninspected.
+Independent packing certification proved that the former 80% large development
 profile can be structurally overloaded (seed 100 has an integer-shortage lower
 bound of 816 boxes). It is therefore historical stress evidence, not a valid
-zero-shortage algorithm benchmark. A new oracle-certified preflight from a
-clean tagged commit is required before formal execution.
+zero-shortage algorithm benchmark.
 
 ## Status and immutable identifiers
 
@@ -18,7 +18,7 @@ This document defines the publication-oriented interface before public-data
 calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
-- Problem protocol: `rolling-v4.3-oracle-certified-development`
+- Problem protocol: `rolling-v4.3-oracle-certified`
 - Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
 - Result schema: `rolling-results-v5`
 - Packing oracle: `full-horizon-integer-packing-v1`
@@ -150,9 +150,35 @@ priorities unchanged. It removes the two empirical routing thresholds from the
 candidate decision and uses a timed aggregate LP relaxation instead. Its
 lead-aware buffer uses only the declared error level and visible forecast
 timestamps. Passing the relaxation selects the local exact-and-repair path;
-failure to pass through `N2` selects Global. Development trials use seeds
-100--102 only. A clean tagged preflight on seeds 700--702 is required before
-this version can be frozen for formal runs.
+failure to pass through `N2` selects Global. Development trials used seeds
+100--102 only. The clean tagged preflight used seeds 700--702 and passed the
+gate below; the version is frozen for formal runs.
+
+### Version 1.3 preflight result
+
+The ordinary/tight gate contained 72 paired rows:
+
+- three scale profiles, three reserved seeds, two oracle-certified feasible
+  pressure classes, and four required internal methods;
+- 72/72 successful rows, zero independent-validation failures, zero numerical
+  feasibility failures, and zero unreported per-cycle wall-clock overruns;
+- all 18 candidate rows were produced from clean, identifiable Git state;
+- against unrestricted Global MIP, candidate shortage win/tie/loss was
+  5/9/4 and the aggregate shortage difference was one box over all 18 paired
+  cases;
+- against Global MIP with the common start, shortage win/tie/loss was 5/8/5;
+- candidate end-to-end time was lower in 16/18 comparisons with Global and
+  15/18 comparisons with Global plus start;
+- direct Impact Region accumulated much larger shortage on tight medium and
+  large cases, confirming the need for route screening and exact recovery.
+
+A separate six-row pressure-mechanism gate also passed validation. Bottleneck
+repair was reached in every row and selected 2--9 pair-blocks. These mechanism
+rows are not pooled with the ordinary/tight performance rows. Across the 18
+ordinary/tight candidate rows, the aggregate screen evaluated 120 rolling
+cycles and selected `N0`, `N1`, `N2`, and Global 57, 16, 2, and 45 times,
+respectively. Its total measured overhead was 20.18 seconds, or 0.161 seconds
+per rolling cycle on average.
 
 ## Preflight gate
 
