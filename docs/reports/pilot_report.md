@@ -1,4 +1,4 @@
-# Dynamic bay-allocation Pilot report
+# Dynamic bay-allocation pilot report
 
 > Status: **preliminary Pilot evidence; expansion stopped by the prescribed
 > failure rule.** This report is not a formal statistical result and does not

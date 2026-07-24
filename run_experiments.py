@@ -646,7 +646,10 @@ def main() -> int:
     )
     parser.add_argument("--oracle-search-iterations", type=int, default=8)
     parser.add_argument("--oracle-time", type=float, default=60.0)
-    parser.add_argument("--output", default="rolling_results.csv")
+    parser.add_argument(
+        "--output",
+        default="local_results/runs/rolling_results.csv",
+    )
     parser.add_argument("--manifest-output")
     parser.add_argument(
         "--resume",

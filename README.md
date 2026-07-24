@@ -211,8 +211,8 @@ python run_experiments.py --sizes small medium --errors 0.1 0.2 \
   --forecast-error-modes multiplicative timing_shift booking_add_cancel \
   --initial-utilizations 0.25 0.55 0.70 \
   --configurations core_start full_direct full_bottleneck --seeds 0 1 2 \
-  --mip-gap 0.01 --output pilot_results.csv \
-  --manifest-output pilot_results.manifest.json
+  --mip-gap 0.01 --output local_results/runs/pilot_results.csv \
+  --manifest-output local_results/runs/pilot_results.manifest.json
 ```
 
 Generate ordinary-feasible, tight-feasible, and overloaded sister cases with
@@ -222,7 +222,8 @@ offline integer certificates:
 python run_experiments.py --sizes small \
   --oracle-case-classes feasible tight overloaded \
   --configurations core core_start core_start_impact full_bottleneck \
-  --seeds 100 --time 20 --output oracle_certified_development.csv
+  --seeds 100 --time 20 \
+  --output local_results/runs/oracle_certified_development.csv
 ```
 
 Oracle calibration time is recorded separately and excluded from each online
@@ -241,7 +242,8 @@ For a paired development comparison:
 python run_experiments.py --sizes small medium large --errors 0.1 \
   --forecast-error-modes mixed --initial-utilizations 0.55 \
   --configurations full_bottleneck full_direct kp_dos kp_sg dra_rpm \
-  --seeds 0 --time 20 --output external_baseline_development.csv
+  --seeds 0 --time 20 \
+  --output local_results/runs/external_baseline_development.csv
 ```
 
 These are adapted rather than code-identical reproductions. They share the
@@ -258,28 +260,33 @@ checkpoint from a complete requested matrix through `row_count`,
 `expected_row_count`, and `complete`.
 
 If `--manifest-output` is omitted, the manifest defaults to the CSV stem, for
-example `pilot_results.manifest.json`. Every CSV row records the Git commit,
-branch and dirty state; problem protocol; Python and Gurobi versions; threads;
-MIP gap; stability formulation; and a compact sorted JSON weight profile. The
-batch manifest additionally records UTC creation time, the command, platform
-and Python implementation, requested experiment matrix, row count, and batch
-success status. Unavailable Git or Gurobi metadata is recorded as null rather
-than aborting the experiment.
+example `local_results/runs/pilot_results.manifest.json`. Every CSV row records
+the Git commit, branch and dirty state; problem protocol; Python and Gurobi
+versions; threads; MIP gap; stability formulation; and a compact sorted JSON
+weight profile. The batch manifest additionally records UTC creation time, the
+command, platform and Python implementation, requested experiment matrix, row
+count, and batch success status. Unavailable Git or Gurobi metadata is recorded
+as null rather than aborting the experiment.
 
 Run the bounded pilot workflow, which uses only `pilot_small`:
 
 ```bash
-python scripts/run_pilot_smoke.py --output pilot_smoke_results.csv
+python scripts/run_pilot_smoke.py
 ```
 
-This produces both `pilot_smoke_results.csv` and
-`pilot_smoke_results.manifest.json`.
+This produces both `local_results/runs/pilot_smoke_results.csv` and
+`local_results/runs/pilot_smoke_results.manifest.json`. New ad-hoc experiment
+artifacts belong under `local_results/runs/`; frozen preflight artifacts and
+older development outputs are kept under `local_results/preflight/` and
+`local_results/archive/`. Archived pilot and tuning narratives are under
+`docs/reports/`.
 
 `large` and `xlarge` are interfaces for later formal experiments and are never
 part of the default smoke workflow. Statistical summaries are generated with:
 
 ```bash
-python analysis/summarize_experiments.py rolling_results.csv
+python analysis/summarize_experiments.py \
+  local_results/runs/rolling_results.csv
 ```
 
 Detailed definitions are in `docs/model_assumptions.md` and

@@ -1,4 +1,4 @@
-# Post-Pilot tuning report
+# Post-pilot tuning report
 
 Date: 2026-07-22  
 Tuning seeds: 100, 101, 102 (reserved for tuning; not formal evaluation)  
@@ -20,7 +20,9 @@ Common setting: one thread, 1% MIP gap, 15 seconds per rolling cycle
 
 The final matrix used `pilot_medium`, utilization 0.55/0.80, forecast error
 0.10/0.20, `booking_add_cancel`/`mixed`, and all three tuning seeds. The
-reported artifact is `local_results/final_tuning_v38_t15_results.csv`, generated
+reported artifact is
+`local_results/archive/development_history/final_tuning_v38_t15_results.csv`,
+generated
 from clean commit `0d286318eb63e366565eab7167fdd0b5ab8568a0` under protocol v3.8.
 All 48 rows completed successfully with zero wall-clock, validation, and
 no-incumbent failures.
@@ -54,7 +56,8 @@ problem. The proactive design was discarded rather than tuned further.
 The retained pressure suite is deliberately synthetic and is used only for
 stage reachability. It has four ships, two cycles, and a controlled second-cycle
 forecast shock. The artifact is
-`local_results/repair_pressure_v38_t15_results.csv`, from the same clean commit.
+`local_results/archive/development_history/repair_pressure_v38_t15_results.csv`,
+from the same clean commit.
 All 12 rows completed successfully with zero realized unplaced boxes.
 
 | Pressure/configuration | mean wall (s) | repair triggers | global repairs | propagated pairs | mean final shortage |
