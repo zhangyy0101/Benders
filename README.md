@@ -57,10 +57,13 @@ For publication experiments, an independent full-information integer packing
 oracle classifies sister instances as ordinary feasible, tight feasible, or
 overloaded. It uses true arrivals only offline and is never visible to the
 rolling optimizer. Zero shortage certifies feasibility, while a strictly
-positive objective lower bound certifies overload; unresolved time-limited
-cases remain `unknown`. Oracle-certified cases add three terminal execution
-cycles with no new admissions so all admitted vessels' 72-hour receiving tails
-are executed and realized-arrival coverage equals the certified demand.
+positive objective lower bound certifies overload. Oracle protocol v2 first
+checks a conservative period-by-size aggregate capacity lower bound, then uses
+the integer MIP whenever that bound does not already prove overload.
+Unresolved time-limited cases remain `unknown`. Oracle-certified cases add
+three terminal execution cycles with no new admissions so all admitted
+vessels' 72-hour receiving tails are executed and realized-arrival coverage
+equals the certified demand.
 
 ## Model and stability
 

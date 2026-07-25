@@ -8,7 +8,7 @@ RESULT_SCHEMA_VERSION = "rolling-results-v7"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
-PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v1"
+PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v2"
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
 # are a held-out set and must not be used for tuning before the final freeze.

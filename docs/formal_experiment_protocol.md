@@ -12,6 +12,16 @@ profile can be structurally overloaded (seed 100 has an integer-shortage lower
 bound of 816 boxes). It is therefore historical stress evidence, not a valid
 zero-shortage algorithm benchmark.
 
+Packing-oracle protocol v2 adds a strict analytical presolve certificate for
+obvious overload. For every period and container size, it compares active new
+demand plus live locked inventory with the total compatible bay capacity.
+Any positive excess is a valid lower bound on unavoidable shortage because
+height compatibility is relaxed, not strengthened. A positive bound can
+therefore certify overload before constructing the integer MIP; all remaining
+cases, including every zero-shortage feasibility certificate and the
+feasible/overloaded boundary, still use the independent full-horizon integer
+packing model.
+
 ## Status and immutable identifiers
 
 This document defines the publication-oriented interface before public-data
@@ -21,7 +31,7 @@ model or the solution stages.
 - Problem protocol: `rolling-v4.3-oracle-certified`
 - Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
 - Result schema: `rolling-results-v7`
-- Packing oracle: `full-horizon-integer-packing-v1`
+- Packing oracle: `full-horizon-integer-packing-v2`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
 - Preprocessing implementation: `lead-aware-aggregate-lp-sparse-indexed-v3`

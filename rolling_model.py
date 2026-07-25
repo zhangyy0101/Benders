@@ -60,8 +60,9 @@ def solve_full_horizon_packing_oracle(
     The oracle is deliberately independent of forecasts, rolling decisions, and
     repair logic.  It minimizes integer unplaced demand using the realized or
     planned whole-ship release dates.  A zero-shortage incumbent is a feasibility
-    certificate because shortage is nonnegative; a positive value establishes
-    structural overload only after optimality has been proved.
+    certificate because shortage is nonnegative. Structural overload is proved
+    either by a positive MIP lower bound or by the conservative analytical
+    size-period capacity lower bound evaluated before model construction.
     """
     if release_basis not in {"realized", "planned"}:
         raise ValueError("release_basis must be 'realized' or 'planned'")
@@ -147,6 +148,73 @@ def solve_full_horizon_packing_oracle(
         )
         compatible_bays[key] = permitted
         place_keys.extend((bay, ship, group, arrival) for bay in permitted)
+
+    sizes = {
+        case["bay_size"][bay] for bay in bays
+    } | {
+        attrs[group]["size"] for _ship, group, _arrival in demand
+    }
+    capacity_by_size = {
+        size: sum(
+            case["capacity"][bay]
+            for bay in bays
+            if case["bay_size"][bay] == size
+        )
+        for size in sizes
+    }
+    analytical_shortage_lower_bound = int(late_flow_quantity)
+    for period in horizon:
+        period_overflow = 0
+        for size in sizes:
+            live_locked = sum(
+                quantity
+                for bay, records in locked_by_bay.items()
+                if case["bay_size"][bay] == size
+                for _old_ship, quantity, _height, release in records
+                if release > period
+            )
+            active_demand = sum(
+                quantity
+                for (ship, group, arrival), quantity in demand.items()
+                if attrs[group]["size"] == size
+                and arrival <= period < int(releases[ship])
+            )
+            period_overflow += max(
+                0,
+                live_locked + active_demand - capacity_by_size[size],
+            )
+        analytical_shortage_lower_bound = max(
+            analytical_shortage_lower_bound,
+            int(late_flow_quantity) + period_overflow,
+        )
+    if analytical_shortage_lower_bound > 0 and stop_after_classification:
+        return {
+            "classification": "overloaded",
+            "release_basis": release_basis,
+            "minimum_shortage": None,
+            "incumbent_shortage": None,
+            "objective_bound": float(analytical_shortage_lower_bound),
+            "shortage_lower_bound": analytical_shortage_lower_bound,
+            "proved_optimal": False,
+            "zero_shortage_certificate": False,
+            "positive_shortage_certificate": True,
+            "certificate_method": (
+                "analytical_size_period_capacity_lower_bound"
+            ),
+            "analytical_shortage_lower_bound": (
+                analytical_shortage_lower_bound
+            ),
+            "solver_status": None,
+            "solution_count": 0,
+            "runtime_seconds": 0.0,
+            "node_count": 0.0,
+            "total_demand": int(sum(demand.values())),
+            "late_flow_quantity": int(late_flow_quantity),
+            "horizon_periods": len(horizon),
+            "placement_variable_count": len(place_keys),
+            "model_variable_count": 0,
+            "model_constraint_count": 0,
+        }
 
     model = gp.Model("full_horizon_integer_packing_oracle")
     model.Params.OutputFlag = 0
@@ -286,6 +354,10 @@ def solve_full_horizon_packing_oracle(
         "proved_optimal": proved_optimal,
         "zero_shortage_certificate": zero_shortage,
         "positive_shortage_certificate": positive_shortage,
+        "certificate_method": "integer_packing_mip",
+        "analytical_shortage_lower_bound": (
+            analytical_shortage_lower_bound
+        ),
         "solver_status": status,
         "solution_count": solution_count,
         "runtime_seconds": float(model.Runtime),

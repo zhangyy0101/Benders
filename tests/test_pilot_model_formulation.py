@@ -343,6 +343,24 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertTrue(result["proved_optimal"])
         self.assertEqual(result["minimum_shortage"], 10)
 
+    def test_packing_oracle_uses_safe_analytical_overload_certificate(self):
+        case = packing_oracle_case(
+            flow={("V01", "P1_20_STD", 0): 60},
+        )
+        result = solve_full_horizon_packing_oracle(
+            case,
+            time_limit=5,
+        )
+
+        self.assertEqual(result["classification"], "overloaded")
+        self.assertTrue(result["positive_shortage_certificate"])
+        self.assertEqual(result["shortage_lower_bound"], 10)
+        self.assertEqual(
+            result["certificate_method"],
+            "analytical_size_period_capacity_lower_bound",
+        )
+        self.assertEqual(result["model_variable_count"], 0)
+
     def test_full_horizon_packing_oracle_enforces_height_and_release(self):
         mixed = packing_oracle_case(
             flow={
