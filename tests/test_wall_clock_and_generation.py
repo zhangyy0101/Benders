@@ -9,11 +9,12 @@ class WallClockAndGenerationTest(unittest.TestCase):
     def test_postprocessing_reserve_is_scaled_and_bounded(self):
         self.assertEqual(postprocessing_reserve_seconds(0), 0)
         self.assertAlmostEqual(postprocessing_reserve_seconds(.05), .025)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(5), .75)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(10), 1.5)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 4.5)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(60), 9.0)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 10.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(5), .8)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(10), 1.6)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 4.8)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(60), 9.6)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 16.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(120), 19.2)
 
     def test_all_forecast_modes_are_reproducible(self):
         for mode in FORECAST_ERROR_MODES:

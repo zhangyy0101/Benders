@@ -304,7 +304,7 @@ def main() -> int:
         if args.experiment_set == "main":
             if configurations != tuple(FORMAL_PRIMARY_CONFIGURATIONS):
                 parser.error(
-                    "formal main matrix must use the frozen seven methods"
+                    "formal main matrix must use the frozen five methods"
                 )
             if parameter_profiles != ("frozen",):
                 parser.error(

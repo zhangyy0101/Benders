@@ -144,7 +144,7 @@ development and still share the common information boundary and evaluator.
 the exact integer model, MIP start, direct Impact Region, bottleneck selector,
 Progressive Repair, and global recovery of `full_bottleneck`, but disables the
 aggregate-LP ladder and uses the former state-based route. It is not a
-candidate method and is not included in the main seven-method table.
+candidate method and is not included in the main five-method table.
 
 Version 1.1 replaces repeated full-table scans in residual-capacity and
 height indexing with sparse bay/pair indexes. When dependency propagation is
@@ -269,12 +269,13 @@ manifest. A formal run rejects:
 - a dirty or unidentifiable Git state;
 - a command-line time override;
 - a provisional public-data source;
-- a main matrix other than the frozen seven methods;
+- a main matrix other than the frozen five methods;
 - a changed bundle, case hash, metadata record, or resume matrix.
 
-The frozen main methods are `core`, `core_start`, `core_start_impact`,
-`full_bottleneck`, `kp_dos`, `kp_sg`, and `dra_rpm`. All seven see the same
-bundle and the same per-cycle wall-clock budget.
+The frozen main methods are `core_start`, `full_bottleneck`, `kp_dos`, `kp_sg`,
+and `dra_rpm`. All five see the same bundle and the same per-cycle wall-clock
+budget. `core_start` is the same-model strong solver baseline; `core` and
+`core_start_impact` are retained only for the separate internal-ablation panel.
 
 The fixed PORT-MIS entry-date windows are deliberately non-overlapping:
 
@@ -392,7 +393,7 @@ The temporal experiment uses the same medium yard, seven-day duration, and
 These profiles are labelled `public_panel_role=temporal_robustness` in every
 bundle/result. The formal runner rejects pooling them into the main scale
 matrix. The separate `public_temporal_robustness` experiment compares
-`core_start` and `full_bottleneck`; the July main panel retains the seven-method
+`core_start` and `full_bottleneck`; the July main panel retains the five-method
 external comparison.
 
 PORT-MIS still does not observe export-box counts, per-container POD/size/
@@ -521,7 +522,7 @@ The final study keeps different evidential roles in separate tables:
 1. **Data audit and calibration.** PORT-MIS only; schedule, vessel, berth,
    source completeness, calibration assumptions, and hashes.
 2. **Main external-validity comparison.** The three public-data-driven windows;
-   the frozen seven methods and ten formal seeds.
+   the frozen five methods and ten formal seeds.
 3. **Public temporal robustness.** Equal-layout seven-day March, July, and
    November windows; `core_start` and `full_bottleneck`, reported separately
    from the scale panel.
@@ -557,6 +558,21 @@ Public data support external validity but do not expose true box attributes,
 forecast histories, or yard layout. Those elements remain fully disclosed
 semi-synthetic fields. Synthetic cases are therefore still required for exact
 scale, utilization, oracle certification, and mechanism control.
+
+### Formal runtime-gate correction
+
+The first formal public-main execution exposed a runtime-contract defect before
+any complete public comparison was inspected. The 15% postprocessing reserve
+was capped at 10 seconds, so mandatory solution extraction and independent
+validation could marginally overrun 60-second public-medium cycles and could
+more substantially overrun 120-second public-large cycles even though the
+solver callback respected its deadline. Version 1.3.2 uses one common 16%
+reserve with a 20-second cap: 60- and 120-second cycles reserve 9.6 and 19.2
+seconds, respectively, while retaining the same strict total wall-clock
+budgets. The change does not alter the model, objective, candidate domains, or
+any method-specific time allowance. The incomplete v1.3 public run and the
+v1.3.1 single-case diagnostic are diagnostic evidence only and must not be
+pooled with formal results.
 
 ## Frozen DRA-RPM sensitivity
 
@@ -658,7 +674,7 @@ python scripts/prepare_formal_instances.py \
     local_results/portmis_publication_panel/2025_11/calibrated_demand_v1
 ```
 
-Run the paired seven-method matrix from archived files:
+Run the paired five-method matrix from archived files:
 
 ```bash
 python scripts/run_formal_matrix.py \

@@ -166,7 +166,7 @@ first-incumbent time starts before preprocessing.
 
 To enforce that contract, every configuration reserves the same bounded tail
 for solver-limit overrun, incumbent extraction, and independent validation:
-15% of the cycle limit, with a 0.5-second minimum and 10-second maximum, while
+16% of the cycle limit, with a 0.5-second minimum and 20-second maximum, while
 very short diagnostic limits retain at least half their budget for
 optimization. The callback also enforces the absolute stage deadline. The
 reserve is included in the recorded weight/runtime profile.
@@ -275,8 +275,9 @@ between methods:
 The formal runner fixes ten held-out seeds (`1000`--`1009`), rejects dirty Git
 state and time overrides, and uses per-cycle budgets stored in each bundle:
 20 seconds for small/medium, 60 for large, and 120 for xlarge. The frozen main
-matrix is `core`, `core_start`, `core_start_impact`, `full_bottleneck`,
-`kp_dos`, `kp_sg`, and `dra_rpm`.
+matrix is `core_start`, `full_bottleneck`, `kp_dos`, `kp_sg`, and `dra_rpm`.
+The unrestricted `core` and direct `core_start_impact` variants are reserved
+for the separate internal-ablation panel.
 
 Example development smoke:
 

@@ -3,7 +3,7 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3.2"
 RESULT_SCHEMA_VERSION = "rolling-results-v7"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
@@ -38,9 +38,7 @@ FORMAL_SYNTHETIC_UTILIZATION_SHIP_VOLUME_FACTOR = 1.0
 # every 24-hour rolling decision cycle.  Instance bundles carry one of these
 # values so a formal runner cannot silently give one method a different budget.
 FORMAL_PRIMARY_CONFIGURATIONS = (
-    "core",
     "core_start",
-    "core_start_impact",
     "full_bottleneck",
     "kp_dos",
     "kp_sg",
@@ -180,9 +178,9 @@ SHIP_OPERATION_DURATION_RANGES={
     "large":(3,4),
 }
 WALL_TIME_TOLERANCE_SECONDS=.20
-POSTPROCESSING_RESERVE_RATIO=.15
+POSTPROCESSING_RESERVE_RATIO=.16
 POSTPROCESSING_RESERVE_MIN_SECONDS=.50
-POSTPROCESSING_RESERVE_MAX_SECONDS=10.0
+POSTPROCESSING_RESERVE_MAX_SECONDS=20.0
 VALIDATE_EACH_EXECUTION_PERIOD=True
 USE_EXACT_STABILITY_BIG_M=False
 

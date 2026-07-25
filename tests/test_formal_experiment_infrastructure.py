@@ -360,7 +360,16 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
 
     def test_formal_seed_and_budget_matrix_is_frozen(self):
         self.assertEqual(config.FORMAL_SEEDS, tuple(range(1000, 1010)))
-        self.assertEqual(len(config.FORMAL_PRIMARY_CONFIGURATIONS), 7)
+        self.assertEqual(
+            config.FORMAL_PRIMARY_CONFIGURATIONS,
+            (
+                "core_start",
+                "full_bottleneck",
+                "kp_dos",
+                "kp_sg",
+                "dra_rpm",
+            ),
+        )
         self.assertLessEqual(max(config.FORMAL_TIME_BUDGETS_SECONDS.values()), 120)
         self.assertEqual(set(config.FORMAL_PUBLIC_WINDOWS), {
             "public_small",
