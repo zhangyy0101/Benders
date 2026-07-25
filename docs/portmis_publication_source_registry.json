@@ -1,0 +1,92 @@
+{
+  "registry_schema": "portmis-publication-source-registry-v1",
+  "entries": {
+    "spring_2025_03": {
+      "source_period": ["2025-03-01", "2025-03-30"],
+      "source_manifest_sha256": "f2b983832647d89451f4e0eaea7f336a980db3a494759eac5f1a01bca0c02b90",
+      "source_snapshot_sha256": "06ea199a350fcd78748520da9a11bd12e16257e77ff2881c5e0ccc9ffc9a33cd",
+      "publication_archive": {
+        "filename": "portmis_2025_03_publication_v1.zip",
+        "sha256": "eed1ecafba146a802243a7335c6169ae43ba15bce1da37e224f368887b31208d",
+        "bytes": 694220
+      },
+      "raw_files": {
+        "raw_inbound.json": "d8c1e8632a641dc4c23f51a642cc951b359efa3d941016c14abaf3a21799f8bd",
+        "raw_outbound.json": "d666dff49ca5cb8197be31d70e3f8b7de0e049469cd31bd7daaedb496832451b"
+      },
+      "official_metadata_files": {
+        "official_openapi_catalog.json": "5e05b1996c52c42818adac0f8c06b28ea12ace0f48baa7d53f83e10058f19d4e",
+        "official_file_catalog.json": "0da3274008d5945cd371d0124a1114b872c79f50ea476e09525e3a9a9d9a3f7e",
+        "official_openapi_page.html": "66da0a6728d0e897db42fd06dee8021cafb05069da04b95c63bcc6f0a5c59388",
+        "official_file_page.html": "e18106da1739883f31aa268fdedcd5ac4dc19ca030361f8dcb087727fa78b137",
+        "official_portal_view.xml": "2433b9a2d13050b7fbcc66ecce2c745aafa99f755eede6d7c2502b0a9d80cb43"
+      },
+      "primary_cluster_calls_sha256": "59d85810702121f35428dcff73fef20303bf8bbbc52f01f7c59826e942b4ddc3",
+      "primary_cluster_call_count": 172,
+      "complete_daily_cycles": 27,
+      "calibration_manifest_sha256": "f4b83f5eb06813aa10e3e646e17c389711070126299ee1a7b46d457d9345e573",
+      "calibrated_call_demand_sha256": "f72fa201c02efb84b2a32658bc92442bfe1ffdc01c36158aed59c1ca89d5a84f",
+      "calibrated_group_demand_sha256": "909231bb11912179b5019631499138a2b2d66d925b03b9c4c0c6f3145d533976",
+      "calibrated_boxes": 30750,
+      "calibrated_teu": 50738
+    },
+    "summer_2025_07": {
+      "source_period": ["2025-07-01", "2025-07-30"],
+      "source_manifest_sha256": "68c8e2870d312dcce8de7eadd17f09434e210a53e896301fe73604e3ec85ac67",
+      "source_snapshot_sha256": "6eebc164b31d46d8ccff946f2bc2ba3dc6a7c1e0adbcfbf4d6c951903858196d",
+      "publication_archive": {
+        "filename": "portmis_2025_07_publication_v1.zip",
+        "sha256": "430ebbf8a17e3271195519679ff4534fec3d299b401221e3a661e7464f52e039",
+        "bytes": 712267
+      },
+      "raw_files": {
+        "raw_inbound.json": "aaea55c3bac928a6276eb655984aa31cb8580e4e6745f6e5a1e255f8ba853a83",
+        "raw_outbound.json": "2346ce0197c7d002dc0a52ad4aa6ee8920b49f0b510f8cd275b91471aee4288f"
+      },
+      "official_metadata_files": {
+        "official_openapi_catalog.json": "5e05b1996c52c42818adac0f8c06b28ea12ace0f48baa7d53f83e10058f19d4e",
+        "official_file_catalog.json": "0da3274008d5945cd371d0124a1114b872c79f50ea476e09525e3a9a9d9a3f7e",
+        "official_openapi_page.html": "76c514be78a36ca7114fe61f70ac0a1c8e9f0beade6d32d24cf362120f255124",
+        "official_file_page.html": "803c02c4756cc33073bc3266fe187c5ece17c288a7c7d4d5ab38e4ef4482728e",
+        "official_portal_view.xml": "2433b9a2d13050b7fbcc66ecce2c745aafa99f755eede6d7c2502b0a9d80cb43"
+      },
+      "primary_cluster_calls_sha256": "dd10f306ac5bd8a542bf47123fbeff82710bc3da8c8ade79b9bedc79c6130371",
+      "primary_cluster_call_count": 200,
+      "complete_daily_cycles": 27,
+      "calibration_manifest_sha256": "b1d583ad5571c023b6e30b18ec02a5d0b9449f6f2f6419776a8cfc831f49bf53",
+      "calibrated_call_demand_sha256": "597e7bd1c813d168731daaa7f51d04289efd49798cb8c5a4cf0bc13a8b6e494a",
+      "calibrated_group_demand_sha256": "3b58642282b51b0e5f0b13f7ed3bcf47e58a0ded93b605f854664e5d525fd684",
+      "calibrated_boxes": 30750,
+      "calibrated_teu": 50738
+    },
+    "autumn_2025_11": {
+      "source_period": ["2025-11-01", "2025-11-30"],
+      "source_manifest_sha256": "a27bf26ee1a0c5d9fcd2561c712e121fee365173381d828e095bc96fb8d3f318",
+      "source_snapshot_sha256": "ad8e920f15bfcb4a35b972dcf3954018613382f68589a4316abc2a49c3952f83",
+      "publication_archive": {
+        "filename": "portmis_2025_11_publication_v1.zip",
+        "sha256": "c624453396e5510b7f24aaecf62afd97af3dce673985d11ef5834c43a1d7805a",
+        "bytes": 727393
+      },
+      "raw_files": {
+        "raw_inbound.json": "6ee3d85829c20a626bd182da4fb7bffb50986d9962d080de0019a7dc04bfd17e",
+        "raw_outbound.json": "9cb53181f032024d2d1d93c4796644b7909ddc00db59792ad76e6cec5613dd41"
+      },
+      "official_metadata_files": {
+        "official_openapi_catalog.json": "5e05b1996c52c42818adac0f8c06b28ea12ace0f48baa7d53f83e10058f19d4e",
+        "official_file_catalog.json": "0da3274008d5945cd371d0124a1114b872c79f50ea476e09525e3a9a9d9a3f7e",
+        "official_openapi_page.html": "0183d831e25063b14e70421676b39fe8d5aec5db5d8a8ff074aeec8d3a9f129b",
+        "official_file_page.html": "83047802377698ae30006ade696e6a79355316ea091dbd4864a0a8c5d34ac022",
+        "official_portal_view.xml": "2433b9a2d13050b7fbcc66ecce2c745aafa99f755eede6d7c2502b0a9d80cb43"
+      },
+      "primary_cluster_calls_sha256": "c7aba4b4e29ea5aadb7bd0c3745dfdfb770f11fde620b4b8b01d03b54cda68b4",
+      "primary_cluster_call_count": 173,
+      "complete_daily_cycles": 27,
+      "calibration_manifest_sha256": "a9e4a579e205ea29f6f661592572bf8fc74ebf7d30a3099925e1f4f54f1d7fc4",
+      "calibrated_call_demand_sha256": "16140b12d16bc4ac97b1ef5acf23e42dae7d5e8bf33936901ad4eff4bdecb881",
+      "calibrated_group_demand_sha256": "469cfe66dda5b017b35f71a5a36e289e2b932c61b3d5c12376a62ddb3b27413e",
+      "calibrated_boxes": 30750,
+      "calibrated_teu": 50738
+    }
+  }
+}

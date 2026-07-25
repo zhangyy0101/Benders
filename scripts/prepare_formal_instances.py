@@ -14,8 +14,10 @@ if str(ROOT) not in sys.path:
 
 from config import (  # noqa: E402
     FORECAST_ERROR_MODES,
+    FORMAL_PUBLIC_CALIBRATION_SCENARIOS,
     FORMAL_SEEDS,
     FORMAL_TIME_BUDGETS_SECONDS,
+    FORMAL_PUBLIC_TEMPORAL_WINDOWS,
     FORMAL_PUBLIC_WINDOWS,
 )
 from experiment_metadata import collect_git_metadata  # noqa: E402
@@ -282,7 +284,9 @@ def main() -> int:
     portmis.add_argument(
         "--windows",
         nargs="+",
-        choices=FORMAL_PUBLIC_WINDOWS,
+        choices=tuple(FORMAL_PUBLIC_WINDOWS) + tuple(
+            FORMAL_PUBLIC_TEMPORAL_WINDOWS
+        ),
         default=list(FORMAL_PUBLIC_WINDOWS),
     )
     portmis.add_argument("--seeds", nargs="+", type=int, default=[100])
@@ -304,6 +308,7 @@ def main() -> int:
     portmis.add_argument("--initial-utilization", type=float, default=0.25)
     portmis.add_argument(
         "--calibration-scenario-id",
+        choices=FORMAL_PUBLIC_CALIBRATION_SCENARIOS,
         default="central",
         help="stable OFAT label such as central, utilization_low, or share40_high",
     )

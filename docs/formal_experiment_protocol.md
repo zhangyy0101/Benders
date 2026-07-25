@@ -20,7 +20,7 @@ model or the solution stages.
 
 - Problem protocol: `rolling-v4.3-oracle-certified`
 - Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
-- Result schema: `rolling-results-v6`
+- Result schema: `rolling-results-v7`
 - Packing oracle: `full-horizon-integer-packing-v1`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
@@ -246,7 +246,7 @@ first serialized as `rolling-instance-bundle-v1`. The serializer preserves
 tuple-key dictionaries, tuples, and sets, and records both the case SHA-256 and
 the exact bundle-file SHA-256. The bundle stores the instance family, profile,
 seed, source window, source/calibration hashes, and frozen per-cycle time
-budget. Result schema `rolling-results-v6` repeats these identities in every
+budget. Result schema `rolling-results-v7` repeats these identities in every
 row.
 
 `scripts/prepare_formal_instances.py` creates or verifies bundles.
@@ -279,63 +279,119 @@ inside the inclusive window; calls are never truncated to reach a target size.
 The yard layout remains semi-synthetic and is fixed by profile rather than
 retuned after seeing method performance.
 
-## PORT-MIS public-data pilot gate
+## PORT-MIS publication source gate
 
-The bounded PORT-MIS acquisition pilot passed on 2026-07-23 without changing
-the mathematical model or frozen algorithm.  It queried Busan vessel calls
-from 2025-07-01 through 2025-07-30, retained final declarations for full
-container ships (`vsslKndCd=41`), and used the Sinsundae berth group as the
-first single-terminal proxy.
+The documented data.go.kr vessel-operation OpenAPI requires an issued
+`serviceKey`; an anonymous request returns HTTP 401 and is not used or
+circumvented. The Ministry of Oceans and Fisheries also publishes the
+`ship arrival/departure status` fileData record. Its institution-provided data
+URL is the PORT-MIS vessel-call query page and its catalogue declares no
+licence restriction. The formal acquisition mode is therefore
+`official_provider_portal_export`, not `documented_openapi`.
 
-The primary sample contains 200 inbound calls by 91 unique vessels across five
-berths.  Callsign, entry/departure time, gross tonnage, facility, previous port,
-and next port are complete in the retained sample.  No source business-key
-duplicates or reversed times remain.  The 27 complete daily rolling cycles
-contain 3--9 newly admitted vessels in each 72--96 hour slice (median 6).
+`scripts/prepare_portmis_pilot.py --publication-ready` archives:
 
-The Busan Port Authority identifies Sinsundae as a five-berth container
-terminal operated by Busan Port Terminal Co., Ltd. (BPT).  Inbound and outbound
-facility fields are retained separately: calls that move between different
-terminal clusters are marked `MULTI_TERMINAL` and excluded from the primary
-single-yard proxy.  Cargo tonnage is not interpreted as container moves, and
-next port is not interpreted as a per-container POD.
+- both official data.go.kr catalogue JSON records and HTML pages;
+- the PORT-MIS UI definition named by the fileData `contentUrl`;
+- the UI-bound POST transport URL, complete parameters, and request-body hash;
+- immutable inbound/outbound response bytes, row counts, and SHA-256 values;
+- standardized call tables and their hashes;
+- the observed-versus-semi-synthetic field boundary and source-revision policy.
 
-`scripts/prepare_portmis_pilot.py` reproduces the bounded acquisition audit.
-Its guest-accessible table endpoint is undocumented and remains a pilot route,
-not the publication extraction contract.  Before formal instance generation,
-archive a fixed official PORT-MIS table export, its query metadata and hashes;
-then freeze the separate semi-synthetic rules for box quantities, attributes,
-forecast trajectories, yard state, and bay layout.
+The formal verifier parses this evidence. It checks the Ministry provider,
+unrestricted licence, official fileData-to-PORT-MIS link, UI-to-transport
+binding, service-key status of the separate documented OpenAPI, every file
+hash and byte count, both directional request identities, and the link from
+the source audit/call table to the calibration manifest. A manually edited
+`publication_ready: true` is insufficient.
 
-The infrastructure enforces that distinction. A publication-ready source
-manifest must declare `publication_ready: true` and
-`pilot_only_undocumented_endpoint: false`, and list the SHA-256 of every raw
-source file. The calibration manifest must list the SHA-256 of every derived
-artifact and its audit must have status `PASS`. The current July pilot snapshot
-verifies byte-for-byte but deliberately fails the formal publication-ready
-gate; it remains usable for development and integration tests only.
+The frozen July source was retrieved on 2026-07-23 and its provenance was
+completed under `portmis-fixed-source-snapshot-v2` on 2026-07-25. It covers
+Busan calls from 2025-07-01 through 2025-07-30, retains final declarations for
+full container ships (`vsslKndCd=41`), and uses the Sinsundae berth group as a
+single-terminal proxy. The sample contains 200 inbound calls by 91 vessels
+across five berths. All quality gates pass, with 27 complete rolling cycles and
+3--9 new vessels per 72--96 hour admission slice (median 6).
 
-A minimal publication source declaration has this shape; the actual query and
-all raw files must be archived beside it:
+A same-window re-query on 2026-07-25 reproduced the complete standardized
+primary call table byte-for-byte. PORT-MIS had corrected only two raw
+`tugYn` values from N to Y; this unused field did not change the research
+sample. Live re-query hashes are deliberately not a reproducibility
+requirement: archived bytes are immutable, and a later provider correction
+must create a new snapshot rather than overwrite the fixed one.
 
-```json
-{
-  "schema": "portmis-fixed-source-snapshot-v1",
-  "publication_ready": true,
-  "pilot_only_undocumented_endpoint": false,
-  "official_data_page": "https://www.data.go.kr/data/15006353/openapi.do",
-  "extraction_method": "fixed official export or documented OpenAPI",
-  "query": {
-    "port_code": "020",
-    "start_date": "YYYY-MM-DD",
-    "end_date": "YYYY-MM-DD"
-  },
-  "raw_files": {
-    "raw_inbound.json": {"sha256": "<64 hexadecimal characters>"},
-    "raw_outbound.json": {"sha256": "<64 hexadecimal characters>"}
-  }
-}
+The primary-terminal mapping is independently anchored to the Busan Port
+Authority description of Sinsundae as a five-berth BPT container terminal.
+Inbound and outbound facilities are retained separately. Cross-cluster calls
+are labelled `MULTI_TERMINAL` and excluded from the single-yard proxy.
+
+Rebuild or upgrade the fixed July source and its linked calibration with:
+
+```bash
+python scripts/prepare_portmis_pilot.py \
+  --start 2025-07-01 --end 2025-07-30 \
+  --output-dir local_results/portmis_pilot_2025_07 \
+  --reuse-raw --publication-ready
+
+python scripts/calibrate_portmis_demand.py \
+  --pilot-dir local_results/portmis_pilot_2025_07 \
+  --output-dir \
+    local_results/portmis_pilot_2025_07/calibrated_demand_v1
 ```
+
+Omit `--reuse-raw` only when intentionally creating a new source snapshot.
+The raw source archive and its manifest must be deposited with the paper's
+reproducibility package; a Git tag alone is not a substitute for the data
+archive.
+
+Create the deterministic archive recorded in
+`docs/portmis_publication_source_registry.json` with:
+
+```bash
+python scripts/package_portmis_source.py \
+  --source-dir local_results/portmis_pilot_2025_07 \
+  --output \
+    local_results/publication_archives/portmis_2025_07_publication_v1.zip
+```
+
+The packager first reruns the strict publication source and calibration-lineage
+checks. It includes only declared source/evidence/standardized/calibration
+members, fixes ZIP metadata, and writes an internal member-hash manifest.
+
+### Temporal public-data panel
+
+One month cannot establish temporal robustness. Independent March, July, and
+November 2025 thirty-day snapshots therefore form a three-period source panel.
+All pass the same source-quality gates:
+
+| Source period | Primary calls | Complete cycles | Role |
+|---|---:|---:|---|
+| 2025-03-01--2025-03-30 | 172 | 27 | temporal robustness |
+| 2025-07-01--2025-07-30 | 200 | 27 | primary scale + temporal robustness |
+| 2025-11-01--2025-11-30 | 173 | 27 | temporal robustness |
+
+The temporal experiment uses the same medium yard, seven-day duration, and
+60-second per-cycle limit in all three periods:
+
+| Profile | Inclusive dates | Yard |
+|---|---:|---:|
+| `public_temporal_spring` | 2025-03-12--2025-03-18 | 16 blocks x 8 bays |
+| `public_temporal_summer` | 2025-07-12--2025-07-18 | 16 blocks x 8 bays |
+| `public_temporal_autumn` | 2025-11-12--2025-11-18 | 16 blocks x 8 bays |
+
+These profiles are labelled `public_panel_role=temporal_robustness` in every
+bundle/result. The formal runner rejects pooling them into the main scale
+matrix. The separate `public_temporal_robustness` experiment compares
+`core_start` and `full_bottleneck`; the July main panel retains the seven-method
+external comparison.
+
+PORT-MIS still does not observe export-box counts, per-container POD/size/
+height, historical booking forecasts, yard inventory/layout, or legacy
+allocations. These gaps cannot be validly filled from this source. The manifest
+therefore requires them to be declared and treated as transparent
+capacity-anchored or controlled semi-synthetic inputs. Reported cargo tonnage
+is not interpreted as container moves, and vessel next port is not interpreted
+as per-container POD.
 
 ## Capacity-anchored demand calibration
 
@@ -404,6 +460,12 @@ computational scale family, must be introduced as a separately labelled
 synthetic large-vessel stratum rather than being forced into this observed
 small/medium-vessel pilot.
 
+The eight noncentral July calibration directories are frozen under
+`local_results/portmis_pilot_2025_07/calibration_scenarios/` with stable IDs
+`utilization_low/high`, `export_split_low/high`, `forty_share_low/high`, and
+`high_cube_low/high`. Every directory has an independent PASS audit and
+manifest linked to the same fixed July source.
+
 ## Calibrated rolling integration gate
 
 `scripts/run_portmis_end_to_end.py` maps the calibrated demand layer to the
@@ -450,20 +512,23 @@ The final study keeps different evidential roles in separate tables:
    source completeness, calibration assumptions, and hashes.
 2. **Main external-validity comparison.** The three public-data-driven windows;
    the frozen seven methods and ten formal seeds.
-3. **Public calibration robustness.** PORT-MIS windows with one-factor-at-a-
+3. **Public temporal robustness.** Equal-layout seven-day March, July, and
+   November windows; `core_start` and `full_bottleneck`, reported separately
+   from the scale panel.
+4. **Public calibration robustness.** PORT-MIS windows with one-factor-at-a-
    time calibration variants; at minimum the candidate and `core_start`, with
    external baselines included on the central setting.
-4. **Synthetic computational scale.** Oracle-certified small, medium, large,
+5. **Synthetic computational scale.** Oracle-certified small, medium, large,
    and xlarge bundles; the frozen seven methods.
-5. **Synthetic utilization/pressure.** Certified feasible, tight, and
+6. **Synthetic utilization/pressure.** Certified feasible, tight, and
    separately labelled overloaded sister cases. Overloaded cases are stress
    evidence and are not pooled into zero-shortage claims.
-6. **Internal component ablation.** `core`, `core_start`,
+7. **Internal component ablation.** `core`, `core_start`,
    `core_start_impact`, and `full_bottleneck`; add
    `full_bottleneck_no_aggregate` only for the aggregate routing ablation.
-7. **Repair-mechanism reachability.** Controlled `nearby` and `global`
+8. **Repair-mechanism reachability.** Controlled `nearby` and `global`
    pressure cases; mechanism statistics only.
-8. **Parameter sensitivity.** DRA-RPM one-factor-at-a-time profiles and the
+9. **Parameter sensitivity.** DRA-RPM one-factor-at-a-time profiles and the
    declared public calibration factors. These are not used to retune the
    candidate after formal outcomes are inspected.
 
@@ -497,8 +562,8 @@ python scripts/prepare_formal_instances.py \
   --oracle-case-classes feasible tight
 ```
 
-Prepare public bundles only after replacing the provisional source manifest
-with the archived publication extraction:
+Prepare primary public bundles from the verified July source/calibration
+chain:
 
 ```bash
 python scripts/prepare_formal_instances.py \
@@ -508,6 +573,35 @@ python scripts/prepare_formal_instances.py \
   --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
   --calibration-dir <fixed-calibration-directory> \
   --source-manifest <fixed-official-source-manifest>
+```
+
+Prepare each temporal source separately so its calibration cannot be paired
+with the wrong month:
+
+```bash
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/portmis_spring \
+  portmis --windows public_temporal_spring \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --calibration-dir \
+    local_results/portmis_publication_panel/2025_03/calibrated_demand_v1
+
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/portmis_summer \
+  portmis --windows public_temporal_summer \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --calibration-dir \
+    local_results/portmis_pilot_2025_07/calibrated_demand_v1
+
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/portmis_autumn \
+  portmis --windows public_temporal_autumn \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --calibration-dir \
+    local_results/portmis_publication_panel/2025_11/calibrated_demand_v1
 ```
 
 Run the paired seven-method matrix from archived files:
@@ -534,6 +628,19 @@ python scripts/run_formal_matrix.py \
   --bundle-indexes \
     local_results/formal/instances/portmis/portmis_instance_index.json \
   --output local_results/formal/runs/dra_sensitivity.csv
+```
+
+Run the temporal panel only with its dedicated experiment set and indexes:
+
+```bash
+python scripts/run_formal_matrix.py \
+  --experiment-phase formal \
+  --experiment-set public_temporal_robustness \
+  --bundle-indexes \
+    local_results/formal/instances/portmis_spring/portmis_instance_index.json \
+    local_results/formal/instances/portmis_summer/portmis_instance_index.json \
+    local_results/formal/instances/portmis_autumn/portmis_instance_index.json \
+  --output local_results/formal/runs/public_temporal_robustness.csv
 ```
 
 Summarize one completed matrix with artifact gates, descriptive statistics,

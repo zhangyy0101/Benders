@@ -52,6 +52,7 @@ EXPERIMENT_SET_CONFIGURATIONS = {
         "full_bottleneck",
     ),
     "public_sensitivity": ("core_start", "full_bottleneck"),
+    "public_temporal_robustness": ("core_start", "full_bottleneck"),
     "repair_mechanism": ("full_direct", "full_bottleneck", "full"),
     "dra_sensitivity": ("dra_rpm",),
 }
@@ -279,6 +280,27 @@ def main() -> int:
                 f"{args.experiment_set} requires central public calibration: "
                 + ", ".join(noncentral)
             )
+        temporal_public = [
+            item[1]["instance_id"]
+            for item in bundles
+            if item[1].get("public_panel_role") == "temporal_robustness"
+        ]
+        if args.experiment_set == "main" and temporal_public:
+            parser.error(
+                "formal main matrix cannot pool the public temporal panel: "
+                + ", ".join(temporal_public)
+            )
+        if args.experiment_set == "public_temporal_robustness":
+            wrong_panel = [
+                item[1]["instance_id"]
+                for item in bundles
+                if item[1].get("public_panel_role") != "temporal_robustness"
+            ]
+            if wrong_panel:
+                parser.error(
+                    "public temporal robustness requires only temporal-panel "
+                    "bundles: " + ", ".join(wrong_panel)
+                )
         if args.experiment_set == "main":
             if configurations != tuple(FORMAL_PRIMARY_CONFIGURATIONS):
                 parser.error(

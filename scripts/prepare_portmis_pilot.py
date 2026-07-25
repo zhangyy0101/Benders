@@ -1,10 +1,15 @@
-"""Prepare and audit a bounded PORT-MIS public-data pilot snapshot.
+"""Prepare and audit a bounded PORT-MIS public-data source snapshot.
 
 This script intentionally does not build rolling optimization instances.  It
-queries the guest-accessible PORT-MIS table used by the official public-data
-page, keeps the source response immutable, and produces a small standardized
-snapshot plus an audit report.  The table endpoint is not the documented Open
-API and therefore remains a pilot acquisition route only.
+queries the guest-accessible PORT-MIS table linked by the provider's official
+``fileData`` catalogue record, keeps the source response immutable, and
+produces a standardized snapshot plus an audit report.
+
+By default the output remains a development pilot.  ``--publication-ready``
+also archives and validates the official catalogue records, the official
+provider-page link, and the PORT-MIS UI definition that binds the table to its
+transport endpoint.  This is an official-provider portal export contract, not
+a claim that the transport endpoint is the documented service-key OpenAPI.
 """
 from __future__ import annotations
 
@@ -12,10 +17,13 @@ import argparse
 import csv
 import hashlib
 import http.cookiejar
+import html
 import json
 import math
+import re
 import statistics
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass
@@ -26,6 +34,12 @@ from typing import Any, Iterable
 
 OFFICIAL_DATA_PAGE = "https://www.data.go.kr/data/15006353/openapi.do"
 OFFICIAL_FILE_PAGE = "https://www.data.go.kr/data/15083024/fileData.do"
+OFFICIAL_OPENAPI_CATALOG_URL = (
+    "https://www.data.go.kr/catalog/15006353/openapi.json"
+)
+OFFICIAL_FILE_CATALOG_URL = (
+    "https://www.data.go.kr/catalog/15083024/fileData.json"
+)
 BPA_SINSUNDAE_PAGE = (
     "https://www.busanpa.com/index.bpa?menuCd=DOM_000000103001003005"
 )
@@ -34,11 +48,27 @@ PORTMIS_MAIN_URL = (
     "?w2xPath=/portmis/w2/main/index.xml"
     "&page=/portmis/w2/sp/vssl/vsch/UI-PM-SP-104-02.xml"
     "&menuId=1319&menuCd=M0182"
+    "&menuNm=%EC%84%A0%EB%B0%95%EC%9E%85%EC%B6%9C%ED%95%AD%ED%98%84%ED%99%A9"
+)
+PORTMIS_UI_DEFINITION_URL = (
+    "https://new.portmis.go.kr/portmis"
+    "/w2/sp/vssl/vsch/UI-PM-SP-104-02.xml"
 )
 PORTMIS_QUERY_URL = (
     "https://new.portmis.go.kr/portmis"
     "/sp/vssl/vsch/selectSpVsslAllPagingList.do"
 )
+PORTMIS_QUERY_PATH = "/sp/vssl/vsch/selectSpVsslAllPagingList.do"
+PORTMIS_SOURCE_SCHEMA = "portmis-fixed-source-snapshot-v2"
+PORTMIS_ACQUISITION_MODE = "official_provider_portal_export"
+NO_RESTRICTION_LICENSE_KO = "이용허락범위 제한 없음"
+PUBLICATION_EVIDENCE_URLS = {
+    "official_openapi_catalog.json": OFFICIAL_OPENAPI_CATALOG_URL,
+    "official_file_catalog.json": OFFICIAL_FILE_CATALOG_URL,
+    "official_openapi_page.html": OFFICIAL_DATA_PAGE,
+    "official_file_page.html": OFFICIAL_FILE_PAGE,
+    "official_portal_view.xml": PORTMIS_UI_DEFINITION_URL,
+}
 CONTAINER_SHIP_CODE = "41"
 FINAL_DECLARATION = "최종"
 TIMESTAMP_FORMAT = "%Y%m%d%H%M"
@@ -260,9 +290,17 @@ def _resolve_service_facility(
 
 def _new_opener() -> urllib.request.OpenerDirector:
     cookie_jar = http.cookiejar.CookieJar()
-    return urllib.request.build_opener(
+    opener = urllib.request.build_opener(
         urllib.request.HTTPCookieProcessor(cookie_jar)
     )
+    opener.addheaders = [
+        (
+            "User-Agent",
+            "Mozilla/5.0 (compatible; PORTMIS-research-snapshot/1.0)",
+        ),
+        ("Accept-Language", "ko-KR,ko;q=0.9,en;q=0.8"),
+    ]
+    return opener
 
 
 def _request(
@@ -282,7 +320,7 @@ def _request(
         raise RuntimeError(f"PORT-MIS request failed: {exc.reason}") from exc
 
 
-def fetch_query(
+def _query_parameters(
     *,
     direction: str,
     port_code: str,
@@ -290,17 +328,10 @@ def fetch_query(
     start: date,
     end: date,
     row_limit: int,
-    timeout: float,
-) -> QueryResult:
+) -> dict[str, str]:
     if direction not in {"inbound", "outbound"}:
         raise ValueError("direction must be inbound or outbound")
-    opener = _new_opener()
-    _request(
-        opener,
-        urllib.request.Request(PORTMIS_MAIN_URL),
-        timeout,
-    )
-    parameters = {
+    return {
         "prtAgCd": port_code,
         "prtAgNm": port_name,
         "clsgn": "",
@@ -313,9 +344,160 @@ def fetch_query(
         "srchEndEtryndDt": end.strftime("%Y%m%d"),
         "loginAt": "N",
     }
-    body = json.dumps(
-        {"dmaParam": parameters}, ensure_ascii=False, separators=(",", ":")
+
+
+def _query_body(parameters: dict[str, str]) -> bytes:
+    return json.dumps(
+        {"dmaParam": parameters},
+        ensure_ascii=False,
+        separators=(",", ":"),
     ).encode("utf-8")
+
+
+def _json_object(raw: bytes, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{label} is not valid UTF-8 JSON") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{label} must contain a JSON object")
+    return value
+
+
+def _catalog_has_unrestricted_license(catalog: dict[str, Any]) -> bool:
+    license_text = str(catalog.get("license", "")).strip()
+    return (
+        license_text == NO_RESTRICTION_LICENSE_KO
+        or "제한 없음" in license_text
+        or license_text.lower() in {"no restrictions", "unrestricted"}
+    )
+
+
+def _extract_content_url(page: bytes) -> str:
+    text = page.decode("utf-8", errors="strict")
+    match = re.search(r'"contentUrl"\s*:\s*"([^"]+)"', text)
+    if not match:
+        raise RuntimeError(
+            "official fileData page does not declare a contentUrl"
+        )
+    return html.unescape(match.group(1))
+
+
+def fetch_publication_evidence(
+    output_dir: Path,
+    *,
+    timeout: float,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Archive evidence that binds the snapshot to the official provider UI."""
+    opener = _new_opener()
+    payloads: dict[str, bytes] = {}
+    for name, url in PUBLICATION_EVIDENCE_URLS.items():
+        payloads[name] = _request(
+            opener,
+            urllib.request.Request(url),
+            timeout,
+        )
+
+    openapi_catalog = _json_object(
+        payloads["official_openapi_catalog.json"],
+        "official OpenAPI catalogue",
+    )
+    file_catalog = _json_object(
+        payloads["official_file_catalog.json"],
+        "official fileData catalogue",
+    )
+    if openapi_catalog.get("url") != OFFICIAL_DATA_PAGE:
+        raise RuntimeError("OpenAPI catalogue URL does not match the source")
+    if file_catalog.get("url") != OFFICIAL_FILE_PAGE:
+        raise RuntimeError("fileData catalogue URL does not match the source")
+    for label, catalog in (
+        ("OpenAPI", openapi_catalog),
+        ("fileData", file_catalog),
+    ):
+        if not _catalog_has_unrestricted_license(catalog):
+            raise RuntimeError(
+                f"{label} catalogue does not declare unrestricted use"
+            )
+        creator = catalog.get("creator") or {}
+        if creator.get("name") != "해양수산부":
+            raise RuntimeError(
+                f"{label} catalogue provider is not the Ministry of Oceans "
+                "and Fisheries"
+            )
+
+    content_url = _extract_content_url(
+        payloads["official_file_page.html"]
+    )
+    if urllib.parse.unquote(content_url) != urllib.parse.unquote(
+        PORTMIS_MAIN_URL
+    ):
+        raise RuntimeError(
+            "official fileData contentUrl does not match the PORT-MIS view"
+        )
+    openapi_page = payloads["official_openapi_page.html"].decode(
+        "utf-8", errors="strict"
+    )
+    if (
+        "apis.data.go.kr/1192000/VsslEtrynd5" not in openapi_page
+        or '"name":"serviceKey"' not in openapi_page
+        or '"required":true' not in openapi_page
+    ):
+        raise RuntimeError(
+            "official OpenAPI page no longer exposes the expected "
+            "service-key contract"
+        )
+    portal_ui = payloads["official_portal_view.xml"].decode(
+        "utf-8", errors="strict"
+    )
+    if PORTMIS_QUERY_PATH not in portal_ui:
+        raise RuntimeError(
+            "official PORT-MIS UI no longer binds the expected query path"
+        )
+
+    declarations: dict[str, dict[str, Any]] = {}
+    for name, raw in payloads.items():
+        path = output_dir / name
+        path.write_bytes(raw)
+        declarations[name] = {
+            "sha256": _sha256(raw),
+            "bytes": len(raw),
+            "url": PUBLICATION_EVIDENCE_URLS[name],
+        }
+    facts = {
+        "provider": file_catalog["creator"]["name"],
+        "license": file_catalog["license"],
+        "official_content_url": content_url,
+        "documented_openapi_requires_service_key": True,
+        "portal_transport_endpoint_bound_by_ui_definition": True,
+    }
+    return declarations, facts
+
+
+def fetch_query(
+    *,
+    direction: str,
+    port_code: str,
+    port_name: str,
+    start: date,
+    end: date,
+    row_limit: int,
+    timeout: float,
+) -> QueryResult:
+    opener = _new_opener()
+    _request(
+        opener,
+        urllib.request.Request(PORTMIS_MAIN_URL),
+        timeout,
+    )
+    parameters = _query_parameters(
+        direction=direction,
+        port_code=port_code,
+        port_name=port_name,
+        start=start,
+        end=end,
+        row_limit=row_limit,
+    )
+    body = _query_body(parameters)
     request = urllib.request.Request(
         PORTMIS_QUERY_URL,
         data=body,
@@ -693,8 +875,10 @@ def build_audit(
         ),
         "gates": gates,
         "limitations": [
-            "The PORT-MIS table endpoint is guest-accessible but undocumented; "
-            "it is used only for this acquisition pilot.",
+            "The JSON transport endpoint is not the documented service-key "
+            "OpenAPI. Publication use requires an archived official fileData "
+            "record and PORT-MIS UI definition that bind the provider view to "
+            "this endpoint.",
             "The primary SINSUNDAE mapping is verified against the Busan Port "
             "Authority; non-primary clusters remain label-derived proxies.",
             "Loaded cargo tonnage is not container moves or terminal throughput.",
@@ -726,12 +910,14 @@ def render_report(
     rolling = audit["rolling_window_support"]
     verified_terminal = audit["scope"]["verified_terminal"]
     lines = [
-        "# PORT-MIS 30-day pilot audit",
+        "# PORT-MIS source snapshot audit",
         "",
         f"Status: **{audit['pilot_status']}**",
         "",
-        "This is a bounded acquisition and data-quality pilot. It does not alter "
-        "the rolling optimization model or its frozen algorithm.",
+        "This is a bounded acquisition and data-quality audit. It does not "
+        "alter the rolling optimization model or its frozen algorithm.",
+        f"Publication source contract: "
+        f"**{'READY' if manifest.get('publication_ready') else 'PROVISIONAL'}**",
         "",
         "## Scope",
         "",
@@ -750,7 +936,9 @@ def render_report(
             if verified_terminal
             else ["- Verified terminal: not yet mapped"]
         ),
-        f"- Retrieval UTC: {manifest['retrieved_at_utc']}",
+        f"- Raw retrieval UTC: {manifest['raw_retrieved_at_utc']}",
+        f"- Provenance completion UTC: "
+        f"{manifest['provenance_completed_at_utc']}",
         "",
         "## Acquisition and sample size",
         "",
@@ -856,6 +1044,14 @@ def main() -> int:
         action="store_true",
         help="Reuse raw_inbound.json and raw_outbound.json in output-dir",
     )
+    parser.add_argument(
+        "--publication-ready",
+        action="store_true",
+        help=(
+            "Archive and validate official catalogue/UI evidence and emit the "
+            "strict publication source contract"
+        ),
+    )
     args = parser.parse_args()
     if args.start > args.end:
         parser.error("--start must be on or before --end")
@@ -866,6 +1062,12 @@ def main() -> int:
 
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    prior_manifest_path = output_dir / "manifest.json"
+    prior_manifest = (
+        json.loads(prior_manifest_path.read_text(encoding="utf-8-sig"))
+        if args.reuse_raw and prior_manifest_path.exists()
+        else {}
+    )
     inbound_path = output_dir / "raw_inbound.json"
     outbound_path = output_dir / "raw_outbound.json"
     if args.reuse_raw:
@@ -930,34 +1132,154 @@ def main() -> int:
         json.dumps(audit, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    manifest = {
-        "schema": "portmis-pilot-snapshot-v1",
-        "retrieved_at_utc": datetime.now(timezone.utc)
+    now_utc = (
+        datetime.now(timezone.utc)
         .replace(microsecond=0)
         .isoformat()
-        .replace("+00:00", "Z"),
+        .replace("+00:00", "Z")
+    )
+    raw_retrieved_at_utc = (
+        prior_manifest.get("raw_retrieved_at_utc")
+        or prior_manifest.get("retrieved_at_utc")
+        or now_utc
+    )
+    evidence_files: dict[str, dict[str, Any]] = {}
+    evidence_facts: dict[str, Any] = {}
+    if args.publication_ready:
+        evidence_files, evidence_facts = fetch_publication_evidence(
+            output_dir,
+            timeout=args.timeout,
+        )
+
+    request_declarations = {}
+    raw_declarations = {}
+    for result, path in (
+        (inbound, inbound_path),
+        (outbound, outbound_path),
+    ):
+        parameters = _query_parameters(
+            direction=result.direction,
+            port_code=args.port_code,
+            port_name=args.port_name,
+            start=args.start,
+            end=args.end,
+            row_limit=args.row_limit,
+        )
+        request_body = _query_body(parameters)
+        request_declarations[result.direction] = {
+            "parameters": parameters,
+            "body_sha256": _sha256(request_body),
+        }
+        raw_declarations[path.name] = {
+            "sha256": _sha256(result.raw_bytes),
+            "bytes": len(result.raw_bytes),
+            "rows": len(result.rows),
+            "direction": result.direction,
+            "request_body_sha256": _sha256(request_body),
+        }
+    snapshot_identity = _sha256(
+        json.dumps(
+            {
+                "requests": request_declarations,
+                "raw_files": raw_declarations,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    standardized_files = {}
+    for name in (
+        "container_calls.csv",
+        "primary_cluster_calls.csv",
+        "rolling_window_counts.csv",
+        "audit.json",
+    ):
+        path = output_dir / name
+        standardized_files[name] = {
+            "sha256": _sha256(path.read_bytes()),
+            "bytes": path.stat().st_size,
+        }
+    manifest = {
+        "schema": (
+            PORTMIS_SOURCE_SCHEMA
+            if args.publication_ready
+            else "portmis-pilot-snapshot-v1"
+        ),
+        "publication_ready": bool(args.publication_ready),
+        "acquisition_mode": (
+            PORTMIS_ACQUISITION_MODE
+            if args.publication_ready
+            else "development_portal_query"
+        ),
+        "raw_retrieved_at_utc": raw_retrieved_at_utc,
+        "provenance_completed_at_utc": now_utc,
+        "source_snapshot_sha256": snapshot_identity,
         "official_data_page": OFFICIAL_DATA_PAGE,
         "official_file_page": OFFICIAL_FILE_PAGE,
+        "extraction_method": (
+            "fixed automated export from the institution-provided PORT-MIS "
+            "query page"
+            if args.publication_ready
+            else "guest PORT-MIS query pilot"
+        ),
         "terminal_mapping_sources": {
             "SINSUNDAE": BPA_SINSUNDAE_PAGE,
         },
+        "portal_contract": {
+            "official_content_url": PORTMIS_MAIN_URL,
+            "ui_definition_url": PORTMIS_UI_DEFINITION_URL,
+            "transport_url": PORTMIS_QUERY_URL,
+            "method": "POST",
+            "content_type": "application/json; charset=UTF-8",
+            "documented_openapi_used": False,
+            "transport_endpoint_status": (
+                "bound_to_archived_official_provider_ui"
+                if args.publication_ready
+                else "pilot_unverified"
+            ),
+        },
         "pilot_query_url": PORTMIS_QUERY_URL,
-        "pilot_only_undocumented_endpoint": True,
+        "pilot_only_undocumented_endpoint": not args.publication_ready,
         "query": {
             "port_code": args.port_code,
             "port_name": args.port_name,
             "start_date": args.start.isoformat(),
             "end_date": args.end.isoformat(),
             "row_limit": args.row_limit,
+            "directions": request_declarations,
         },
-        "raw_files": {
-            inbound_path.name: {
-                "sha256": _sha256(inbound.raw_bytes),
-                "rows": len(inbound.rows),
-            },
-            outbound_path.name: {
-                "sha256": _sha256(outbound.raw_bytes),
-                "rows": len(outbound.rows),
+        "raw_files": raw_declarations,
+        "standardized_files": standardized_files,
+        "official_metadata_files": evidence_files,
+        "official_evidence": evidence_facts,
+        "source_revision_policy": {
+            "archived_bytes_are_immutable": True,
+            "provider_corrections_require_new_snapshot": True,
+            "live_refetch_hash_is_not_a_reproducibility_requirement": True,
+        },
+        "data_coverage": {
+            "observed_from_portmis": [
+                "vessel_call_identity",
+                "entry_and_departure_times",
+                "berth_or_facility",
+                "gross_tonnage",
+                "previous_and_next_vessel_ports",
+            ],
+            "not_observed_from_portmis": [
+                "per_call_export_box_volume",
+                "per_container_discharge_port",
+                "container_size_and_height",
+                "historical_booking_forecasts",
+                "yard_inventory_and_bay_layout",
+                "legacy_yard_allocation",
+            ],
+            "treatment": {
+                "schedule_and_vessel_skeleton": "observed",
+                "box_demand": "capacity-anchored semi-synthetic calibration",
+                "box_attributes": "semi-synthetic integer disaggregation",
+                "forecast_trajectories": "controlled semi-synthetic errors",
+                "yard_state_and_layout": "controlled semi-synthetic generator",
             },
         },
         "derived_files": [

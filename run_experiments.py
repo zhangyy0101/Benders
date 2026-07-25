@@ -505,7 +505,14 @@ def result_row(
         "source_snapshot_sha256": instance_metadata.get(
             "source_snapshot_sha256"
         ),
+        "source_raw_snapshot_sha256": instance_metadata.get(
+            "source_raw_snapshot_sha256"
+        ),
+        "source_acquisition_mode": instance_metadata.get(
+            "source_acquisition_mode"
+        ),
         "source_window_id": instance_metadata.get("source_window_id"),
+        "public_panel_role": instance_metadata.get("public_panel_role"),
         "source_publication_ready": instance_metadata.get(
             "source_publication_ready"
         ),

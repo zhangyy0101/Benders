@@ -4,7 +4,7 @@
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
 ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3"
-RESULT_SCHEMA_VERSION = "rolling-results-v6"
+RESULT_SCHEMA_VERSION = "rolling-results-v7"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
@@ -37,6 +37,9 @@ FORMAL_TIME_BUDGETS_SECONDS = {
     "public_small": 20.0,
     "public_medium": 60.0,
     "public_large": 120.0,
+    "public_temporal_spring": 60.0,
+    "public_temporal_summer": 60.0,
+    "public_temporal_autumn": 60.0,
     "pressure": 20.0,
 }
 FORMAL_PUBLIC_WINDOWS = {
@@ -60,6 +63,79 @@ FORMAL_PUBLIC_WINDOWS = {
         "num_blocks": 20,
         "bays_per_block": 10,
         "bay_capacity": 50,
+    },
+}
+# These equal-layout, equal-duration windows are a separate temporal
+# robustness panel.  They must be generated from the matching independently
+# archived monthly source/calibration directory and must not be pooled with the
+# three July scale profiles.
+FORMAL_PUBLIC_TEMPORAL_WINDOWS = {
+    "public_temporal_spring": {
+        "start_date": "2025-03-12",
+        "end_date": "2025-03-18",
+        "num_blocks": 16,
+        "bays_per_block": 8,
+        "bay_capacity": 50,
+    },
+    "public_temporal_summer": {
+        "start_date": "2025-07-12",
+        "end_date": "2025-07-18",
+        "num_blocks": 16,
+        "bays_per_block": 8,
+        "bay_capacity": 50,
+    },
+    "public_temporal_autumn": {
+        "start_date": "2025-11-12",
+        "end_date": "2025-11-18",
+        "num_blocks": 16,
+        "bays_per_block": 8,
+        "bay_capacity": 50,
+    },
+}
+FORMAL_PUBLIC_CALIBRATION_BASE = {
+    "design_capacity_teu_per_year": 2_236_000,
+    "capacity_utilization": 0.85,
+    "import_export_split_to_export": 0.50,
+    "forty_foot_box_share": 0.65,
+    "high_cube_share_of_forty": 0.55,
+    "min_boxes_per_call": 80,
+    "max_boxes_per_call": 450,
+    "boxes_per_pod": 100,
+    "max_pods_per_call": 12,
+}
+FORMAL_PUBLIC_CALIBRATION_SCENARIOS = {
+    "central": dict(FORMAL_PUBLIC_CALIBRATION_BASE),
+    "utilization_low": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "capacity_utilization": 0.70,
+    },
+    "utilization_high": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "capacity_utilization": 1.00,
+    },
+    "export_split_low": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "import_export_split_to_export": 0.45,
+    },
+    "export_split_high": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "import_export_split_to_export": 0.55,
+    },
+    "forty_share_low": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "forty_foot_box_share": 0.55,
+    },
+    "forty_share_high": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "forty_foot_box_share": 0.75,
+    },
+    "high_cube_low": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "high_cube_share_of_forty": 0.40,
+    },
+    "high_cube_high": {
+        **FORMAL_PUBLIC_CALIBRATION_BASE,
+        "high_cube_share_of_forty": 0.70,
     },
 }
 ROLLING_CYCLE_HOURS=24

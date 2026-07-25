@@ -267,7 +267,7 @@ between methods:
 1. `scripts/prepare_formal_instances.py` serializes each exact case to a
    hash-verified instance bundle and immutable index;
 2. `scripts/run_formal_matrix.py` verifies the index, loads the same bundles
-   for every paired method, and writes `rolling-results-v6` rows.
+   for every paired method, and writes `rolling-results-v7` rows.
 
 The formal runner fixes ten held-out seeds (`1000`--`1009`), rejects dirty Git
 state and time overrides, and uses per-cycle budgets stored in each bundle:
@@ -288,12 +288,29 @@ python scripts/run_formal_matrix.py \
   --output local_results/formal_smoke/results.csv
 ```
 
-The fixed July PORT-MIS snapshot is currently marked provisional because its
-guest-accessible extraction endpoint is undocumented. Its hashes can be used
-for development, but a formal public-data bundle additionally requires an
-archived source manifest with `publication_ready: true` and
-`pilot_only_undocumented_endpoint: false`. Full experiment composition and
-commands are specified in `docs/formal_experiment_protocol.md`.
+The fixed July PORT-MIS snapshot now uses
+`portmis-fixed-source-snapshot-v2`. The documented data.go.kr OpenAPI requires
+a service key, so the archived source instead uses the Ministry's official
+`fileData` record, whose provider URL is the PORT-MIS vessel-call query page.
+The publication contract archives both data.go.kr catalogue records, the
+official pages, the PORT-MIS UI definition, exact POST-request identities, raw
+responses, standardized tables, licence evidence, and all SHA-256 values. The
+formal gate independently checks this chain and the calibration/source link;
+changing only `publication_ready` cannot bypass it.
+
+March, July, and November 2025 source snapshots provide a separate temporal
+robustness panel. The July small/medium/large profiles remain the primary scale
+panel; equal-duration, equal-layout temporal profiles are never pooled with
+them. PORT-MIS supplies the vessel-call and schedule skeleton only. Box
+quantities and attributes, forecast histories, yard state, and bay layout are
+explicitly recorded as semi-synthetic rather than treated as observed data.
+The committed checksum ledger is
+`docs/portmis_publication_source_registry.json`; matching raw source archives
+remain publication-package artifacts rather than Git-tracked generated data.
+`scripts/package_portmis_source.py` verifies a complete source/calibration
+chain and creates the deterministic ZIP named in that ledger.
+Full experiment composition and commands are specified in
+`docs/formal_experiment_protocol.md`.
 
 After a matrix completes, `analysis/summarize_experiments.py` produces the
 paired win/tie/loss and confidence-interval report while auditing formal seeds,
