@@ -386,6 +386,22 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
                 "high_cube_high",
             },
         )
+        self.assertEqual(
+            config.FORMAL_SYNTHETIC_PRESSURE_TARGETS,
+            {"ordinary": 0.70, "high_pressure": 0.85},
+        )
+        self.assertEqual(
+            config.FORMAL_SYNTHETIC_PRESSURE_TARGET_TOLERANCE,
+            0.03,
+        )
+        self.assertEqual(
+            config.FORMAL_SYNTHETIC_UTILIZATION_LEVELS,
+            (0.25, 0.55, 0.65),
+        )
+        self.assertEqual(
+            config.FORMAL_SYNTHETIC_UTILIZATION_SIZE,
+            "medium",
+        )
 
     def test_dra_profiles_are_scalar_and_identity_separating(self):
         self.assertEqual(DRA_PARAMETER_PROFILES["frozen"]["mu"], 0.5)

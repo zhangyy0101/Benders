@@ -9,12 +9,30 @@ FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
 PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v2"
+SYNTHETIC_PRESSURE_PROTOCOL = (
+    "aggregate-size-period-target-integer-certified-v1"
+)
 
 # Development and preflight seeds may guide algorithm changes.  Formal seeds
 # are a held-out set and must not be used for tuning before the final freeze.
 DEVELOPMENT_SEEDS = (100, 101, 102)
 PREFLIGHT_SEEDS = (700, 701, 702)
 FORMAL_SEEDS = tuple(range(1000, 1010))
+
+# Synthetic formal panels separate computational size, initial yard
+# utilization, and capacity pressure.  The pressure targets are peak
+# full-horizon load ratios over each container-size capacity pool; every
+# generated case is still certified by the independent integer bay-packing
+# oracle before it can enter a formal instance index.
+FORMAL_SYNTHETIC_PRESSURE_TARGETS = {
+    "ordinary": 0.70,
+    "high_pressure": 0.85,
+}
+FORMAL_SYNTHETIC_PRESSURE_TARGET_TOLERANCE = 0.03
+FORMAL_SYNTHETIC_SCALE_INITIAL_UTILIZATION = 0.55
+FORMAL_SYNTHETIC_UTILIZATION_LEVELS = (0.25, 0.55, 0.65)
+FORMAL_SYNTHETIC_UTILIZATION_SIZE = "medium"
+FORMAL_SYNTHETIC_UTILIZATION_SHIP_VOLUME_FACTOR = 1.0
 
 # Frozen publication matrix.  The online limit is applied independently to
 # every 24-hour rolling decision cycle.  Instance bundles carry one of these

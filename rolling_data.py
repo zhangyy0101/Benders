@@ -827,6 +827,253 @@ def build_oracle_certified_case_family(
     } | {"calibration": calibration}
 
 
+def aggregate_size_period_pressure_diagnostics(
+    case: dict,
+    *,
+    release_basis: str = "realized",
+) -> dict:
+    """Measure full-horizon load against aggregate capacity by box size.
+
+    This is an interpretable pressure diagnostic, not a packing-feasibility
+    test: it deliberately ignores bay-level height compatibility and integer
+    fragmentation.  Formal pressure cases therefore require a separate
+    integer packing-oracle certificate after target calibration.
+    """
+    if release_basis not in {"realized", "planned"}:
+        raise ValueError("release_basis must be 'realized' or 'planned'")
+    release_key = (
+        "realized_ship_release_period"
+        if release_basis == "realized"
+        else "planned_ship_release_period"
+    )
+    releases = case[release_key]
+    attrs = case["group_attrs"]
+    demand = {
+        (ship, group, int(period)): int(quantity)
+        for (ship, group, period), quantity in case["true_flow"].items()
+        if int(quantity) > 0
+    }
+    sizes = sorted(
+        set(case["bay_size"].values())
+        | {attrs[group]["size"] for _ship, group, _period in demand}
+    )
+    capacity_by_size = {
+        size: sum(
+            int(case["capacity"][bay])
+            for bay in case["bays"]
+            if case["bay_size"][bay] == size
+        )
+        for size in sizes
+    }
+    if any(capacity <= 0 for capacity in capacity_by_size.values()):
+        raise ValueError("every demanded size must have positive yard capacity")
+
+    old_releases = case.get("old_release_period", {})
+    last_arrival = max(
+        (period for _ship, _group, period in demand),
+        default=0,
+    )
+    peak_ratio = 0.0
+    peak_record: dict[str, int | float | str] | None = None
+    for period in range(last_arrival + 1):
+        for size in sizes:
+            locked_boxes = sum(
+                int(quantity)
+                for (bay, old_ship), quantity in case.get(
+                    "locked_initial", {}
+                ).items()
+                if case["bay_size"][bay] == size
+                and int(old_releases.get(old_ship, INF)) > period
+            )
+            active_new_boxes = sum(
+                quantity
+                for (ship, group, arrival), quantity in demand.items()
+                if attrs[group]["size"] == size
+                and arrival <= period < int(releases[ship])
+            )
+            capacity = capacity_by_size[size]
+            ratio = (locked_boxes + active_new_boxes) / capacity
+            if ratio > peak_ratio:
+                peak_ratio = ratio
+                peak_record = {
+                    "period": period,
+                    "size": size,
+                    "locked_boxes": locked_boxes,
+                    "active_new_boxes": active_new_boxes,
+                    "capacity_boxes": capacity,
+                    "load_ratio": ratio,
+                }
+    return {
+        "metric": "peak_size_period_aggregate_capacity_load_ratio",
+        "release_basis": release_basis,
+        "peak_load_ratio": peak_ratio,
+        "peak": peak_record,
+        "capacity_by_size": capacity_by_size,
+        "total_true_demand": sum(demand.values()),
+    }
+
+
+def build_integer_certified_pressure_case_family(
+    *,
+    pressure_targets: dict[str, float],
+    factor_bounds: tuple[float, float] = (.01, 4.0),
+    target_absolute_tolerance: float = .03,
+    search_iterations: int = 14,
+    oracle_time_limit: float = 60.0,
+    oracle_threads: int = 1,
+    oracle_seed: int | None = None,
+    **synthetic_case_kwargs,
+) -> dict:
+    """Build pressure-targeted cases and certify exact integer packability.
+
+    A cheap aggregate load ratio calibrates demand intensity.  It never
+    substitutes for feasibility: each selected case must subsequently receive
+    a zero-shortage certificate from the independent full-horizon integer
+    bay-packing oracle.
+    """
+    if "ship_volume_factor" in synthetic_case_kwargs:
+        raise ValueError(
+            "ship_volume_factor is calibrated internally and must not be supplied"
+        )
+    if not pressure_targets:
+        raise ValueError("pressure_targets must not be empty")
+    if any(not 0 < float(target) < 1 for target in pressure_targets.values()):
+        raise ValueError("pressure targets must be strictly between zero and one")
+    if target_absolute_tolerance <= 0:
+        raise ValueError("target_absolute_tolerance must be positive")
+    if search_iterations <= 0:
+        raise ValueError("search_iterations must be positive")
+    lower_bound, upper_bound = map(float, factor_bounds)
+    if lower_bound <= 0 or upper_bound <= lower_bound:
+        raise ValueError("factor_bounds must be positive and increasing")
+    synthetic_case_kwargs.setdefault(
+        "tail_execution_cycles",
+        math.ceil(RECEIVING_PERIODS / EXECUTION_PERIODS),
+    )
+
+    from rolling_model import solve_full_horizon_packing_oracle
+
+    seed = int(
+        synthetic_case_kwargs.get("seed", 0)
+        if oracle_seed is None
+        else oracle_seed
+    )
+    cache: dict[float, tuple[dict, dict]] = {}
+
+    def evaluate(factor: float) -> tuple[dict, dict]:
+        normalized = round(float(factor), 8)
+        if normalized not in cache:
+            case = build_synthetic_rolling_case(
+                ship_volume_factor=normalized,
+                **synthetic_case_kwargs,
+            )
+            cache[normalized] = (
+                case,
+                aggregate_size_period_pressure_diagnostics(case),
+            )
+        return cache[normalized]
+
+    selected: dict[str, tuple[dict, dict, float]] = {}
+    for label, raw_target in sorted(
+        pressure_targets.items(),
+        key=lambda item: item[1],
+    ):
+        target = float(raw_target)
+        lower_factor = lower_bound
+        upper_factor = upper_bound
+        lower_case, lower_diagnostics = evaluate(lower_factor)
+        upper_case, upper_diagnostics = evaluate(upper_factor)
+        if (
+            lower_diagnostics["peak_load_ratio"]
+            > target + target_absolute_tolerance
+        ):
+            raise RuntimeError(
+                f"target {target:g} is below unavoidable initial pressure"
+            )
+        if (
+            upper_diagnostics["peak_load_ratio"]
+            < target - target_absolute_tolerance
+        ):
+            raise RuntimeError(
+                f"target {target:g} exceeds the supplied factor range"
+            )
+
+        candidates = [
+            (lower_case, lower_diagnostics, lower_factor),
+            (upper_case, upper_diagnostics, upper_factor),
+        ]
+        for _iteration in range(search_iterations):
+            midpoint = (lower_factor + upper_factor) / 2
+            midpoint_case, midpoint_diagnostics = evaluate(midpoint)
+            candidates.append(
+                (midpoint_case, midpoint_diagnostics, midpoint)
+            )
+            midpoint_ratio = midpoint_diagnostics["peak_load_ratio"]
+            if abs(midpoint_ratio - target) <= target_absolute_tolerance:
+                break
+            if midpoint_ratio < target:
+                lower_factor = midpoint
+            else:
+                upper_factor = midpoint
+
+        best_case, best_diagnostics, best_factor = min(
+            candidates,
+            key=lambda item: (
+                abs(item[1]["peak_load_ratio"] - target),
+                item[2],
+            ),
+        )
+        error = abs(best_diagnostics["peak_load_ratio"] - target)
+        if error > target_absolute_tolerance:
+            raise RuntimeError(
+                f"could not calibrate {label} pressure target {target:g}; "
+                f"best absolute error={error:g}"
+            )
+        selected[label] = (
+            best_case,
+            best_diagnostics,
+            best_factor,
+        )
+
+    labeled: dict[str, dict] = {}
+    for label, (case, diagnostics, factor) in selected.items():
+        certificate = solve_full_horizon_packing_oracle(
+            case,
+            release_basis="realized",
+            time_limit=oracle_time_limit,
+            threads=oracle_threads,
+            seed=seed,
+        )
+        if certificate["classification"] != "feasible":
+            raise RuntimeError(
+                f"{label} pressure case lacks a zero-shortage integer "
+                f"packing certificate: {certificate['classification']}"
+            )
+        target = float(pressure_targets[label])
+        case["capacity_pressure_profile"] = label
+        case["capacity_pressure_target"] = target
+        case["capacity_pressure_diagnostics"] = diagnostics
+        case["oracle_case_class"] = "feasible"
+        case["oracle_certificate"] = dict(certificate)
+        case["oracle_calibration"] = {
+            "method": (
+                "aggregate_size_period_pressure_target_then_integer_packing"
+            ),
+            "target_peak_load_ratio": target,
+            "actual_peak_load_ratio": diagnostics["peak_load_ratio"],
+            "target_absolute_error": abs(
+                diagnostics["peak_load_ratio"] - target
+            ),
+            "target_absolute_tolerance": target_absolute_tolerance,
+            "ship_volume_factor": factor,
+            "factor_bounds": factor_bounds,
+            "search_iterations": search_iterations,
+            "integer_oracle_time_limit": oracle_time_limit,
+        }
+        labeled[label] = case
+    return labeled
+
+
 def build_repair_pressure_case(*, level: str = "nearby", seed: int = 0) -> dict:
     """Create a small deterministic case that exercises progressive repair."""
     if level not in ("nearby", "global"):

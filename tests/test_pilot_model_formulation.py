@@ -12,6 +12,8 @@ from rolling_model import (
     validate_snapshot_temporal_consistency,
 )
 from rolling_data import (
+    aggregate_size_period_pressure_diagnostics,
+    build_integer_certified_pressure_case_family,
     build_oracle_certified_case_family,
     build_repair_pressure_case,
     build_synthetic_rolling_case,
@@ -316,6 +318,63 @@ class PilotModelFormulationTest(unittest.TestCase):
             family["tight"]["execution_cycles"]
             * family["tight"]["execution_periods"],
         )
+
+    def test_aggregate_pressure_diagnostic_is_not_a_feasibility_claim(self):
+        case = packing_oracle_case(
+            flow={
+                ("V01", "P1_20_STD", 0): 30,
+                ("V02", "P2_20_HIGH", 0): 30,
+            },
+            releases={"V01": 3, "V02": 3},
+        )
+        diagnostics = aggregate_size_period_pressure_diagnostics(case)
+
+        self.assertEqual(diagnostics["peak_load_ratio"], 1.2)
+        self.assertEqual(
+            diagnostics["metric"],
+            "peak_size_period_aggregate_capacity_load_ratio",
+        )
+        result = solve_full_horizon_packing_oracle(
+            case,
+            time_limit=5,
+            stop_after_classification=False,
+        )
+        self.assertEqual(result["classification"], "overloaded")
+
+    def test_pressure_target_family_requires_integer_feasible_cases(self):
+        family = build_integer_certified_pressure_case_family(
+            pressure_targets={"ordinary": .35, "high_pressure": .55},
+            seed=13,
+            num_blocks=2,
+            bays_per_block=4,
+            num_ships=2,
+            cycles=2,
+            bay_capacity=50,
+            initial_utilization=.20,
+            forecast_error=0,
+            containers_per_ship_range=(20, 30),
+            active_ship_overlap=2,
+            pod_count=1,
+            factor_bounds=(.01, 5),
+            target_absolute_tolerance=.03,
+            search_iterations=10,
+            oracle_time_limit=5,
+        )
+
+        self.assertEqual(set(family), {"ordinary", "high_pressure"})
+        for label, target in {"ordinary": .35, "high_pressure": .55}.items():
+            case = family[label]
+            self.assertEqual(case["oracle_case_class"], "feasible")
+            self.assertTrue(
+                case["oracle_certificate"]["zero_shortage_certificate"]
+            )
+            self.assertLessEqual(
+                abs(
+                    case["capacity_pressure_diagnostics"]["peak_load_ratio"]
+                    - target
+                ),
+                .03,
+            )
 
     def test_full_horizon_packing_oracle_certifies_integer_feasibility(self):
         result = solve_full_horizon_packing_oracle(

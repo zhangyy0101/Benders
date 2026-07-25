@@ -528,11 +528,22 @@ The final study keeps different evidential roles in separate tables:
 4. **Public calibration robustness.** PORT-MIS windows with one-factor-at-a-
    time calibration variants; at minimum the candidate and `core_start`, with
    external baselines included on the central setting.
-5. **Synthetic computational scale.** Oracle-certified small, medium, large,
-   and xlarge bundles; the frozen seven methods.
-6. **Synthetic utilization/pressure.** Certified feasible, tight, and
-   separately labelled overloaded sister cases. Overloaded cases are stress
-   evidence and are not pooled into zero-shortage claims.
+5. **Synthetic computational scale and capacity pressure.** Small, medium,
+   large, and xlarge bundles at fixed initial utilization 0.55. Each size has
+   an `ordinary` target (0.70) and a `high_pressure` target (0.85), measured as
+   the peak full-horizon load ratio within a container-size capacity pool.
+   The frozen absolute calibration tolerance is 0.03 to accommodate integer
+   box volumes and discrete attribute groups.
+   Every selected bundle additionally requires a zero-shortage certificate
+   from the independent integer bay-packing oracle.
+6. **Synthetic initial-utilization isolation.** Medium instances at initial
+   utilization 0.25, 0.55, and 0.65 use the same unscaled ship-volume rule.
+   The resulting pressure is measured rather than normalized away, and each
+   bundle again requires an integer zero-shortage certificate. This panel is
+   separate from item 5 so scale, utilization, and demand pressure are not
+   conflated. Exact boundary/overloaded sister cases may be reported as
+   separately labelled stress evidence and must never be pooled into
+   zero-shortage comparisons.
 7. **Internal component ablation.** `core`, `core_start`,
    `core_start_impact`, and `full_bottleneck`; add
    `full_bottleneck_no_aggregate` only for the aggregate routing ablation.
@@ -558,19 +569,52 @@ values.
 
 ## Reproducible commands
 
-After committing and tagging the infrastructure, prepare synthetic bundles
-without running a method:
+After committing and tagging the infrastructure, prepare the scale-by-pressure
+panel without running a candidate or baseline method:
 
 ```bash
 python scripts/prepare_formal_instances.py \
   --experiment-phase formal \
-  --output-dir local_results/formal/instances/synthetic \
+  --output-dir local_results/formal/instances/synthetic_scale_pressure \
   synthetic --sizes small medium large xlarge \
   --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
   --forecast-error 0.1 --forecast-error-mode mixed \
   --initial-utilization 0.55 \
-  --oracle-case-classes feasible tight
+  --capacity-pressure-profiles ordinary high_pressure
 ```
+
+Prepare the utilization-isolation panel as three immutable indexes. All three
+use the same medium preset and ship-volume factor:
+
+```bash
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/synthetic_utilization_u025 \
+  synthetic --sizes medium \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --forecast-error 0.1 --forecast-error-mode mixed \
+  --initial-utilization 0.25 --ship-volume-factor 1 --certify-oracle
+
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/synthetic_utilization_u055 \
+  synthetic --sizes medium \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --forecast-error 0.1 --forecast-error-mode mixed \
+  --initial-utilization 0.55 --ship-volume-factor 1 --certify-oracle
+
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/synthetic_utilization_u065 \
+  synthetic --sizes medium \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --forecast-error 0.1 --forecast-error-mode mixed \
+  --initial-utilization 0.65 --ship-volume-factor 1 --certify-oracle
+```
+
+The aggregate pressure diagnostic is a calibration coordinate only. It
+ignores height fragmentation and cannot declare feasibility; the archived
+integer oracle certificate is the formal feasibility gate.
 
 Prepare primary public bundles from the verified July source/calibration
 chain:
@@ -620,7 +664,7 @@ Run the paired seven-method matrix from archived files:
 python scripts/run_formal_matrix.py \
   --experiment-phase formal --experiment-set main \
   --bundle-indexes \
-    local_results/formal/instances/synthetic/synthetic_instance_index.json \
+    local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json \
   --output local_results/formal/runs/synthetic_main.csv
 ```
 
@@ -630,7 +674,7 @@ The Aggregate-LP ablation and DRA-RPM sensitivity use the same bundles:
 python scripts/run_formal_matrix.py \
   --experiment-phase formal --experiment-set aggregate_ablation \
   --bundle-indexes \
-    local_results/formal/instances/synthetic/synthetic_instance_index.json \
+    local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json \
   --output local_results/formal/runs/aggregate_ablation.csv
 
 python scripts/run_formal_matrix.py \

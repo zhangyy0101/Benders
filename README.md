@@ -353,4 +353,8 @@ python analysis/summarize_experiments.py \
 Detailed definitions are in `docs/model_assumptions.md` and
 `docs/dependency_impact_design.md`. The candidate-freeze rules, metric schema,
 held-out seeds, preflight gate, and required baselines are specified in
-`docs/formal_experiment_protocol.md`.
+`docs/formal_experiment_protocol.md`. The synthetic formal design separates
+four computational sizes, three initial-utilization levels, and two calibrated
+capacity-pressure levels. Aggregate pressure targets are descriptive only;
+every formal comparison bundle must still pass the independent integer
+full-horizon packing oracle.

@@ -16,9 +16,16 @@ from config import (  # noqa: E402
     FORECAST_ERROR_MODES,
     FORMAL_PUBLIC_CALIBRATION_SCENARIOS,
     FORMAL_SEEDS,
+    FORMAL_SYNTHETIC_SCALE_INITIAL_UTILIZATION,
+    FORMAL_SYNTHETIC_PRESSURE_TARGET_TOLERANCE,
+    FORMAL_SYNTHETIC_PRESSURE_TARGETS,
+    FORMAL_SYNTHETIC_UTILIZATION_LEVELS,
+    FORMAL_SYNTHETIC_UTILIZATION_SHIP_VOLUME_FACTOR,
+    FORMAL_SYNTHETIC_UTILIZATION_SIZE,
     FORMAL_TIME_BUDGETS_SECONDS,
     FORMAL_PUBLIC_TEMPORAL_WINDOWS,
     FORMAL_PUBLIC_WINDOWS,
+    SYNTHETIC_PRESSURE_PROTOCOL,
 )
 from experiment_metadata import collect_git_metadata  # noqa: E402
 from formal_experiments import (  # noqa: E402
@@ -30,6 +37,8 @@ from formal_experiments import (  # noqa: E402
 )
 from main import PRESETS  # noqa: E402
 from rolling_data import (  # noqa: E402
+    aggregate_size_period_pressure_diagnostics,
+    build_integer_certified_pressure_case_family,
     build_oracle_certified_case_family,
     build_repair_pressure_case,
     build_synthetic_rolling_case,
@@ -84,7 +93,25 @@ def _synthetic_instances(args: argparse.Namespace) -> list[dict[str, object]]:
                 "nominal_outbound_rate_per_ship_period": args.outbound_rate,
                 "release_delay_periods": args.release_delay_periods,
             }
-            if args.oracle_case_classes:
+            if args.capacity_pressure_profiles:
+                family = build_integer_certified_pressure_case_family(
+                    pressure_targets={
+                        label: FORMAL_SYNTHETIC_PRESSURE_TARGETS[label]
+                        for label in args.capacity_pressure_profiles
+                    },
+                    factor_bounds=tuple(args.oracle_factor_bounds),
+                    target_absolute_tolerance=args.pressure_target_tolerance,
+                    search_iterations=args.pressure_search_iterations,
+                    oracle_time_limit=args.oracle_time,
+                    oracle_threads=args.oracle_threads,
+                    oracle_seed=seed,
+                    **case_kwargs,
+                )
+                cases = [
+                    (f"{size}_{label}", family[label])
+                    for label in args.capacity_pressure_profiles
+                ]
+            elif args.oracle_case_classes:
                 family = build_oracle_certified_case_family(
                     factor_bounds=tuple(args.oracle_factor_bounds),
                     search_iterations=args.oracle_search_iterations,
@@ -98,7 +125,35 @@ def _synthetic_instances(args: argparse.Namespace) -> list[dict[str, object]]:
                     for label in args.oracle_case_classes
                 ]
             else:
-                cases = [(size, build_synthetic_rolling_case(**case_kwargs))]
+                case = build_synthetic_rolling_case(
+                    ship_volume_factor=args.ship_volume_factor,
+                    **case_kwargs,
+                )
+                if args.certify_oracle:
+                    from rolling_model import solve_full_horizon_packing_oracle
+
+                    diagnostics = aggregate_size_period_pressure_diagnostics(
+                        case
+                    )
+                    certificate = solve_full_horizon_packing_oracle(
+                        case,
+                        release_basis="realized",
+                        time_limit=args.oracle_time,
+                        threads=args.oracle_threads,
+                        seed=seed,
+                    )
+                    if certificate["classification"] != "feasible":
+                        raise RuntimeError(
+                            "certified formal comparison cases require a "
+                            "zero-shortage integer packing certificate; "
+                            f"classification={certificate['classification']}"
+                        )
+                    case["capacity_pressure_profile"] = "observed"
+                    case["capacity_pressure_target"] = None
+                    case["capacity_pressure_diagnostics"] = diagnostics
+                    case["oracle_case_class"] = certificate["classification"]
+                    case["oracle_certificate"] = dict(certificate)
+                cases = [(size, case)]
             for profile, case in cases:
                 instance_id = (
                     f"synthetic_{profile}_e{args.forecast_error:g}_"
@@ -109,11 +164,17 @@ def _synthetic_instances(args: argparse.Namespace) -> list[dict[str, object]]:
                     "instance_id": instance_id,
                     "instance_family": "reproducible_synthetic",
                     "instance_protocol": INSTANCE_PROTOCOL,
+                    "synthetic_pressure_protocol": (
+                        SYNTHETIC_PRESSURE_PROTOCOL
+                    ),
                 })
                 metadata = {
                     "instance_id": instance_id,
                     "instance_family": case["instance_family"],
                     "instance_protocol": INSTANCE_PROTOCOL,
+                    "synthetic_pressure_protocol": (
+                        SYNTHETIC_PRESSURE_PROTOCOL
+                    ),
                     "profile": profile,
                     "seed": seed,
                     "time_budget_seconds": FORMAL_TIME_BUDGETS_SECONDS[size],
@@ -123,6 +184,15 @@ def _synthetic_instances(args: argparse.Namespace) -> list[dict[str, object]]:
                     "oracle_case_class": case.get(
                         "oracle_case_class", "not_evaluated"
                     ),
+                    "capacity_pressure_profile": case.get(
+                        "capacity_pressure_profile", "not_evaluated"
+                    ),
+                    "capacity_pressure_target": case.get(
+                        "capacity_pressure_target"
+                    ),
+                    "capacity_pressure_peak_load_ratio": case.get(
+                        "capacity_pressure_diagnostics", {}
+                    ).get("peak_load_ratio"),
                     "generator_git_commit": git.get("git_commit"),
                     "generator_git_branch": git.get("git_branch"),
                     "source_publication_ready": None,
@@ -267,6 +337,14 @@ def main() -> int:
     synthetic.add_argument("--initial-utilization", type=float, default=0.25)
     synthetic.add_argument("--outbound-rate", type=int, default=150)
     synthetic.add_argument("--release-delay-periods", type=int, default=0)
+    synthetic.add_argument("--ship-volume-factor", type=float, default=1.0)
+    synthetic.add_argument("--certify-oracle", action="store_true")
+    synthetic.add_argument(
+        "--capacity-pressure-profiles",
+        nargs="*",
+        choices=tuple(FORMAL_SYNTHETIC_PRESSURE_TARGETS),
+        default=[],
+    )
     synthetic.add_argument(
         "--oracle-case-classes",
         nargs="*",
@@ -277,6 +355,12 @@ def main() -> int:
         "--oracle-factor-bounds", nargs=2, type=float, default=(0.25, 4.0)
     )
     synthetic.add_argument("--oracle-search-iterations", type=int, default=8)
+    synthetic.add_argument("--pressure-search-iterations", type=int, default=14)
+    synthetic.add_argument(
+        "--pressure-target-tolerance",
+        type=float,
+        default=FORMAL_SYNTHETIC_PRESSURE_TARGET_TOLERANCE,
+    )
     synthetic.add_argument("--oracle-time", type=float, default=60.0)
     synthetic.add_argument("--oracle-threads", type=int, default=1)
 
@@ -323,6 +407,8 @@ def main() -> int:
     pressure.add_argument("--seeds", nargs="+", type=int, default=[100])
 
     args = parser.parse_args()
+    if args.family == "synthetic" and args.ship_volume_factor <= 0:
+        parser.error("--ship-volume-factor must be positive")
     if args.experiment_phase == "formal":
         unexpected = sorted(set(args.seeds) - set(FORMAL_SEEDS))
         if unexpected:
@@ -337,6 +423,63 @@ def main() -> int:
             parser.error("formal bundles cannot be overwritten")
         if args.family == "portmis" and args.allow_provisional_source:
             parser.error("formal public bundles cannot allow provisional source")
+        if args.family == "synthetic":
+            if args.oracle_case_classes and args.capacity_pressure_profiles:
+                parser.error(
+                    "choose either boundary oracle classes or capacity "
+                    "pressure profiles"
+                )
+            if args.certify_oracle and (
+                args.oracle_case_classes or args.capacity_pressure_profiles
+            ):
+                parser.error(
+                    "--certify-oracle is only for fixed-volume utilization "
+                    "cases"
+                )
+            if (
+                not args.oracle_case_classes
+                and not args.capacity_pressure_profiles
+                and not args.certify_oracle
+            ):
+                parser.error(
+                    "formal synthetic bundles require integer oracle "
+                    "certification"
+                )
+            if args.capacity_pressure_profiles:
+                if abs(
+                    args.initial_utilization
+                    - FORMAL_SYNTHETIC_SCALE_INITIAL_UTILIZATION
+                ) > 1e-12:
+                    parser.error(
+                        "formal scale-pressure cases require initial "
+                        f"utilization "
+                        f"{FORMAL_SYNTHETIC_SCALE_INITIAL_UTILIZATION:g}"
+                    )
+            elif args.certify_oracle:
+                if set(args.sizes) != {
+                    FORMAL_SYNTHETIC_UTILIZATION_SIZE
+                }:
+                    parser.error(
+                        "formal utilization-isolation cases require only "
+                        f"size {FORMAL_SYNTHETIC_UTILIZATION_SIZE}"
+                    )
+                if not any(
+                    abs(args.initial_utilization - level) <= 1e-12
+                    for level in FORMAL_SYNTHETIC_UTILIZATION_LEVELS
+                ):
+                    parser.error(
+                        "formal utilization-isolation level must be one of "
+                        f"{FORMAL_SYNTHETIC_UTILIZATION_LEVELS}"
+                    )
+                if abs(
+                    args.ship_volume_factor
+                    - FORMAL_SYNTHETIC_UTILIZATION_SHIP_VOLUME_FACTOR
+                ) > 1e-12:
+                    parser.error(
+                        "formal utilization-isolation cases require ship "
+                        f"volume factor "
+                        f"{FORMAL_SYNTHETIC_UTILIZATION_SHIP_VOLUME_FACTOR:g}"
+                    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     builders = {
