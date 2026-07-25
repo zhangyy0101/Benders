@@ -156,7 +156,7 @@ the unrestricted Global MIP.
 
 The technical preflight gate is passed. Before formal execution, commit and
 tag the freeze candidate, require a clean worktree, and do not inspect or tune
-on formal seeds 1000--1004.
+on formal seeds 1000--1009.
 
 ## Safeguarded adaptive high-pressure route (2026-07-24)
 

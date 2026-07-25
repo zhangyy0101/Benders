@@ -198,6 +198,12 @@ def collect_experiment_metadata(
             config.PREPROCESSING_IMPLEMENTATION
         ),
         "packing_oracle_protocol": config.PACKING_ORACLE_PROTOCOL,
+        "formal_seed_set": list(config.FORMAL_SEEDS),
+        "formal_primary_configurations": list(
+            config.FORMAL_PRIMARY_CONFIGURATIONS
+        ),
+        "formal_time_budgets_seconds": config.FORMAL_TIME_BUDGETS_SECONDS,
+        "formal_public_windows": config.FORMAL_PUBLIC_WINDOWS,
         "external_baselines": literature_baseline_metadata(),
         "experiment_phase": experiment_phase,
         "python_version": platform_module.python_version(),

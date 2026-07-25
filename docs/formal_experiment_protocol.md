@@ -20,7 +20,7 @@ model or the solution stages.
 
 - Problem protocol: `rolling-v4.3-oracle-certified`
 - Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
-- Result schema: `rolling-results-v5`
+- Result schema: `rolling-results-v6`
 - Packing oracle: `full-horizon-integer-packing-v1`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
@@ -59,8 +59,8 @@ The seed sets are disjoint and stored in `config.py`.
   guide implementation and tuning.
 - Preflight: seeds `700, 701, 702`.  These exercise the formal interface on a
   small representative matrix and may still guide one final algorithm change.
-- Formal: held-out seeds `1000, 1001, 1002, 1003, 1004`.  These must not guide
-  algorithm selection or parameter tuning.
+- Formal: held-out seeds `1000`--`1009`. These must not guide algorithm
+  selection or parameter tuning.
 
 `run_experiments.py --experiment-phase preflight` and `formal` reject seeds
 outside their phase set.  A formal batch also rejects a dirty or unidentifiable
@@ -130,6 +130,12 @@ validator. Candidate-only MIP starts and repair stages are not shared.
 The external-baseline methods remain unchanged by later candidate-controller
 development and still share the common information boundary and evaluator.
 
+`full_bottleneck_no_aggregate` is a dedicated controller ablation. It retains
+the exact integer model, MIP start, direct Impact Region, bottleneck selector,
+Progressive Repair, and global recovery of `full_bottleneck`, but disables the
+aggregate-LP ladder and uses the former state-based route. It is not a
+candidate method and is not included in the main seven-method table.
+
 Version 1.1 replaces repeated full-table scans in residual-capacity and
 height indexing with sparse bay/pair indexes. When dependency propagation is
 disabled, it also skips the physical-score pass that would be overwritten
@@ -143,7 +149,7 @@ scores, and external baselines unchanged. Its pressure diagnostic uses only
 forecast load, vessel presence, physical capacity, and visible remaining
 demand. Severe-pressure snapshots skip score construction and enter the
 unrestricted Global MIP immediately. The threshold was finalized on reserved
-preflight seeds; formal seeds 1000--1004 remain uninspected.
+preflight seeds; formal seeds 1000--1009 remain uninspected.
 
 Version 1.3 also leaves the bay-level mathematical model and objective
 priorities unchanged. It removes the two empirical routing thresholds from the
@@ -190,8 +196,9 @@ profiles with all preflight seeds:
 2. medium, 20% mixed error;
 3. large, 20% mixed error.
 
-Use identical time limits within each profile.  Recommended initial limits are
-20 seconds per cycle for small and medium and 60 seconds for large. Initial
+Use identical time limits within each profile. The frozen limits are 20
+seconds per cycle for small and medium, 60 seconds for large, and 120 seconds
+for xlarge. Initial
 utilization is a recorded scenario factor, not a surrogate feasibility label.
 Certified-overloaded members are reported separately as mechanism/stress cases
 and are not pooled into zero-shortage performance claims.
@@ -232,6 +239,46 @@ Generator code, source-to-field mapping, distributions, seeds, and generated
 instance files must be archived.  The existing Pilot cases remain development
 evidence and are not reused as the sole formal evidence.
 
+### Immutable instance-bundle workflow
+
+Formal generation and timed solution are separate commands. An instance is
+first serialized as `rolling-instance-bundle-v1`. The serializer preserves
+tuple-key dictionaries, tuples, and sets, and records both the case SHA-256 and
+the exact bundle-file SHA-256. The bundle stores the instance family, profile,
+seed, source window, source/calibration hashes, and frozen per-cycle time
+budget. Result schema `rolling-results-v6` repeats these identities in every
+row.
+
+`scripts/prepare_formal_instances.py` creates or verifies bundles.
+It also writes `rolling-instance-index-v1`, containing the expected bundle and
+case hashes. `scripts/run_formal_matrix.py` requires that index in formal mode,
+verifies every file against it, and atomically checkpoints a common CSV and
+manifest. A formal run rejects:
+
+- seeds outside `1000`--`1009`;
+- a dirty or unidentifiable Git state;
+- a command-line time override;
+- a provisional public-data source;
+- a main matrix other than the frozen seven methods;
+- a changed bundle, case hash, metadata record, or resume matrix.
+
+The frozen main methods are `core`, `core_start`, `core_start_impact`,
+`full_bottleneck`, `kp_dos`, `kp_sg`, and `dra_rpm`. All seven see the same
+bundle and the same per-cycle wall-clock budget.
+
+The fixed PORT-MIS entry-date windows are deliberately non-overlapping:
+
+| Profile | Inclusive dates | Yard | Limit/cycle |
+|---|---:|---:|---:|
+| `public_small` | 2025-07-04--2025-07-06 | 8 blocks × 6 bays | 20 s |
+| `public_medium` | 2025-07-12--2025-07-18 | 16 blocks × 8 bays | 60 s |
+| `public_large` | 2025-07-20--2025-07-30 | 20 blocks × 10 bays | 120 s |
+
+Each profile keeps all calls and calibrated groups whose entry date falls
+inside the inclusive window; calls are never truncated to reach a target size.
+The yard layout remains semi-synthetic and is fixed by profile rather than
+retuned after seeing method performance.
+
 ## PORT-MIS public-data pilot gate
 
 The bounded PORT-MIS acquisition pilot passed on 2026-07-23 without changing
@@ -259,6 +306,36 @@ not the publication extraction contract.  Before formal instance generation,
 archive a fixed official PORT-MIS table export, its query metadata and hashes;
 then freeze the separate semi-synthetic rules for box quantities, attributes,
 forecast trajectories, yard state, and bay layout.
+
+The infrastructure enforces that distinction. A publication-ready source
+manifest must declare `publication_ready: true` and
+`pilot_only_undocumented_endpoint: false`, and list the SHA-256 of every raw
+source file. The calibration manifest must list the SHA-256 of every derived
+artifact and its audit must have status `PASS`. The current July pilot snapshot
+verifies byte-for-byte but deliberately fails the formal publication-ready
+gate; it remains usable for development and integration tests only.
+
+A minimal publication source declaration has this shape; the actual query and
+all raw files must be archived beside it:
+
+```json
+{
+  "schema": "portmis-fixed-source-snapshot-v1",
+  "publication_ready": true,
+  "pilot_only_undocumented_endpoint": false,
+  "official_data_page": "https://www.data.go.kr/data/15006353/openapi.do",
+  "extraction_method": "fixed official export or documented OpenAPI",
+  "query": {
+    "port_code": "020",
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD"
+  },
+  "raw_files": {
+    "raw_inbound.json": {"sha256": "<64 hexadecimal characters>"},
+    "raw_outbound.json": {"sha256": "<64 hexadecimal characters>"}
+  }
+}
+```
 
 ## Capacity-anchored demand calibration
 
@@ -364,3 +441,112 @@ This gate establishes data-contract and lifecycle correctness only.  It is not
 a formal computational-performance result and does not demonstrate the value
 of Progressive Repair, which was correctly not triggered in this non-pressure
 case.
+
+## Formal experiment table and data families
+
+The final study keeps different evidential roles in separate tables:
+
+1. **Data audit and calibration.** PORT-MIS only; schedule, vessel, berth,
+   source completeness, calibration assumptions, and hashes.
+2. **Main external-validity comparison.** The three public-data-driven windows;
+   the frozen seven methods and ten formal seeds.
+3. **Public calibration robustness.** PORT-MIS windows with one-factor-at-a-
+   time calibration variants; at minimum the candidate and `core_start`, with
+   external baselines included on the central setting.
+4. **Synthetic computational scale.** Oracle-certified small, medium, large,
+   and xlarge bundles; the frozen seven methods.
+5. **Synthetic utilization/pressure.** Certified feasible, tight, and
+   separately labelled overloaded sister cases. Overloaded cases are stress
+   evidence and are not pooled into zero-shortage claims.
+6. **Internal component ablation.** `core`, `core_start`,
+   `core_start_impact`, and `full_bottleneck`; add
+   `full_bottleneck_no_aggregate` only for the aggregate routing ablation.
+7. **Repair-mechanism reachability.** Controlled `nearby` and `global`
+   pressure cases; mechanism statistics only.
+8. **Parameter sensitivity.** DRA-RPM one-factor-at-a-time profiles and the
+   declared public calibration factors. These are not used to retune the
+   candidate after formal outcomes are inspected.
+
+Public data support external validity but do not expose true box attributes,
+forecast histories, or yard layout. Those elements remain fully disclosed
+semi-synthetic fields. Synthetic cases are therefore still required for exact
+scale, utilization, oracle certification, and mechanism control.
+
+## Frozen DRA-RPM sensitivity
+
+The main comparison uses `frozen`: \(\mu=0.5\), \(\nu=0.5\), and history
+discount \(0.8\). The separate one-factor-at-a-time profiles are
+`mu_low=0.25`, `mu_high=0.75`, `nu_low=0.25`, `nu_high=0.75`,
+`discount_low=0.60`, and `discount_high=0.95`; all unspecified values remain
+at the frozen setting. Every CSV row records the profile and three scalar
+values.
+
+## Reproducible commands
+
+After committing and tagging the infrastructure, prepare synthetic bundles
+without running a method:
+
+```bash
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/synthetic \
+  synthetic --sizes small medium large xlarge \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --forecast-error 0.1 --forecast-error-mode mixed \
+  --initial-utilization 0.55 \
+  --oracle-case-classes feasible tight
+```
+
+Prepare public bundles only after replacing the provisional source manifest
+with the archived publication extraction:
+
+```bash
+python scripts/prepare_formal_instances.py \
+  --experiment-phase formal \
+  --output-dir local_results/formal/instances/portmis \
+  portmis --windows public_small public_medium public_large \
+  --seeds 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 \
+  --calibration-dir <fixed-calibration-directory> \
+  --source-manifest <fixed-official-source-manifest>
+```
+
+Run the paired seven-method matrix from archived files:
+
+```bash
+python scripts/run_formal_matrix.py \
+  --experiment-phase formal --experiment-set main \
+  --bundle-indexes \
+    local_results/formal/instances/synthetic/synthetic_instance_index.json \
+  --output local_results/formal/runs/synthetic_main.csv
+```
+
+The Aggregate-LP ablation and DRA-RPM sensitivity use the same bundles:
+
+```bash
+python scripts/run_formal_matrix.py \
+  --experiment-phase formal --experiment-set aggregate_ablation \
+  --bundle-indexes \
+    local_results/formal/instances/synthetic/synthetic_instance_index.json \
+  --output local_results/formal/runs/aggregate_ablation.csv
+
+python scripts/run_formal_matrix.py \
+  --experiment-phase formal --experiment-set dra_sensitivity \
+  --bundle-indexes \
+    local_results/formal/instances/portmis/portmis_instance_index.json \
+  --output local_results/formal/runs/dra_sensitivity.csv
+```
+
+Summarize one completed matrix with artifact gates, descriptive statistics,
+95% confidence intervals, paired differences, win/tie/loss counts, and a
+two-sided Wilcoxon test when SciPy is available:
+
+```bash
+python analysis/summarize_experiments.py \
+  local_results/formal/runs/synthetic_main.csv \
+  --output local_results/formal/runs/synthetic_main.summary.json
+```
+
+The summary distinguishes every DRA-RPM sensitivity profile, includes the
+three external-baseline pairings, and audits formal seed membership, instance
+hash presence, duplicate experiment identities, dirty state, validation
+failures, wall-clock failures, and provisional public sources.

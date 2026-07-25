@@ -4,7 +4,7 @@
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
 ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3"
-RESULT_SCHEMA_VERSION = "rolling-results-v5"
+RESULT_SCHEMA_VERSION = "rolling-results-v6"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
@@ -14,7 +14,54 @@ PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v1"
 # are a held-out set and must not be used for tuning before the final freeze.
 DEVELOPMENT_SEEDS = (100, 101, 102)
 PREFLIGHT_SEEDS = (700, 701, 702)
-FORMAL_SEEDS = (1000, 1001, 1002, 1003, 1004)
+FORMAL_SEEDS = tuple(range(1000, 1010))
+
+# Frozen publication matrix.  The online limit is applied independently to
+# every 24-hour rolling decision cycle.  Instance bundles carry one of these
+# values so a formal runner cannot silently give one method a different budget.
+FORMAL_PRIMARY_CONFIGURATIONS = (
+    "core",
+    "core_start",
+    "core_start_impact",
+    "full_bottleneck",
+    "kp_dos",
+    "kp_sg",
+    "dra_rpm",
+)
+FORMAL_TIME_BUDGETS_SECONDS = {
+    "pilot_small": 20.0,
+    "small": 20.0,
+    "medium": 20.0,
+    "large": 60.0,
+    "xlarge": 120.0,
+    "public_small": 20.0,
+    "public_medium": 60.0,
+    "public_large": 120.0,
+    "pressure": 20.0,
+}
+FORMAL_PUBLIC_WINDOWS = {
+    "public_small": {
+        "start_date": "2025-07-04",
+        "end_date": "2025-07-06",
+        "num_blocks": 8,
+        "bays_per_block": 6,
+        "bay_capacity": 50,
+    },
+    "public_medium": {
+        "start_date": "2025-07-12",
+        "end_date": "2025-07-18",
+        "num_blocks": 16,
+        "bays_per_block": 8,
+        "bay_capacity": 50,
+    },
+    "public_large": {
+        "start_date": "2025-07-20",
+        "end_date": "2025-07-30",
+        "num_blocks": 20,
+        "bays_per_block": 10,
+        "bay_capacity": 50,
+    },
+}
 ROLLING_CYCLE_HOURS=24
 RECEIVING_WINDOW_HOURS=72
 TIME_BUCKET_HOURS=6

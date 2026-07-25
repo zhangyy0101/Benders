@@ -5,6 +5,7 @@ from scripts.run_portmis_end_to_end import (
     ADAPTER_PROTOCOL_VERSION,
     build_portmis_rolling_case,
     select_calibrated_calls,
+    select_calibrated_window,
 )
 
 
@@ -163,6 +164,22 @@ class PortmisRollingAdapterTests(unittest.TestCase):
         )
         selected_ids = {row["call_id"] for row in selected_calls}
         self.assertEqual(selected_ids, {"CALL_02", "CALL_03"})
+        self.assertEqual(
+            sum(int(row["synthetic_export_boxes"]) for row in selected_calls),
+            sum(int(row["boxes"]) for row in selected_groups),
+        )
+
+    def test_date_window_is_inclusive_and_keeps_complete_groups(self):
+        selected_calls, selected_groups = select_calibrated_window(
+            self.calls,
+            self.groups,
+            start_date="2025-07-01",
+            end_date="2025-07-01",
+        )
+        self.assertEqual(
+            [row["call_id"] for row in selected_calls],
+            ["CALL_01", "CALL_02"],
+        )
         self.assertEqual(
             sum(int(row["synthetic_export_boxes"]) for row in selected_calls),
             sum(int(row["boxes"]) for row in selected_groups),

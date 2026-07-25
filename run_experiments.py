@@ -13,7 +13,11 @@ from config import (
     FORMAL_SEEDS,
     PREFLIGHT_SEEDS,
 )
-from external_baselines import CONFIGURATIONS, baseline_row_metadata
+from external_baselines import (
+    CONFIGURATIONS,
+    DRA_PARAMETER_PROFILES,
+    baseline_row_metadata,
+)
 from experiment_metadata import (
     collect_experiment_metadata,
     csv_metadata_fields,
@@ -26,6 +30,10 @@ from rolling_data import (
     build_synthetic_rolling_case,
 )
 from rolling_experiment import run_rolling_case
+from rolling_solver import (
+    CONFIGURATIONS as CORE_CONFIGURATIONS,
+    configuration_features,
+)
 
 
 EXPERIMENT_ID_FIELDS = (
@@ -43,6 +51,8 @@ EXPERIMENT_ID_FIELDS = (
     "outbound_rate",
     "release_delay_periods",
     "configuration",
+    "baseline_parameter_profile",
+    "instance_bundle_sha256",
     "seed",
     "time_limit",
 )
@@ -51,11 +61,15 @@ NUMERIC_EXPERIMENT_ID_FIELDS = set(EXPERIMENT_ID_FIELDS) - {
     "oracle_case_class",
     "forecast_error_mode",
     "configuration",
+    "baseline_parameter_profile",
+    "instance_bundle_sha256",
 }
 EXPERIMENT_ID_DEFAULTS = {
     "tail_execution_cycles": 0,
     "ship_volume_factor": 1.0,
     "oracle_case_class": "not_evaluated",
+    "baseline_parameter_profile": "not_applicable",
+    "instance_bundle_sha256": "",
 }
 
 
@@ -82,6 +96,9 @@ def planned_experiment_identity(
     configuration: str,
     seed: int,
     time_limit: float,
+    *,
+    baseline_parameter_profile: str = "frozen",
+    instance_metadata: dict[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Build the same identity without solving the experiment."""
     return experiment_identity({
@@ -99,6 +116,13 @@ def planned_experiment_identity(
         "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
         "release_delay_periods": case["release_delay_periods"],
         "configuration": configuration,
+        "baseline_parameter_profile": (
+            baseline_parameter_profile
+            if configuration == "dra_rpm" else "not_applicable"
+        ),
+        "instance_bundle_sha256": (
+            (instance_metadata or {}).get("instance_bundle_sha256", "")
+        ),
         "seed": seed,
         "time_limit": time_limit,
     })
@@ -433,6 +457,9 @@ def result_row(
     time_limit: float,
     result: dict,
     metadata: dict[str, object],
+    *,
+    baseline_parameter_profile: str = "frozen",
+    instance_metadata: dict[str, object] | None = None,
 ) -> dict:
     def forecast_values(field: str) -> list[float]:
         return [
@@ -450,8 +477,56 @@ def result_row(
     predicted_shortage = forecast_values("predicted_shortage")
     oracle = case.get("oracle_certificate", {})
     oracle_shortage_lower_bound = oracle.get("shortage_lower_bound")
+    instance_metadata = instance_metadata or {}
+    features = (
+        configuration_features(configuration)
+        if configuration in CORE_CONFIGURATIONS else {}
+    )
+    calibration = instance_metadata.get(
+        "calibration_scenario_assumptions", {}
+    )
     return {
         "instance": instance,
+        "instance_id": instance_metadata.get(
+            "instance_id", case.get("instance_id", instance)
+        ),
+        "instance_family": instance_metadata.get(
+            "instance_family", case.get("instance_family", "synthetic")
+        ),
+        "instance_protocol": instance_metadata.get(
+            "instance_protocol", case.get("instance_protocol")
+        ),
+        "instance_bundle_sha256": instance_metadata.get(
+            "instance_bundle_sha256", ""
+        ) or "",
+        "instance_case_sha256": instance_metadata.get(
+            "instance_case_sha256"
+        ),
+        "source_snapshot_sha256": instance_metadata.get(
+            "source_snapshot_sha256"
+        ),
+        "source_window_id": instance_metadata.get("source_window_id"),
+        "source_publication_ready": instance_metadata.get(
+            "source_publication_ready"
+        ),
+        "calibration_protocol": instance_metadata.get(
+            "calibration_protocol"
+        ),
+        "calibration_scenario_id": instance_metadata.get(
+            "calibration_scenario_id"
+        ),
+        "calibration_capacity_utilization": calibration.get(
+            "capacity_utilization"
+        ),
+        "calibration_export_split": calibration.get(
+            "import_export_split_to_export"
+        ),
+        "calibration_forty_foot_share": calibration.get(
+            "forty_foot_box_share"
+        ),
+        "calibration_high_cube_share": calibration.get(
+            "high_cube_share_of_forty"
+        ),
         "num_blocks": case["num_blocks"],
         "bays_per_block": case["bays_per_block"],
         "num_ships": case["num_ships"],
@@ -483,7 +558,10 @@ def result_row(
         "release_delay_periods": case["release_delay_periods"],
         "initial_total_capacity": case["initial_total_capacity"],
         "configuration": configuration,
-        **baseline_row_metadata(configuration),
+        "configuration_features": json.dumps(
+            features, sort_keys=True, separators=(",", ":")
+        ),
+        **baseline_row_metadata(configuration, baseline_parameter_profile),
         "seed": seed,
         "time_limit": time_limit,
         **csv_metadata_fields(metadata),
@@ -599,6 +677,12 @@ def main() -> int:
         default=["full_bottleneck"],
     )
     parser.add_argument(
+        "--baseline-parameter-profile",
+        choices=DRA_PARAMETER_PROFILES,
+        default="frozen",
+        help="DRA-RPM profile; ignored by all other configurations",
+    )
+    parser.add_argument(
         "--pressure-levels", nargs="*", choices=("nearby", "global"), default=[]
     )
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
@@ -689,6 +773,7 @@ def main() -> int:
         "forecast_error_modes": list(args.forecast_error_modes),
         "initial_utilizations": list(args.initial_utilizations),
         "configurations": list(args.configurations),
+        "baseline_parameter_profile": args.baseline_parameter_profile,
         "pressure_levels": list(args.pressure_levels),
         "seeds": list(args.seeds),
         "experiment_phase": args.experiment_phase,
@@ -801,6 +886,9 @@ def main() -> int:
                                     configuration,
                                     seed,
                                     args.time,
+                                    baseline_parameter_profile=(
+                                        args.baseline_parameter_profile
+                                    ),
                                 )
                                 if identity in completed:
                                     print(
@@ -816,6 +904,9 @@ def main() -> int:
                                     seed=seed,
                                     configuration=configuration,
                                     dependency_profile=args.dependency_profile,
+                                    baseline_parameter_profile=(
+                                        args.baseline_parameter_profile
+                                    ),
                                 )
                                 row = result_row(
                                     instance_name,
@@ -825,6 +916,9 @@ def main() -> int:
                                     args.time,
                                     result,
                                     metadata,
+                                    baseline_parameter_profile=(
+                                        args.baseline_parameter_profile
+                                    ),
                                 )
                                 checkpoint(row)
     for level in args.pressure_levels:
@@ -832,7 +926,12 @@ def main() -> int:
             for configuration in args.configurations:
                 case = build_repair_pressure_case(level=level, seed=seed)
                 identity = planned_experiment_identity(
-                    f"pressure_{level}", case, configuration, seed, args.time
+                    f"pressure_{level}",
+                    case,
+                    configuration,
+                    seed,
+                    args.time,
+                    baseline_parameter_profile=args.baseline_parameter_profile,
                 )
                 if identity in completed:
                     print(f"resume: skipping {identity}", flush=True)
@@ -845,6 +944,7 @@ def main() -> int:
                     seed=seed,
                     configuration=configuration,
                     dependency_profile=args.dependency_profile,
+                    baseline_parameter_profile=args.baseline_parameter_profile,
                 )
                 row = result_row(
                     f"pressure_{level}",
@@ -854,6 +954,7 @@ def main() -> int:
                     args.time,
                     result,
                     metadata,
+                    baseline_parameter_profile=args.baseline_parameter_profile,
                 )
                 checkpoint(row)
     write_experiment_artifacts(

@@ -38,6 +38,43 @@ DRA_MU = 0.5
 DRA_NU = 0.5
 DRA_HISTORY_DISCOUNT = 0.8
 DRA_HISTORY_LIMIT = 12
+DRA_PARAMETER_PROFILES = {
+    "frozen": {
+        "mu": DRA_MU,
+        "nu": DRA_NU,
+        "history_discount": DRA_HISTORY_DISCOUNT,
+    },
+    "mu_low": {
+        "mu": 0.25,
+        "nu": DRA_NU,
+        "history_discount": DRA_HISTORY_DISCOUNT,
+    },
+    "mu_high": {
+        "mu": 0.75,
+        "nu": DRA_NU,
+        "history_discount": DRA_HISTORY_DISCOUNT,
+    },
+    "nu_low": {
+        "mu": DRA_MU,
+        "nu": 0.25,
+        "history_discount": DRA_HISTORY_DISCOUNT,
+    },
+    "nu_high": {
+        "mu": DRA_MU,
+        "nu": 0.75,
+        "history_discount": DRA_HISTORY_DISCOUNT,
+    },
+    "discount_low": {
+        "mu": DRA_MU,
+        "nu": DRA_NU,
+        "history_discount": 0.60,
+    },
+    "discount_high": {
+        "mu": DRA_MU,
+        "nu": DRA_NU,
+        "history_discount": 0.95,
+    },
+}
 
 BASELINE_SPECS = {
     "kp_dos": {
@@ -106,12 +143,29 @@ def literature_baseline_metadata() -> dict[str, object]:
             "reward_choice": "maximize_equation_27",
             "operation_count_proxy": "normalized_outbound_forecast_0_to_10",
             "distance_cutoff": "inactive_no_common_business_threshold",
+            "main_parameter_profile": "frozen",
+            "sensitivity_profiles": DRA_PARAMETER_PROFILES,
         },
     }
 
 
-def baseline_row_metadata(configuration: str) -> dict[str, object]:
+def baseline_row_metadata(
+    configuration: str,
+    parameter_profile: str = "frozen",
+) -> dict[str, object]:
     """Return scalar method identity for one CSV row."""
+    if parameter_profile not in DRA_PARAMETER_PROFILES:
+        raise ValueError(
+            "parameter_profile must be one of "
+            f"{tuple(DRA_PARAMETER_PROFILES)}"
+        )
+    profile = (
+        parameter_profile if configuration == "dra_rpm" else "not_applicable"
+    )
+    parameters: dict[str, float] | None = (
+        DRA_PARAMETER_PROFILES[parameter_profile]
+        if configuration == "dra_rpm" else None
+    )
     if configuration not in LITERATURE_CONFIGURATIONS:
         return {
             "baseline_protocol": None,
@@ -119,6 +173,10 @@ def baseline_row_metadata(configuration: str) -> dict[str, object]:
             "baseline_method": None,
             "baseline_doi": None,
             "baseline_fidelity": None,
+            "baseline_parameter_profile": profile,
+            "baseline_mu": None,
+            "baseline_nu": None,
+            "baseline_history_discount": None,
         }
     spec = BASELINE_SPECS[configuration]
     return {
@@ -127,6 +185,12 @@ def baseline_row_metadata(configuration: str) -> dict[str, object]:
         "baseline_method": spec["method"],
         "baseline_doi": spec["doi"],
         "baseline_fidelity": spec["fidelity"],
+        "baseline_parameter_profile": profile,
+        "baseline_mu": parameters["mu"] if parameters else None,
+        "baseline_nu": parameters["nu"] if parameters else None,
+        "baseline_history_discount": (
+            parameters["history_discount"] if parameters else None
+        ),
     }
 
 
@@ -733,8 +797,10 @@ def _dra_reward(
     history: dict[tuple[str, str, str], list[float]],
     block_period_pairs: dict[tuple[str, int], set[Pair]],
     preferred_future: dict[tuple[str, str, int], str],
+    parameters: dict[str, float] | None = None,
     static_cache: dict | None = None,
 ) -> tuple[float, dict[str, float]]:
+    parameters = parameters or DRA_PARAMETER_PROFILES["frozen"]
     block = d["bay_block"][bay]
     outbound_peak = (
         static_cache["outbound_peak"]
@@ -810,7 +876,7 @@ def _dra_reward(
 
     past_values = history.get((ship, group, block), [])
     past_score = sum(
-        DRA_HISTORY_DISCOUNT ** (len(past_values) - index) * value
+        parameters["history_discount"] ** (len(past_values) - index) * value
         for index, value in enumerate(past_values)
     )
 
@@ -841,8 +907,8 @@ def _dra_reward(
         conflict
         + distance_score
         + space_score
-        + DRA_MU * past_score
-        + DRA_NU * future_score
+        + parameters["mu"] * past_score
+        + parameters["nu"] * future_score
     )
     return reward, {
         "conflict_1": conflict_1,
@@ -862,6 +928,7 @@ def _solve_dra_rpm(
     *,
     deadline: float,
     method_state: dict | None,
+    parameters: dict[str, float],
 ) -> tuple[dict, dict, dict]:
     incoming_history = (method_state or {}).get("reward_history", {})
     history: dict[tuple[str, str, str], list[float]] = {
@@ -936,6 +1003,7 @@ def _solve_dra_rpm(
                     history=history,
                     block_period_pairs=block_period_pairs,
                     preferred_future=preferred_future,
+                    parameters=parameters,
                     static_cache=static_cache,
                 )
                 block = d["bay_block"][bay]
@@ -982,9 +1050,9 @@ def _solve_dra_rpm(
         shortage[ship, group, period] = remaining
     diagnostics = {
         "reward_choice": "maximize_equation_27",
-        "mu": DRA_MU,
-        "nu": DRA_NU,
-        "history_discount": DRA_HISTORY_DISCOUNT,
+        "mu": parameters["mu"],
+        "nu": parameters["nu"],
+        "history_discount": parameters["history_discount"],
         "native_reward_total": reward_total,
         "decision_count": sum(
             1 for quantity in allocator.din.values() if quantity > 0
@@ -1158,12 +1226,18 @@ def solve_literature_baseline(
     time_limit: float = 60,
     seed: int = 0,
     method_state: dict | None = None,
+    parameter_profile: str = "frozen",
 ) -> dict:
     """Solve one visible snapshot using an adapted published heuristic."""
     del seed  # All three frozen adaptations use deterministic tie-breaking.
     if configuration not in LITERATURE_CONFIGURATIONS:
         raise ValueError(
             f"configuration must be one of {LITERATURE_CONFIGURATIONS}"
+        )
+    if parameter_profile not in DRA_PARAMETER_PROFILES:
+        raise ValueError(
+            "parameter_profile must be one of "
+            f"{tuple(DRA_PARAMETER_PROFILES)}"
         )
     started = time.perf_counter()
     limit = max(0.0, float(time_limit))
@@ -1190,6 +1264,7 @@ def solve_literature_baseline(
             allocator,
             deadline=deadline,
             method_state=method_state,
+            parameters=DRA_PARAMETER_PROFILES[parameter_profile],
         )
     shortage, diagnostics, next_method_state = solver()
     if configuration == "kp_sg":
@@ -1240,7 +1315,9 @@ def solve_literature_baseline(
         "solution": solution,
         "validation": validation,
         "baseline_diagnostics": diagnostics,
-        "baseline_metadata": baseline_row_metadata(configuration),
+        "baseline_metadata": baseline_row_metadata(
+            configuration, parameter_profile
+        ),
         "method_state": next_method_state,
         "affected_ships": list(d["active_ships"]),
         "impact_diagnostics": {

@@ -162,6 +162,14 @@ Equation (27) and the prose maximize reward, while Algorithm 3 initializes
 positive infinity and tests for a smaller score. The adaptation follows the
 mathematical definition and selects the maximum.
 
+The main table freezes the profile `frozen` at
+\((\mu,\nu,\phi)=(0.5,0.5,0.8)\). A separate one-factor-at-a-time experiment
+uses `mu_low=0.25`, `mu_high=0.75`, `nu_low=0.25`, `nu_high=0.75`,
+`discount_low=0.60`, and `discount_high=0.95`. These profiles do not alter the
+candidate algorithm and are never selected post hoc per instance. The formal
+runner records the profile and all three scalar parameters in every DRA-RPM
+row.
+
 Fidelity status: the supplied formal PDF confirms the open full text. The
 method remains **adapted DRA-RPM** because of the operation proxy, exact-slot
 output, common hard constraints and altered rolling state.

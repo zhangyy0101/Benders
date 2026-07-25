@@ -6,11 +6,20 @@ import csv
 import json
 import math
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config import FORMAL_SEEDS
+
 SCENARIO_FIELDS = (
     "instance",
+    "instance_bundle_sha256",
     "initial_utilization",
     "forecast_error",
     "forecast_error_mode",
@@ -109,6 +118,15 @@ def describe(values: list[float]) -> dict[str, float | int | None]:
     }
 
 
+def method_label(row: dict) -> str:
+    """Distinguish DRA sensitivity profiles without duplicating other methods."""
+    configuration = str(row.get("configuration", ""))
+    if configuration != "dra_rpm":
+        return configuration
+    profile = row.get("baseline_parameter_profile") or "frozen"
+    return f"dra_rpm[{profile}]"
+
+
 def paired_comparison(
     rows: list[dict],
     metric: str,
@@ -122,10 +140,16 @@ def paired_comparison(
         if value is None:
             continue
         key = tuple(row.get(field) for field in SCENARIO_FIELDS) + (row.get("seed"),)
-        indexed[key, row.get("configuration")] = value
+        indexed[key, method_label(row)] = value
     differences = [
         indexed[key, left] - indexed[key, right]
-        for key, configuration in sorted(indexed)
+        for key, configuration in sorted(
+            indexed,
+            key=lambda item: tuple(
+                "" if value is None else str(value)
+                for value in (*item[0], item[1])
+            ),
+        )
         if configuration == left and (key, right) in indexed
     ]
     tolerance = 1e-9
@@ -199,6 +223,25 @@ def artifact_audit(rows: list[dict]) -> dict:
     def unique(field: str) -> list[str]:
         return sorted({str(row[field]) for row in rows if row.get(field) not in (None, "")})
 
+    formal_rows = [
+        row for row in rows if row.get("experiment_phase") == "formal"
+    ]
+    identities = [
+        (
+            row.get("instance_bundle_sha256") or row.get("instance"),
+            method_label(row),
+            row.get("seed"),
+            row.get("time_limit"),
+        )
+        for row in rows
+    ]
+
+    def valid_formal_seed(row: dict) -> bool:
+        try:
+            return int(row.get("seed", -1)) in FORMAL_SEEDS
+        except (TypeError, ValueError):
+            return False
+
     return {
         "row_count": len(rows),
         "failed_row_count": sum(_number(row, "ok") == 0 for row in rows),
@@ -210,6 +253,23 @@ def artifact_audit(rows: list[dict]) -> dict:
         ),
         "dirty_row_count": sum(
             str(row.get("git_dirty", "")).lower() == "true" for row in rows
+        ),
+        "duplicate_experiment_identity_count": (
+            len(identities) - len(set(identities))
+        ),
+        "formal_row_count": len(formal_rows),
+        "formal_missing_bundle_hash_count": sum(
+            not row.get("instance_bundle_sha256") for row in formal_rows
+        ),
+        "formal_unexpected_seed_count": sum(
+            not valid_formal_seed(row) for row in formal_rows
+        ),
+        "formal_provisional_public_source_count": sum(
+            row.get("instance_family")
+            == "public_data_calibrated_semi_synthetic"
+            and str(row.get("source_publication_ready", "")).lower()
+            != "true"
+            for row in formal_rows
         ),
         "problem_protocols": unique("problem_protocol"),
         "algorithm_versions": unique("algorithm_version"),
@@ -226,12 +286,23 @@ def summarize(rows: list[dict], metrics: tuple[str, ...]) -> dict:
     for row in rows:
         key = tuple(row.get(field) for field in SCENARIO_FIELDS) + (
             row.get("configuration"),
+            row.get("baseline_parameter_profile"),
         )
         grouped[key].append(row)
     summaries = []
-    for key, group in sorted(grouped.items()):
-        entry = {field: value for field, value in zip(SCENARIO_FIELDS, key[:-1])}
-        entry["configuration"] = key[-1]
+    for key, group in sorted(
+        grouped.items(),
+        key=lambda item: tuple(
+            "" if value is None else str(value) for value in item[0]
+        ),
+    ):
+        entry = {
+            field: value
+            for field, value in zip(SCENARIO_FIELDS, key[:-2])
+        }
+        entry["configuration"] = key[-2]
+        entry["baseline_parameter_profile"] = key[-1]
+        entry["method_label"] = method_label(group[0])
         entry["metrics"] = {
             metric: describe([
                 value for row in group if (value := _number(row, metric)) is not None
@@ -244,7 +315,17 @@ def summarize(rows: list[dict], metrics: tuple[str, ...]) -> dict:
         ("full_bottleneck", "core_start"),
         ("full_bottleneck", "core_start_impact"),
         ("full_bottleneck", "full_direct"),
+        ("full_bottleneck", "kp_dos"),
+        ("full_bottleneck", "kp_sg"),
+        ("full_bottleneck", "dra_rpm[frozen]"),
+        ("full_bottleneck", "full_bottleneck_no_aggregate"),
         ("full", "full_direct"),
+        ("dra_rpm[mu_low]", "dra_rpm[frozen]"),
+        ("dra_rpm[mu_high]", "dra_rpm[frozen]"),
+        ("dra_rpm[nu_low]", "dra_rpm[frozen]"),
+        ("dra_rpm[nu_high]", "dra_rpm[frozen]"),
+        ("dra_rpm[discount_low]", "dra_rpm[frozen]"),
+        ("dra_rpm[discount_high]", "dra_rpm[frozen]"),
     )
     comparisons = [
         paired_comparison(rows, metric, left, right)
@@ -273,12 +354,17 @@ def main() -> int:
     )
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        matrix = manifest.get("requested_matrix") or {}
         result["manifest_audit"] = {
             "path": str(manifest_path),
             "row_count": manifest.get("row_count"),
             "expected_row_count": manifest.get("expected_row_count"),
             "complete": manifest.get("complete"),
             "all_ok": manifest.get("all_ok"),
+            "instance_index_count": len(
+                matrix.get("instance_indexes") or []
+            ),
+            "time_budget_policy": matrix.get("time_budget_policy"),
         }
     else:
         result["manifest_audit"] = {"path": str(manifest_path), "present": False}

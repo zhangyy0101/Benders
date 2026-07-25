@@ -78,6 +78,7 @@ CONFIGURATIONS = (
     "core_start_impact",
     "full_direct",
     "full_bottleneck",
+    "full_bottleneck_no_aggregate",
     "full",
 )
 
@@ -108,11 +109,18 @@ def configuration_features(configuration: str) -> dict:
         "progressive_repair": configuration in (
             "full_direct",
             "full_bottleneck",
+            "full_bottleneck_no_aggregate",
             "full",
         ),
-        "bottleneck_repair": configuration == "full_bottleneck",
+        "bottleneck_repair": configuration in (
+            "full_bottleneck",
+            "full_bottleneck_no_aggregate",
+        ),
         "adaptive_global_bypass": (
-            configuration == "full_bottleneck"
+            configuration in (
+                "full_bottleneck",
+                "full_bottleneck_no_aggregate",
+            )
             and ADAPTIVE_GLOBAL_BYPASS_ENABLED
         ),
         "aggregate_domain_ladder": (
@@ -121,7 +129,12 @@ def configuration_features(configuration: str) -> dict:
         ),
         "quality_polish": (
             QUALITY_POLISH_ENABLED
-            and configuration in ("full_direct", "full_bottleneck", "full")
+            and configuration in (
+                "full_direct",
+                "full_bottleneck",
+                "full_bottleneck_no_aggregate",
+                "full",
+            )
         ),
     }
 

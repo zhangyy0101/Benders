@@ -27,6 +27,7 @@ def run_rolling_case(
     seed: int = 0,
     configuration: str = "full_bottleneck",
     dependency_profile: str = "current",
+    baseline_parameter_profile: str = "frozen",
 ) -> dict:
     """Optimize and execute each rolling cycle under a common wall-clock limit."""
     state = initial_simulation_state(case)
@@ -53,6 +54,7 @@ def run_rolling_case(
                 seed=seed + state["cycle"],
                 configuration=configuration,
                 method_state=method_state,
+                parameter_profile=baseline_parameter_profile,
             )
             method_state = result.get("method_state", {})
         else:

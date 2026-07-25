@@ -36,6 +36,15 @@ class ConfigurationTest(unittest.TestCase):
         ):
             self.assertEqual(direct[feature], bottleneck[feature])
 
+    def test_aggregate_screen_has_an_independent_controller_ablation(self):
+        candidate = configuration_features("full_bottleneck")
+        ablation = configuration_features("full_bottleneck_no_aggregate")
+        self.assertTrue(candidate["aggregate_domain_ladder"])
+        self.assertFalse(ablation["aggregate_domain_ladder"])
+        for feature in candidate:
+            if feature != "aggregate_domain_ladder":
+                self.assertEqual(candidate[feature], ablation[feature])
+
 
 if __name__ == "__main__":
     unittest.main()

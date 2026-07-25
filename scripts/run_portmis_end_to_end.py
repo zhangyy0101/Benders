@@ -187,6 +187,39 @@ def select_calibrated_calls(
     return selected, selected_groups
 
 
+def select_calibrated_window(
+    calls: Sequence[dict[str, str]],
+    groups: Sequence[dict[str, str]],
+    *,
+    start_date: str,
+    end_date: str,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Select a complete inclusive entry-date window without call truncation."""
+    _validate_calibrated_rows(calls, groups)
+    start = datetime.fromisoformat(start_date).date()
+    end = datetime.fromisoformat(end_date).date()
+    if end < start:
+        raise ValueError("end_date must not precede start_date")
+    selected = sorted(
+        (
+            row
+            for row in calls
+            if start
+            <= datetime.fromisoformat(row["entry_time"]).date()
+            <= end
+        ),
+        key=lambda row: (row["entry_time"], row["call_id"]),
+    )
+    if not selected:
+        raise ValueError("calibrated date window contains no calls")
+    selected_ids = {row["call_id"] for row in selected}
+    selected_groups = [
+        row for row in groups if row["call_id"] in selected_ids
+    ]
+    _validate_calibrated_rows(selected, selected_groups)
+    return selected, selected_groups
+
+
 def build_portmis_rolling_case(
     calls: Sequence[dict[str, str]],
     groups: Sequence[dict[str, str]],

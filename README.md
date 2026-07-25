@@ -259,6 +259,47 @@ silently mixing results. The manifest distinguishes a successful partial
 checkpoint from a complete requested matrix through `row_count`,
 `expected_row_count`, and `complete`.
 
+## Frozen formal-instance workflow
+
+Publication runs use a two-step interface so case generation cannot change
+between methods:
+
+1. `scripts/prepare_formal_instances.py` serializes each exact case to a
+   hash-verified instance bundle and immutable index;
+2. `scripts/run_formal_matrix.py` verifies the index, loads the same bundles
+   for every paired method, and writes `rolling-results-v6` rows.
+
+The formal runner fixes ten held-out seeds (`1000`--`1009`), rejects dirty Git
+state and time overrides, and uses per-cycle budgets stored in each bundle:
+20 seconds for small/medium, 60 for large, and 120 for xlarge. The frozen main
+matrix is `core`, `core_start`, `core_start_impact`, `full_bottleneck`,
+`kp_dos`, `kp_sg`, and `dra_rpm`.
+
+Example development smoke:
+
+```bash
+python scripts/prepare_formal_instances.py \
+  --output-dir local_results/formal_smoke/instances \
+  synthetic --sizes pilot_small --seeds 100
+
+python scripts/run_formal_matrix.py \
+  --bundles local_results/formal_smoke/instances \
+  --experiment-set main --time 2 \
+  --output local_results/formal_smoke/results.csv
+```
+
+The fixed July PORT-MIS snapshot is currently marked provisional because its
+guest-accessible extraction endpoint is undocumented. Its hashes can be used
+for development, but a formal public-data bundle additionally requires an
+archived source manifest with `publication_ready: true` and
+`pilot_only_undocumented_endpoint: false`. Full experiment composition and
+commands are specified in `docs/formal_experiment_protocol.md`.
+
+After a matrix completes, `analysis/summarize_experiments.py` produces the
+paired win/tie/loss and confidence-interval report while auditing formal seeds,
+bundle hashes, duplicate rows, source readiness, validation, and time-limit
+failures.
+
 If `--manifest-output` is omitted, the manifest defaults to the CSV stem, for
 example `local_results/runs/pilot_results.manifest.json`. Every CSV row records
 the Git commit, branch and dirty state; problem protocol; Python and Gurobi
