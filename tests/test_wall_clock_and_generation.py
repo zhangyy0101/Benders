@@ -2,7 +2,11 @@ import unittest
 
 from config import FORECAST_ERROR_MODES, WALL_TIME_TOLERANCE_SECONDS
 from rolling_data import build_synthetic_rolling_case, initial_simulation_state, optimization_snapshot
-from rolling_solver import postprocessing_reserve_seconds, solve_rolling_snapshot
+from rolling_solver import (
+    postprocessing_reserve_seconds,
+    solve_rolling_snapshot,
+    solver_return_guard_seconds,
+)
 
 
 class WallClockAndGenerationTest(unittest.TestCase):
@@ -15,6 +19,14 @@ class WallClockAndGenerationTest(unittest.TestCase):
         self.assertAlmostEqual(postprocessing_reserve_seconds(60), 9.6)
         self.assertAlmostEqual(postprocessing_reserve_seconds(100), 16.0)
         self.assertAlmostEqual(postprocessing_reserve_seconds(120), 19.2)
+
+    def test_solver_return_guard_is_scaled_and_bounded(self):
+        self.assertEqual(solver_return_guard_seconds(0, 10), .25)
+        self.assertAlmostEqual(solver_return_guard_seconds(20, 10), 2)
+        self.assertAlmostEqual(solver_return_guard_seconds(60, 50), 6)
+        self.assertAlmostEqual(solver_return_guard_seconds(120, 100), 12)
+        self.assertAlmostEqual(solver_return_guard_seconds(180, 100), 12)
+        self.assertAlmostEqual(solver_return_guard_seconds(60, 2), 1.99)
 
     def test_all_forecast_modes_are_reproducible(self):
         for mode in FORECAST_ERROR_MODES:
@@ -60,12 +72,31 @@ class WallClockAndGenerationTest(unittest.TestCase):
             configuration="full",
         )
         self.assertLessEqual(
-            result["total_wall_time"],
+            result["online_decision_time"],
             limit + WALL_TIME_TOLERANCE_SECONDS,
         )
+        self.assertGreaterEqual(
+            result["audit_wall_time"],
+            result["online_decision_time"],
+        )
+        self.assertIn(
+            result["termination_status"],
+            {"FEASIBLE", "TIME_LIMIT_FEASIBLE", "DEADLINE_MISS"},
+        )
+        if result["ok"]:
+            self.assertNotEqual(
+                result["termination_status"],
+                "DEADLINE_MISS",
+            )
         self.assertIn("block_score_time", result)
         self.assertIn("model_build_time", result)
         self.assertIn("solver_time", result)
+        self.assertIn("solution_extract_time", result)
+        self.assertIn("model_dispose_time", result)
+        self.assertIn("validation_time", result)
+        for stage in result["stages"]:
+            self.assertIn("solver_return_guard", stage)
+            self.assertIn("solver_return_overrun", stage)
 
 
 if __name__ == "__main__":

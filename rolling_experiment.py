@@ -29,7 +29,7 @@ def run_rolling_case(
     dependency_profile: str = "current",
     baseline_parameter_profile: str = "frozen",
 ) -> dict:
-    """Optimize and execute each rolling cycle under a common wall-clock limit."""
+    """Optimize each rolling cycle under a common online-decision limit."""
     state = initial_simulation_state(case)
     method_state: dict = {}
     cycles: list[dict] = []
@@ -137,8 +137,27 @@ def run_rolling_case(
         for row in cycles
     )
     discretionary = total("plan_revision_metrics", "discretionary_cancel")
-    total_wall = sum(row.get("total_wall_time", 0) or 0 for row in cycles)
+    total_audit_wall = sum(
+        row.get("audit_wall_time", row.get("total_wall_time", 0)) or 0
+        for row in cycles
+    )
+    total_online_decision = sum(
+        row.get("online_decision_time", row.get("runtime", 0)) or 0
+        for row in cycles
+    )
     total_solver = sum(row.get("solver_time", 0) or 0 for row in cycles)
+    total_solution_extract = sum(
+        row.get("solution_extract_time", 0) or 0 for row in cycles
+    )
+    total_model_dispose = sum(
+        row.get("model_dispose_time", 0) or 0 for row in cycles
+    )
+    total_final_model_dispose = sum(
+        row.get("final_model_dispose_time", 0) or 0 for row in cycles
+    )
+    total_validation = sum(
+        row.get("validation_time", 0) or 0 for row in cycles
+    )
     total_preprocessing = sum(
         (row.get("preprocessing_time", 0) or 0)
         + (row.get("model_build_time", 0) or 0)
@@ -169,14 +188,34 @@ def run_rolling_case(
         for row in cycles
         for stage in row.get("stages", [])
     ]
+    termination_statuses = [
+        row["termination_status"]
+        for row in cycles
+        if not row.get("skipped") and row.get("termination_status")
+    ]
+    if "VALIDATION_FAILED" in termination_statuses:
+        termination_status = "VALIDATION_FAILED"
+    elif "DEADLINE_MISS" in termination_statuses:
+        termination_status = "DEADLINE_MISS"
+    elif "TIME_LIMIT_FEASIBLE" in termination_statuses:
+        termination_status = "TIME_LIMIT_FEASIBLE"
+    else:
+        termination_status = "FEASIBLE"
     return {
         "ok": all(row.get("ok", True) for row in cycles),
+        "termination_status": termination_status,
         "configuration": configuration,
         "cycles": cycles,
         "final_state": state,
-        "total_runtime": total_wall,
-        "total_wall_time": total_wall,
+        "total_runtime": total_online_decision,
+        "total_online_decision_time": total_online_decision,
+        "total_audit_wall_time": total_audit_wall,
+        "total_wall_time": total_audit_wall,
         "total_solver_time": total_solver,
+        "total_solution_extract_time": total_solution_extract,
+        "total_model_dispose_time": total_model_dispose,
+        "total_final_model_dispose_time": total_final_model_dispose,
+        "total_validation_time": total_validation,
         "total_preprocessing_time": total_preprocessing,
         "total_bottleneck_selection_time": total_bottleneck_selection,
         "total_realized_arrivals": realized_arrivals,

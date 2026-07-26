@@ -29,8 +29,9 @@ calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
 - Problem protocol: `rolling-v4.3-oracle-certified`
-- Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.3`
-- Result schema: `rolling-results-v7`
+- Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.4.0`
+- Result schema: `rolling-results-v8`
+- Online runtime: `strict-online-decision-wall-v1`
 - Packing oracle: `full-horizon-integer-packing-v2`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
@@ -108,10 +109,17 @@ separately.  The principal realized KPIs are:
 - peak block utilization and utilization deviation;
 - discretionary revision rate and stability cost.
 
-Runtime reporting uses end-to-end wall time per rolling cycle.  Solver time,
-preprocessing time, first-incumbent time, node count, repair stages, and final
-stage gap are secondary diagnostics.  A missing multiobjective Gurobi gap is
-reported as null and must not be converted to zero.
+The primary runtime is strict online end-to-end decision wall time per rolling
+cycle. Timing starts before method-specific preprocessing and ends when the
+complete executable integer allocation is available in memory. It includes
+preprocessing, domain selection, model construction, optimization, callbacks,
+repair control, and full solution extraction. Independent validation and final
+model disposal are excluded from the online limit but recorded in
+`audit_wall_time`; validation failure invalidates the row regardless of timing.
+Solver time, extraction time, disposal time, validation time, first-incumbent
+time, node count, repair stages, and final-stage gap are secondary diagnostics.
+A missing multiobjective Gurobi gap is reported as null and must not be
+converted to zero.
 
 ## Required comparison methods
 
@@ -256,7 +264,7 @@ first serialized as `rolling-instance-bundle-v1`. The serializer preserves
 tuple-key dictionaries, tuples, and sets, and records both the case SHA-256 and
 the exact bundle-file SHA-256. The bundle stores the instance family, profile,
 seed, source window, source/calibration hashes, and frozen per-cycle time
-budget. Result schema `rolling-results-v7` repeats these identities in every
+budget. Result schema `rolling-results-v8` repeats these identities in every
 row.
 
 `scripts/prepare_formal_instances.py` creates or verifies bundles.
@@ -559,20 +567,29 @@ forecast histories, or yard layout. Those elements remain fully disclosed
 semi-synthetic fields. Synthetic cases are therefore still required for exact
 scale, utilization, oracle certification, and mechanism control.
 
-### Formal runtime-gate correction
+### Online-decision runtime correction
 
-The first formal public-main execution exposed a runtime-contract defect before
-any complete public comparison was inspected. The 15% postprocessing reserve
-was capped at 10 seconds, so mandatory solution extraction and independent
-validation could marginally overrun 60-second public-medium cycles and could
-more substantially overrun 120-second public-large cycles even though the
-solver callback respected its deadline. Version 1.3.2 uses one common 16%
-reserve with a 20-second cap: 60- and 120-second cycles reserve 9.6 and 19.2
-seconds, respectively, while retaining the same strict total wall-clock
-budgets. The change does not alter the model, objective, candidate domains, or
-any method-specific time allowance. The incomplete v1.3 public run and the
-v1.3.1 single-case diagnostic are diagnostic evidence only and must not be
-pooled with formal results.
+Archived v1.3 diagnostics showed that a fixed audit-inclusive wall gate
+conflated online computation with independent validation and final model
+cleanup. The complete v1.3.2 five-method diagnostic contained valid incumbents
+and zero validation failures in all 17 rows flagged by that gate, but those
+rolling trajectories stopped early and are not formal evidence.
+
+Version 1.4.0 therefore freezes protocol
+`strict-online-decision-wall-v1`. The deadline covers all method-specific work
+through complete integer solution extraction. Independent validation and final
+model disposal are timed separately. `FEASIBLE` and `TIME_LIMIT_FEASIBLE` are
+valid terminations; `DEADLINE_MISS` and `VALIDATION_FAILED` stop the trajectory.
+The implementation uses batched Gurobi attribute extraction and a sparse-indexed
+validator whose reports are checked against the original scan-based validator.
+The 16% common extraction reserve and the original 20/60/120-second scale
+budgets remain unchanged. Since Gurobi can return after its nominal
+`TimeLimit` while finalizing attributes, a common in-budget solver-return guard
+(10% of the cycle limit, capped at 12 seconds) and independent wall-clock
+termination request protect the executable-solution deadline. This guard does
+not add runtime. The model, objective, domains, seeds, and method-specific
+allowances are unchanged. All v1.3 artifacts are diagnostic only and must not
+be pooled with v1.4 formal results.
 
 ## Frozen DRA-RPM sensitivity
 

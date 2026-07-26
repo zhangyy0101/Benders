@@ -158,20 +158,34 @@ sum of period observations rather than an unweighted average of cycle means.
 
 ## Timing and solver diagnostics
 
-The per-cycle limit is wall-clock time and includes impact detection, scoring,
-graph construction, model construction, Gurobi, extraction, and validation.
-Every stage reports total and binary variables, constraints, nodes, solution
-count, stage first-incumbent time, and reliable bound/gap attributes. Cycle
-first-incumbent time starts before preprocessing.
+The per-cycle online limit is wall-clock time from method-specific
+preprocessing through the availability of a complete executable allocation. It
+includes impact detection, scoring, graph construction, model construction,
+Gurobi, callbacks, repair control, and complete solution extraction. Independent
+validation and final model disposal are audit work outside that online decision
+boundary; an invalid audited solution still fails the run. Every stage reports
+total and binary variables, constraints, nodes, solution count, stage
+first-incumbent time, and reliable bound/gap attributes. Cycle first-incumbent
+time starts before preprocessing.
 
 To enforce that contract, every configuration reserves the same bounded tail
-for solver-limit overrun, incumbent extraction, and independent validation:
+for solver-limit overrun and complete incumbent extraction:
 16% of the cycle limit, with a 0.5-second minimum and 20-second maximum, while
 very short diagnostic limits retain at least half their budget for
 optimization. The callback also enforces the absolute stage deadline. The
 reserve is included in the recorded weight/runtime profile.
-Each completed stage also disposes its Gurobi model explicitly so long Pilot
-batches do not accumulate native solver resources across rolling cycles.
+Because Gurobi documents that it may return after its nominal `TimeLimit`
+while finalizing solver attributes, optimization also receives a common
+in-budget return guard (10% of the cycle limit, capped at 12 seconds) and an
+independent wall-clock termination request. The unused part of that guard
+remains inside the method's original budget; it is not extra runtime.
+`online_decision_time` is the primary computational metric.
+`audit_wall_time`, solution-extraction time, model-disposal time, and validation
+time are recorded separately. A time-limited but valid allocation available by
+the deadline is `TIME_LIMIT_FEASIBLE`; only a missing/late allocation or an
+invalid audited allocation fails the rolling trajectory.
+Each completed stage disposes its Gurobi model explicitly so long Pilot batches
+do not accumulate native solver resources across rolling cycles.
 The Pilot quality-polish stage is disabled in protocol `rolling-v3.9` because
 it consumed most of the residual budget without improving any accepted Pilot
 incumbent. The switch is applied equally to `full_direct` and `full` and is
@@ -270,7 +284,7 @@ between methods:
 1. `scripts/prepare_formal_instances.py` serializes each exact case to a
    hash-verified instance bundle and immutable index;
 2. `scripts/run_formal_matrix.py` verifies the index, loads the same bundles
-   for every paired method, and writes `rolling-results-v7` rows.
+   for every paired method, and writes `rolling-results-v8` rows.
 
 The formal runner fixes ten held-out seeds (`1000`--`1009`), rejects dirty Git
 state and time overrides, and uses per-cycle budgets stored in each bundle:

@@ -3,8 +3,9 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.3.2"
-RESULT_SCHEMA_VERSION = "rolling-results-v7"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.4.0"
+RESULT_SCHEMA_VERSION = "rolling-results-v8"
+ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
@@ -58,6 +59,15 @@ FORMAL_TIME_BUDGETS_SECONDS = {
     "public_temporal_autumn": 60.0,
     "pressure": 20.0,
 }
+
+# Gurobi's TimeLimit is a solver-work boundary: the optimizer may need
+# additional wall time to finalize attributes after the limit is reached.
+# Request termination before the online optimization deadline so that this
+# solver-return tail and incumbent extraction remain inside the declared
+# end-to-end decision budget.
+SOLVER_RETURN_GUARD_RATIO = .10
+SOLVER_RETURN_GUARD_MIN_SECONDS = .25
+SOLVER_RETURN_GUARD_MAX_SECONDS = 12.0
 FORMAL_PUBLIC_WINDOWS = {
     "public_small": {
         "start_date": "2025-07-04",

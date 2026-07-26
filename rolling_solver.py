@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 from collections import defaultdict, deque
 from typing import TypeAlias
@@ -47,6 +48,9 @@ from config import (
     QUALITY_POLISH_WEIGHT_OVERLAP,
     QUALITY_POLISH_WEIGHT_SUPPORT,
     QUALITY_POLISH_WEIGHT_UTILIZATION,
+    SOLVER_RETURN_GUARD_MAX_SECONDS,
+    SOLVER_RETURN_GUARD_MIN_SECONDS,
+    SOLVER_RETURN_GUARD_RATIO,
     POSTPROCESSING_RESERVE_MAX_SECONDS,
     POSTPROCESSING_RESERVE_MIN_SECONDS,
     POSTPROCESSING_RESERVE_RATIO,
@@ -84,7 +88,7 @@ CONFIGURATIONS = (
 
 
 def postprocessing_reserve_seconds(time_limit: float) -> float:
-    """Reserve a common bounded wall-clock tail for extraction and validation."""
+    """Reserve a common bounded online tail for incumbent extraction."""
     limit = max(0.0, float(time_limit))
     if limit <= 0:
         return 0.0
@@ -96,6 +100,22 @@ def postprocessing_reserve_seconds(time_limit: float) -> float:
         ),
     )
     return min(.50 * limit, target)
+
+
+def solver_return_guard_seconds(time_limit: float, solver_window: float) -> float:
+    """Return the common in-budget guard for solver termination cleanup."""
+
+    window = max(0.0, float(solver_window))
+    if window <= .01:
+        return 0.0
+    target = min(
+        SOLVER_RETURN_GUARD_MAX_SECONDS,
+        max(
+            SOLVER_RETURN_GUARD_MIN_SECONDS,
+            SOLVER_RETURN_GUARD_RATIO * max(0.0, float(time_limit)),
+        ),
+    )
+    return min(max(0.0, window - .01), target)
 
 
 def configuration_features(configuration: str) -> dict:
@@ -1758,7 +1778,13 @@ def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> d
     }
 
 
-def validate_rolling_solution(d: dict, solution: dict, tol: float = 1e-6) -> dict:
+def _validate_rolling_solution_reference(
+    d: dict,
+    solution: dict,
+    tol: float = 1e-6,
+) -> dict:
+    """Original scan-based validator retained as an equivalence oracle."""
+
     reserve, din, inv = solution["reservation"], solution["din"], solution["inventory"]
     shortage, attrs, violations = solution["shortage"], d["group_attrs"], {}
 
@@ -1897,6 +1923,199 @@ def validate_rolling_solution(d: dict, solution: dict, tol: float = 1e-6) -> dic
     return {"feasible": maximum <= tol, "max_violation": maximum, "violations": violations}
 
 
+def validate_rolling_solution(
+    d: dict,
+    solution: dict,
+    tol: float = 1e-6,
+) -> dict:
+    """Independently validate one solution with sparse cumulative indexes."""
+
+    reserve = solution["reservation"]
+    din = solution["din"]
+    inv = solution["inventory"]
+    shortage = solution["shortage"]
+    attrs = d["group_attrs"]
+    periods = tuple(d["periods"])
+    last = periods[-1]
+    violations: dict[str, float] = {}
+
+    def record(name: str, value: float) -> None:
+        violations[name] = max(
+            violations.get(name, 0),
+            max(0, float(value)),
+        )
+
+    presence_cache: dict[tuple[str, int], bool] = {}
+
+    def present(ship: str, period: int) -> bool:
+        key = (ship, period)
+        if key not in presence_cache:
+            presence_cache[key] = ship_present_at(d, ship, period)
+        return presence_cache[key]
+
+    reserve_by_pair: dict[Pair, float] = defaultdict(float)
+    reserve_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (bay, ship, group), quantity in reserve.items():
+        if quantity != 0:
+            reserve_by_pair[ship, group] += quantity
+            reserve_by_bay[bay].append((ship, group, quantity))
+
+    din_by_pair: dict[Pair, float] = defaultdict(float)
+    din_by_pair_period: dict[tuple[str, str, int], float] = defaultdict(float)
+    din_period_quantity: dict[
+        tuple[str, str, str],
+        dict[int, float],
+    ] = defaultdict(lambda: defaultdict(float))
+    for (bay, ship, group, period), quantity in din.items():
+        if quantity == 0:
+            continue
+        din_by_pair[ship, group] += quantity
+        din_by_pair_period[ship, group, period] += quantity
+        din_period_quantity[bay, ship, group][period] += quantity
+
+    cumulative_din: dict[tuple[str, str, str, int], float] = {}
+    planned_load: dict[tuple[str, int], float] = defaultdict(float)
+    planned_heights: dict[tuple[str, int], set[str]] = defaultdict(set)
+    for (bay, ship, group), by_period in din_period_quantity.items():
+        cumulative = 0.0
+        height_active = False
+        for period in periods:
+            period_quantity = by_period.get(period, 0.0)
+            cumulative += period_quantity
+            height_active = height_active or period_quantity > tol
+            cumulative_din[bay, ship, group, period] = cumulative
+            if present(ship, period):
+                planned_load[bay, period] += cumulative
+                if height_active:
+                    planned_heights[bay, period].add(attrs[group]["height"])
+
+    locked_load: dict[tuple[str, int], float] = defaultdict(float)
+    locked_heights: dict[tuple[str, int], set[str]] = defaultdict(set)
+    for (bay, old_ship), quantity in d["locked_inventory"].items():
+        release = d["locked_release_local"].get((bay, old_ship), INF)
+        for period in periods:
+            if release > period:
+                locked_load[bay, period] += quantity
+    for (bay, old_ship), height in d["locked_height"].items():
+        release = d["locked_release_local"].get((bay, old_ship), INF)
+        for period in periods:
+            if release > period:
+                locked_heights[bay, period].add(height)
+
+    actual_load: dict[tuple[str, int], float] = defaultdict(float)
+    actual_heights: dict[tuple[str, int], set[str]] = defaultdict(set)
+    for (bay, ship, group), quantity in d["actual_inventory"].items():
+        for period in periods:
+            if present(ship, period):
+                actual_load[bay, period] += quantity
+                if quantity > tol:
+                    actual_heights[bay, period].add(attrs[group]["height"])
+
+    for (ship, group, period), forecast in d["forecast_arrivals"].items():
+        placed = din_by_pair_period[ship, group, period]
+        record(
+            "period_arrival",
+            abs(placed + shortage.get((ship, group, period), 0) - forecast),
+        )
+    for ship, group in d["remaining_demand"]:
+        record(
+            "reserve_flow",
+            abs(reserve_by_pair[ship, group] - din_by_pair[ship, group]),
+        )
+
+    for bay in d["bays"]:
+        locked_final = locked_load[bay, last]
+        actual_final = actual_load[bay, last]
+        planned_final = sum(
+            quantity
+            for ship, _group, quantity in reserve_by_bay[bay]
+            if present(ship, last)
+        )
+        record(
+            "final_capacity",
+            locked_final
+            + actual_final
+            + planned_final
+            - d["capacity"][bay],
+        )
+        for period in periods:
+            record(
+                "period_capacity",
+                locked_load[bay, period]
+                + actual_load[bay, period]
+                + planned_load[bay, period]
+                - d["capacity"][bay],
+            )
+            used_heights = (
+                locked_heights[bay, period]
+                | actual_heights[bay, period]
+                | planned_heights[bay, period]
+            )
+            record("height", len(used_heights) - 1)
+
+    for (bay, _ship, group), quantity in reserve.items():
+        if quantity > tol:
+            record(
+                "size",
+                int(d["bay_size"][bay] != attrs[group]["size"]),
+            )
+        record("integrality", abs(quantity - round(quantity)))
+
+    for (bay, ship, group, period), value in inv.items():
+        expected = (
+            d["actual_inventory"].get((bay, ship, group), 0)
+            + cumulative_din.get((bay, ship, group, period), 0.0)
+            if present(ship, period)
+            else 0
+        )
+        record("inventory", abs(value - expected))
+        if not present(ship, period):
+            record("released_inventory", abs(value))
+
+    for value in din.values():
+        record("flow_integrality", abs(value - round(value)))
+
+    canonical = canonical_stability_metrics(d, reserve, shortage)
+    for name in (
+        "cancellation_quantity",
+        "mandatory_reduction",
+        "discretionary_cancel",
+        "new_bay_count",
+        "block_reallocation_quantity",
+        "stability_cost",
+    ):
+        expected = canonical[name]
+        if name in solution.get("components", {}):
+            record(
+                f"{name}_accounting",
+                abs(solution["components"][name] - expected),
+            )
+    auxiliary_pairs = {
+        "pair_cancellation": "pair_cancellation",
+        "pair_discretionary_cancel": "pair_discretionary_cancel",
+        "block_reallocation": "pair_block_reallocation",
+    }
+    stability_pairs = set(_dependency_pairs(d))
+    for variable_name, canonical_name in auxiliary_pairs.items():
+        actual_values = solution.get(variable_name, {})
+        expected_values = canonical[canonical_name]
+        for pair in stability_pairs:
+            record(
+                f"{variable_name}_accounting",
+                abs(
+                    actual_values.get(pair, 0)
+                    - expected_values.get(pair, 0)
+                ),
+            )
+
+    maximum = max(violations.values(), default=0)
+    return {
+        "feasible": maximum <= tol,
+        "max_violation": maximum,
+        "violations": violations,
+    }
+
+
 def solve_rolling_snapshot(
     d: dict,
     *,
@@ -1917,9 +2136,8 @@ def solve_rolling_snapshot(
     settings = configuration_features(configuration)
     wall_start = time.perf_counter()
     deadline = wall_start + max(0.0, time_limit)
-    # Leave a bounded tail for incumbent extraction and the mandatory independent
-    # validation.  The reserve is part of the common wall-clock budget, not extra
-    # time granted to any configuration.
+    # Leave a bounded tail for complete incumbent extraction. The reserve is
+    # inside the common online-decision budget, not extra method time.
     postprocessing_reserve = postprocessing_reserve_seconds(time_limit)
     optimization_deadline = max(wall_start, deadline - postprocessing_reserve)
     timing = {
@@ -1934,6 +2152,8 @@ def solve_rolling_snapshot(
         "model_build_time": 0.0,
         "solver_time": 0.0,
         "solution_extract_time": 0.0,
+        "model_dispose_time": 0.0,
+        "final_model_dispose_time": 0.0,
         "validation_time": 0.0,
     }
 
@@ -2130,6 +2350,7 @@ def solve_rolling_snapshot(
     quality_improved = False
     repair_pairs: set[Pair] = set()
     bottleneck_repair_plans: list[dict] = []
+    decision_ready_elapsed: float | None = None
     if settings["aggregate_domain_ladder"] and selected_initial_level == 3:
         stages = [(3, "aggregate_ladder_global_core", None)]
     elif settings["aggregate_domain_ladder"]:
@@ -2220,6 +2441,11 @@ def solve_rolling_snapshot(
                 "status": "model_build_time_limit",
                 "model_build_time": build_time,
                 "solver_runtime": 0.0,
+                "solver_time_window": max(0.0, solver_budget),
+                "allocated_solver_time": 0.0,
+                "solver_return_guard": 0.0,
+                "solver_return_overrun": 0.0,
+                "solver_budget_binding": False,
                 "stage_wall_time": time.perf_counter() - stage_wall_start,
                 "variables": int(model.NumVars),
                 "binary_variables": int(model.NumBinVars),
@@ -2237,7 +2463,12 @@ def solve_rolling_snapshot(
                     "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
                 ),
             })
+            decision_ready_elapsed = time.perf_counter() - wall_start
+            dispose_started = time.perf_counter()
             model.dispose()
+            dispose_time = time.perf_counter() - dispose_started
+            timing["model_dispose_time"] += dispose_time
+            timing["final_model_dispose_time"] += dispose_time
             del model, variables, expressions
             break
 
@@ -2245,12 +2476,24 @@ def solve_rolling_snapshot(
         model.Params.Threads = threads
         model.Params.Seed = seed
         model.Params.MIPGap = mip_gap
-        model.Params.TimeLimit = max(.01, solver_budget)
+        solver_return_guard = solver_return_guard_seconds(
+            time_limit,
+            solver_budget,
+        )
+        effective_solver_budget = max(
+            .01,
+            solver_budget - solver_return_guard,
+        )
+        solver_stop_deadline = min(
+            stage_deadline,
+            time.perf_counter() + effective_solver_budget,
+        )
+        model.Params.TimeLimit = effective_solver_budget
         first = [None]
         optimize_started = time.perf_counter()
 
         def callback(_model, where):
-            if time.perf_counter() >= stage_deadline:
+            if time.perf_counter() >= solver_stop_deadline:
                 _model.terminate()
                 return
             if where == GRB.Callback.MIPSOL and first[0] is None:
@@ -2279,8 +2522,26 @@ def solve_rolling_snapshot(
                     },
                 })
             ranking[f"{ship}|{group}"] = entries
-        model.optimize(callback)
+        termination_timer = threading.Timer(
+            max(.001, solver_stop_deadline - time.perf_counter()),
+            model.terminate,
+        )
+        termination_timer.daemon = True
+        termination_timer.start()
+        try:
+            model.optimize(callback)
+        finally:
+            termination_timer.cancel()
+        solver_returned_at = time.perf_counter()
         solver_runtime = float(model.Runtime)
+        solver_limit_status = int(model.Status) in {
+            GRB.TIME_LIMIT,
+            GRB.INTERRUPTED,
+        }
+        solver_budget_binding = bool(
+            solver_limit_status
+            and solver_returned_at >= solver_stop_deadline - .05
+        )
         timing["solver_time"] += solver_runtime
         try:
             objective_bound = float(model.ObjBound)
@@ -2302,7 +2563,14 @@ def solve_rolling_snapshot(
             "stability_formulation": (
                 "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
             ),
-            "allocated_solver_time": solver_budget,
+            "solver_time_window": solver_budget,
+            "allocated_solver_time": effective_solver_budget,
+            "solver_return_guard": solver_return_guard,
+            "solver_return_overrun": max(
+                0.0,
+                solver_returned_at - solver_stop_deadline,
+            ),
+            "solver_budget_binding": solver_budget_binding,
             "expanded_shortage_pairs": [list(pair) for pair in sorted(repair_pairs)],
             "top_block_scores": ranking,
             "direct_pair_count": len(direct_pairs),
@@ -2341,7 +2609,11 @@ def solve_rolling_snapshot(
             if cycle_first_incumbent[0] is None:
                 cycle_first_incumbent[0] = time.perf_counter() - wall_start
             extract_started = time.perf_counter()
-            candidate = extract_rolling_solution(variables, expressions)
+            candidate = extract_rolling_solution(
+                variables,
+                expressions,
+                model=model,
+            )
             candidate["components"]["predicted_shortage"] = float(
                 sum(candidate["shortage"].values())
             )
@@ -2413,134 +2685,217 @@ def solve_rolling_snapshot(
                 quality_improved = previous_key is None or best_key < previous_key
         record["stage_wall_time"] = time.perf_counter() - stage_wall_start
         trace.append(record)
-        model.dispose()
-        del model, variables, expressions
         position += 1
         record["progressive_repair_enabled"] = settings["progressive_repair"]
-        if not settings["progressive_repair"]:
-            continue
-
         shortage_pairs = {
             (ship, group)
-            for (ship, group, _period), quantity in (incumbent or {}).get("shortage", {}).items()
+            for (ship, group, _period), quantity
+            in (incumbent or {}).get("shortage", {}).items()
             if quantity > 1e-6
         }
-        remaining_wall = optimization_deadline - time.perf_counter()
-        record["postsolve_predicted_shortage"] = (
-            incumbent["components"]["predicted_shortage"] if incumbent else None
+        shortage_free = bool(
+            incumbent
+            and incumbent["components"]["predicted_shortage"] <= 1e-6
         )
-        record["postsolve_shortage_pair_count"] = len(shortage_pairs)
-        record["postsolve_remaining_wall_time"] = remaining_wall
-        if incumbent and incumbent["components"]["predicted_shortage"] <= 1e-6:
-            if (
-                settings["quality_polish"]
-                and name != "quality_polish"
-                and remaining_wall > .05
-            ):
-                polish_allowed, info = _quality_polish_allowed(
-                    d,
-                    affected_pairs,
-                    direct_pairs,
-                    propagated_pairs,
-                    scores,
-                    incumbent,
-                    release_opportunity_blocks,
+        requires_postsolve_planning = bool(
+            settings["progressive_repair"]
+            and (
+                not shortage_free
+                or (
+                    settings["quality_polish"]
+                    and name != "quality_polish"
                 )
-                quality_triggered = True
-                stages.append((0, "quality_polish", polish_allowed))
-                record["quality_polish_plan"] = info
-            continue
-        if shortage_pairs:
-            for pair in shortage_pairs:
-                direct_pairs.add(pair)
-                direct_reasons.setdefault(pair, []).append("shortage_repair")
-                impact_direction[pair] = "increase"
-                diagnostic_path_scores[pair] = max(
-                    1.0, diagnostic_path_scores.get(pair, 0.0)
-                )
-                diagnostic_depths[pair] = 0
-                propagation_types[pair] = "pressure"
-            propagated_pairs -= shortage_pairs
-            repair_pairs |= shortage_pairs
-            affected_pairs |= shortage_pairs
-            if settings["dependency_propagation"]:
-                repair_prop = _propagate_impact_pairs(
-                    shortage_pairs,
-                    dependency_graph,
-                    impact_direction=impact_direction,
-                    max_depth=1,
-                    edge_threshold=dependency_thresholds["edge_threshold"],
-                    path_threshold=dependency_thresholds["path_threshold"],
-                )
-                new_neighbors = set(repair_prop["propagated_pairs"]) - direct_pairs
-                propagated_pairs |= new_neighbors
-                affected_pairs |= new_neighbors
-                repair_pairs |= new_neighbors
-                for pair in sorted(new_neighbors):
-                    score = repair_prop["best_path_score"][pair]
-                    if score > diagnostic_path_scores.get(pair, -1):
-                        diagnostic_path_scores[pair] = score
-                        diagnostic_depths[pair] = repair_prop["propagation_depth"][pair]
-                        propagation_types[pair] = repair_prop["propagation_type"][pair]
-        if settings["bottleneck_repair"]:
-            if initial_impact_stage:
-                selector_budget = min(
-                    BOTTLENECK_SELECTOR_MAX_SECONDS,
-                    max(.01, BOTTLENECK_SELECTOR_BUDGET_RATIO * time_limit),
-                    max(.01, remaining_wall - .01),
-                )
-                selection_started = time.perf_counter()
-                if incumbent and shortage_pairs and remaining_wall > .02:
-                    repair_allowed, plan = _bottleneck_minimal_expansion(
-                        d,
-                        allowed,
-                        incumbent,
-                        shortage_pairs,
-                        scores,
-                        time_limit=selector_budget,
-                        seed=seed,
-                    )
-                else:
-                    repair_allowed = allowed
-                    plan = {
-                        "selector": "granularity_guarded_minimum_pair_block_cover",
-                        "status": "no_usable_incumbent_or_time",
-                        "shortage_pairs": [
-                            list(pair) for pair in sorted(shortage_pairs)
-                        ],
-                        "selected_pair_blocks": {},
-                        "selected_pair_block_count": 0,
-                        "selector_runtime": 0.0,
-                    }
-                timing["bottleneck_selection_time"] += (
-                    time.perf_counter() - selection_started
-                )
-                plan["allocated_selector_time"] = selector_budget
-                bottleneck_repair_plans.append(plan)
-                record["bottleneck_repair_plan"] = plan
-                if plan["selected_pair_block_count"] > 0:
-                    stages.append((1, "bottleneck_repair", repair_allowed))
-                else:
-                    stages.append((3, "global_repair", None))
-                repair_expansions += 1
-            elif name == "bottleneck_repair":
-                stages.append((3, "global_repair", None))
-                repair_expansions += 1
-        elif name == "impact_region":
-            stages.append((1, "adaptive_repair_1", None))
-            repair_expansions += 1
-        elif name == "adaptive_repair_1":
-            stages.append((2, "adaptive_repair_2", None))
-            repair_expansions += 1
-        elif name == "adaptive_repair_2":
-            stages.append((3, "global_repair", None))
-            repair_expansions += 1
+            )
+        )
+        if not requires_postsolve_planning:
+            decision_ready_elapsed = time.perf_counter() - wall_start
+            dispose_started = time.perf_counter()
+            model.dispose()
+            dispose_time = time.perf_counter() - dispose_started
+            timing["model_dispose_time"] += dispose_time
+            timing["final_model_dispose_time"] += dispose_time
+            record["model_dispose_time"] = dispose_time
+            del model, variables, expressions
+            break
 
+        dispose_started = time.perf_counter()
+        model.dispose()
+        dispose_time = time.perf_counter() - dispose_started
+        timing["model_dispose_time"] += dispose_time
+        record["model_dispose_time"] = dispose_time
+        del model, variables, expressions
+        if settings["progressive_repair"]:
+            remaining_wall = optimization_deadline - time.perf_counter()
+            record["postsolve_predicted_shortage"] = (
+                incumbent["components"]["predicted_shortage"]
+                if incumbent
+                else None
+            )
+            record["postsolve_shortage_pair_count"] = len(shortage_pairs)
+            record["postsolve_remaining_wall_time"] = remaining_wall
+            if shortage_free:
+                if (
+                    settings["quality_polish"]
+                    and name != "quality_polish"
+                    and remaining_wall > .05
+                ):
+                    polish_allowed, info = _quality_polish_allowed(
+                        d,
+                        affected_pairs,
+                        direct_pairs,
+                        propagated_pairs,
+                        scores,
+                        incumbent,
+                        release_opportunity_blocks,
+                    )
+                    quality_triggered = True
+                    stages.append((0, "quality_polish", polish_allowed))
+                    record["quality_polish_plan"] = info
+            else:
+                if shortage_pairs:
+                    for pair in shortage_pairs:
+                        direct_pairs.add(pair)
+                        direct_reasons.setdefault(
+                            pair,
+                            [],
+                        ).append("shortage_repair")
+                        impact_direction[pair] = "increase"
+                        diagnostic_path_scores[pair] = max(
+                            1.0,
+                            diagnostic_path_scores.get(pair, 0.0),
+                        )
+                        diagnostic_depths[pair] = 0
+                        propagation_types[pair] = "pressure"
+                    propagated_pairs -= shortage_pairs
+                    repair_pairs |= shortage_pairs
+                    affected_pairs |= shortage_pairs
+                    if settings["dependency_propagation"]:
+                        repair_prop = _propagate_impact_pairs(
+                            shortage_pairs,
+                            dependency_graph,
+                            impact_direction=impact_direction,
+                            max_depth=1,
+                            edge_threshold=dependency_thresholds[
+                                "edge_threshold"
+                            ],
+                            path_threshold=dependency_thresholds[
+                                "path_threshold"
+                            ],
+                        )
+                        new_neighbors = (
+                            set(repair_prop["propagated_pairs"])
+                            - direct_pairs
+                        )
+                        propagated_pairs |= new_neighbors
+                        affected_pairs |= new_neighbors
+                        repair_pairs |= new_neighbors
+                        for pair in sorted(new_neighbors):
+                            score = repair_prop["best_path_score"][pair]
+                            if score > diagnostic_path_scores.get(pair, -1):
+                                diagnostic_path_scores[pair] = score
+                                diagnostic_depths[pair] = repair_prop[
+                                    "propagation_depth"
+                                ][pair]
+                                propagation_types[pair] = repair_prop[
+                                    "propagation_type"
+                                ][pair]
+                if settings["bottleneck_repair"]:
+                    if initial_impact_stage:
+                        selector_budget = min(
+                            BOTTLENECK_SELECTOR_MAX_SECONDS,
+                            max(
+                                .01,
+                                BOTTLENECK_SELECTOR_BUDGET_RATIO
+                                * time_limit,
+                            ),
+                            max(.01, remaining_wall - .01),
+                        )
+                        selection_started = time.perf_counter()
+                        if (
+                            incumbent
+                            and shortage_pairs
+                            and remaining_wall > .02
+                        ):
+                            (
+                                repair_allowed,
+                                plan,
+                            ) = _bottleneck_minimal_expansion(
+                                d,
+                                allowed,
+                                incumbent,
+                                shortage_pairs,
+                                scores,
+                                time_limit=selector_budget,
+                                seed=seed,
+                            )
+                        else:
+                            repair_allowed = allowed
+                            plan = {
+                                "selector": (
+                                    "granularity_guarded_minimum_pair_block_cover"
+                                ),
+                                "status": "no_usable_incumbent_or_time",
+                                "shortage_pairs": [
+                                    list(pair)
+                                    for pair in sorted(shortage_pairs)
+                                ],
+                                "selected_pair_blocks": {},
+                                "selected_pair_block_count": 0,
+                                "selector_runtime": 0.0,
+                            }
+                        timing["bottleneck_selection_time"] += (
+                            time.perf_counter() - selection_started
+                        )
+                        plan["allocated_selector_time"] = selector_budget
+                        bottleneck_repair_plans.append(plan)
+                        record["bottleneck_repair_plan"] = plan
+                        if plan["selected_pair_block_count"] > 0:
+                            stages.append(
+                                (1, "bottleneck_repair", repair_allowed)
+                            )
+                        else:
+                            stages.append((3, "global_repair", None))
+                        repair_expansions += 1
+                    elif name == "bottleneck_repair":
+                        stages.append((3, "global_repair", None))
+                        repair_expansions += 1
+                elif name == "impact_region":
+                    stages.append((1, "adaptive_repair_1", None))
+                    repair_expansions += 1
+                elif name == "adaptive_repair_1":
+                    stages.append((2, "adaptive_repair_2", None))
+                    repair_expansions += 1
+                elif name == "adaptive_repair_2":
+                    stages.append((3, "global_repair", None))
+                    repair_expansions += 1
+
+        more_online_work = (
+            position < len(stages)
+            and time.perf_counter() < optimization_deadline
+        )
+        if not more_online_work:
+            decision_ready_elapsed = time.perf_counter() - wall_start
+        if not more_online_work:
+            break
+
+    if decision_ready_elapsed is None:
+        decision_ready_elapsed = time.perf_counter() - wall_start
+    optimization_budget_binding = (
+        decision_ready_elapsed
+        >= max(0.0, time_limit - postprocessing_reserve) - .01
+        or any(
+            bool(record.get("solver_budget_binding"))
+            for record in trace
+        )
+    )
     validation_started = time.perf_counter()
     report = validate_rolling_solution(d, incumbent) if incumbent else None
     timing["validation_time"] = time.perf_counter() - validation_started
-    total_wall_time = time.perf_counter() - wall_start
-    deadline_exceeded = total_wall_time > time_limit + WALL_TIME_TOLERANCE_SECONDS
+    audit_wall_time = time.perf_counter() - wall_start
+    deadline_exceeded = (
+        decision_ready_elapsed
+        > time_limit + WALL_TIME_TOLERANCE_SECONDS
+    )
     path_scores = {
         f"{ship}|{group}": score
         for (ship, group), score in sorted(diagnostic_path_scores.items())
@@ -2591,25 +2946,42 @@ def solve_rolling_snapshot(
         "aggregate_domain_ladder_enabled": settings["aggregate_domain_ladder"],
         "aggregate_domain_ladder": aggregate_ladder_diagnostics,
     }
+    solution_valid = bool(
+        incumbent
+        and report
+        and report["feasible"]
+    )
     failure_status = None
-    if preprocessing_timed_out:
-        failure_status = "preprocessing_time_limit"
-    elif deadline_exceeded:
-        failure_status = "wall_clock_time_limit_exceeded"
-    elif incumbent is None:
-        failure_status = "no_incumbent"
+    if incumbent is None:
+        failure_status = (
+            "preprocessing_time_limit"
+            if preprocessing_timed_out
+            else "no_incumbent"
+        )
     elif report and not report["feasible"]:
         failure_status = "solution_validation_failed"
+    elif deadline_exceeded:
+        failure_status = "online_decision_time_limit_exceeded"
+    if not solution_valid:
+        termination_status = (
+            "VALIDATION_FAILED"
+            if incumbent is not None and report is not None
+            else "DEADLINE_MISS"
+        )
+    elif deadline_exceeded:
+        termination_status = "DEADLINE_MISS"
+    elif optimization_budget_binding:
+        termination_status = "TIME_LIMIT_FEASIBLE"
+    else:
+        termination_status = "FEASIBLE"
     final_trace = trace[-1] if trace else {}
     final_components = (incumbent or {}).get("components", {})
     return {
-        "ok": bool(
-            incumbent
-            and report
-            and report["feasible"]
-            and not deadline_exceeded
-        ),
+        "ok": bool(solution_valid and not deadline_exceeded),
         "failure_status": failure_status,
+        "termination_status": termination_status,
+        "decision_deadline_met": not deadline_exceeded,
+        "optimization_budget_binding": optimization_budget_binding,
         "configuration": configuration,
         "solution": incumbent,
         "validation": report,
@@ -2632,8 +3004,10 @@ def solve_rolling_snapshot(
         "quality_polish_improved": quality_improved,
         "preprocessing_time": preprocessing_time,
         **timing,
-        "total_wall_time": total_wall_time,
-        "runtime": total_wall_time,
+        "online_decision_time": decision_ready_elapsed,
+        "audit_wall_time": audit_wall_time,
+        "total_wall_time": audit_wall_time,
+        "runtime": decision_ready_elapsed,
         "wall_time_limit": time_limit,
         "wall_time_tolerance": WALL_TIME_TOLERANCE_SECONDS,
         "postprocessing_time_reserve": postprocessing_reserve,

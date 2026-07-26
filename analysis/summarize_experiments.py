@@ -28,7 +28,14 @@ SCENARIO_FIELDS = (
 )
 DEFAULT_METRICS = (
     "ok",
+    "total_online_decision_time",
+    "total_audit_wall_time",
     "total_wall_time",
+    "total_solution_extract_time",
+    "total_model_dispose_time",
+    "total_validation_time",
+    "time_limit_feasible_count",
+    "online_deadline_miss_count",
     "realized_unplaced",
     "unplaced_rate",
     "fallback_rate",
@@ -250,6 +257,14 @@ def artifact_audit(rows: list[dict]) -> dict:
         ),
         "wall_clock_failure_count": sum(
             _number(row, "wall_clock_time_limit_exceeded") or 0 for row in rows
+        ),
+        "online_deadline_miss_count": sum(
+            _number(row, "online_deadline_miss_count") or 0
+            for row in rows
+        ),
+        "time_limit_feasible_count": sum(
+            _number(row, "time_limit_feasible_count") or 0
+            for row in rows
         ),
         "dirty_row_count": sum(
             str(row.get("git_dirty", "")).lower() == "true" for row in rows

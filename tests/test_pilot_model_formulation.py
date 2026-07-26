@@ -1,3 +1,4 @@
+import copy
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -34,6 +35,8 @@ from rolling_solver import (
     canonical_stability_metrics,
     physical_residual_capacity_by_bay_period,
     solve_rolling_snapshot,
+    _validate_rolling_solution_reference,
+    validate_rolling_solution,
 )
 from test_objective_scales_and_occupancy import objective_snapshot
 from test_time_scores_and_release_propagation import base_snapshot
@@ -559,6 +562,59 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertEqual(solution["integer"]["i"], 2)
         self.assertEqual(solution["binary"]["b"], 1)
         self.assertAlmostEqual(solution["continuous"]["c"], 2.0000087)
+
+    def test_batched_extraction_and_sparse_validation_match_references(self):
+        snapshot = objective_snapshot()
+        model, variables, expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+        model.Params.OutputFlag = 0
+        model.optimize()
+        self.assertEqual(model.Status, GRB.OPTIMAL)
+
+        reference_solution = extract_rolling_solution(
+            variables,
+            expressions,
+        )
+        batched_solution = extract_rolling_solution(
+            variables,
+            expressions,
+            model=model,
+        )
+        self.assertEqual(batched_solution, reference_solution)
+
+        for solution in (
+            batched_solution,
+            copy.deepcopy(batched_solution),
+        ):
+            if solution is not batched_solution:
+                first_key = next(iter(solution["reservation"]))
+                solution["reservation"][first_key] += 1
+            reference_report = _validate_rolling_solution_reference(
+                snapshot,
+                solution,
+            )
+            sparse_report = validate_rolling_solution(snapshot, solution)
+            self.assertEqual(
+                sparse_report["feasible"],
+                reference_report["feasible"],
+            )
+            self.assertEqual(
+                set(sparse_report["violations"]),
+                set(reference_report["violations"]),
+            )
+            self.assertAlmostEqual(
+                sparse_report["max_violation"],
+                reference_report["max_violation"],
+            )
+            for name, value in reference_report["violations"].items():
+                self.assertAlmostEqual(
+                    sparse_report["violations"][name],
+                    value,
+                    msg=name,
+                )
+        model.dispose()
 
     def test_release_after_arrival_is_rejected_and_cannot_create_flow(self):
         snapshot = objective_snapshot()

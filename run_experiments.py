@@ -176,6 +176,9 @@ def stage_summary(result: dict) -> dict:
         if stage.get("first_incumbent_time") is not None
     ]
     solved_cycles = [cycle for cycle in result["cycles"] if not cycle.get("skipped")]
+    def cycle_value(cycle: dict, field: str) -> float:
+        return float(cycle.get(field, 0) or 0)
+
     return {
         "mean_first_incumbent_time": sum(first) / len(first) if first else None,
         "repair_expansions": sum(
@@ -202,6 +205,57 @@ def stage_summary(result: dict) -> dict:
         "mean_solver_time": (
             result["total_solver_time"] / len(solved_cycles)
             if solved_cycles else 0.0
+        ),
+        "mean_online_decision_time": (
+            result["total_online_decision_time"] / len(solved_cycles)
+            if solved_cycles else 0.0
+        ),
+        "mean_solution_extract_time": (
+            result["total_solution_extract_time"] / len(solved_cycles)
+            if solved_cycles else 0.0
+        ),
+        "mean_validation_time": (
+            result["total_validation_time"] / len(solved_cycles)
+            if solved_cycles else 0.0
+        ),
+        "max_cycle_online_decision_time": max(
+            (
+                cycle_value(cycle, "online_decision_time")
+                for cycle in solved_cycles
+            ),
+            default=0.0,
+        ),
+        "max_cycle_audit_wall_time": max(
+            (
+                cycle_value(cycle, "audit_wall_time")
+                for cycle in solved_cycles
+            ),
+            default=0.0,
+        ),
+        "max_cycle_solution_extract_time": max(
+            (
+                cycle_value(cycle, "solution_extract_time")
+                for cycle in solved_cycles
+            ),
+            default=0.0,
+        ),
+        "max_cycle_validation_time": max(
+            (
+                cycle_value(cycle, "validation_time")
+                for cycle in solved_cycles
+            ),
+            default=0.0,
+        ),
+        "max_stage_solver_return_overrun": max(
+            (
+                float(stage.get("solver_return_overrun", 0) or 0)
+                for stage in stages
+            ),
+            default=0.0,
+        ),
+        "solver_budget_binding_stages": sum(
+            bool(stage.get("solver_budget_binding"))
+            for stage in stages
         ),
     }
 
@@ -356,10 +410,31 @@ def pilot_diagnostics(result: dict) -> dict:
         and not bool(cycle["validation"].get("feasible"))
         for cycle in cycles
     )
+    termination_statuses = [
+        cycle.get("termination_status")
+        for cycle in cycles
+        if cycle.get("termination_status")
+    ]
     return {
         "failure_status": ";".join(failures) if failures else None,
         "wall_clock_time_limit_exceeded": sum(
-            failure == "wall_clock_time_limit_exceeded" for failure in failures
+            failure in {
+                "wall_clock_time_limit_exceeded",
+                "online_decision_time_limit_exceeded",
+            }
+            for failure in failures
+        ),
+        "online_deadline_miss_count": sum(
+            status == "DEADLINE_MISS"
+            for status in termination_statuses
+        ),
+        "time_limit_feasible_count": sum(
+            status == "TIME_LIMIT_FEASIBLE"
+            for status in termination_statuses
+        ),
+        "feasible_termination_count": sum(
+            status == "FEASIBLE"
+            for status in termination_statuses
         ),
         "validation_failure_count": validation_failures,
         "no_incumbent_count": sum(failure == "no_incumbent" for failure in failures),
@@ -573,8 +648,23 @@ def result_row(
         "time_limit": time_limit,
         **csv_metadata_fields(metadata),
         "ok": result["ok"],
+        "termination_status": result["termination_status"],
+        "total_online_decision_time": result[
+            "total_online_decision_time"
+        ],
+        "total_audit_wall_time": result["total_audit_wall_time"],
         "total_wall_time": result["total_wall_time"],
         "total_solver_time": result["total_solver_time"],
+        "total_solution_extract_time": result[
+            "total_solution_extract_time"
+        ],
+        "total_model_dispose_time": result[
+            "total_model_dispose_time"
+        ],
+        "total_final_model_dispose_time": result[
+            "total_final_model_dispose_time"
+        ],
+        "total_validation_time": result["total_validation_time"],
         "total_preprocessing_time": result["total_preprocessing_time"],
         **stage_summary(result),
         **pilot_diagnostics(result),

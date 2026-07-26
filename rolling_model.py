@@ -897,7 +897,19 @@ def build_rolling_model(
     return m, variables, expressions
 
 
-def extract_rolling_solution(variables: dict, expressions: dict) -> dict:
+def extract_rolling_solution(
+    variables: dict,
+    expressions: dict,
+    *,
+    model: gp.Model | None = None,
+) -> dict:
+    """Extract a complete solution, using batched attributes when possible.
+
+    The optional ``model`` path avoids one Python-to-Gurobi call per variable.
+    The legacy path remains available for equivalence tests and callers that do
+    not retain the model object.
+    """
+
     def expression_value(value) -> float:
         if hasattr(value, "getValue"):
             return float(value.getValue())
@@ -912,7 +924,31 @@ def extract_rolling_solution(variables: dict, expressions: dict) -> dict:
         return value
 
     components = {name: expression_value(value) for name, value in expressions.items()}
-    return {
-        name: {key: variable_value(variable) for key, variable in group.items()}
-        for name, group in variables.items()
-    } | {"components": components}
+    if model is None:
+        extracted = {
+            name: {
+                key: variable_value(variable)
+                for key, variable in group.items()
+            }
+            for name, group in variables.items()
+        }
+    else:
+        extracted = {}
+        for name, group in variables.items():
+            items = list(group.items())
+            if not items:
+                extracted[name] = {}
+                continue
+            variable_list = [variable for _key, variable in items]
+            values = model.getAttr(GRB.Attr.X, variable_list)
+            variable_types = model.getAttr(GRB.Attr.VType, variable_list)
+            extracted[name] = {
+                key: (
+                    int(round(float(value)))
+                    if variable_type in (GRB.BINARY, GRB.INTEGER)
+                    else float(value)
+                )
+                for (key, _variable), value, variable_type
+                in zip(items, values, variable_types)
+            }
+    return extracted | {"components": components}

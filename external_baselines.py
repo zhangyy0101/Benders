@@ -1270,31 +1270,46 @@ def solve_literature_baseline(
     if configuration == "kp_sg":
         preprocessing_time = float(diagnostics.get("pricing_time", 0.0))
     search_time = time.perf_counter() - started
+    extract_started = time.perf_counter()
     solution, scales = _build_common_solution(d, allocator, shortage)
+    solution_extract_time = time.perf_counter() - extract_started
+    online_decision_time = time.perf_counter() - started
     validation_started = time.perf_counter()
     validation = validate_rolling_solution(d, solution)
     validation_time = time.perf_counter() - validation_started
-    total_wall_time = time.perf_counter() - started
+    audit_wall_time = time.perf_counter() - started
     deadline_exceeded = (
-        total_wall_time
+        online_decision_time
         > max(0.0, float(time_limit)) + WALL_TIME_TOLERANCE_SECONDS
+    )
+    optimization_budget_binding = (
+        online_decision_time
+        >= max(0.0, limit - postprocessing_reserve) - .01
     )
     failure_status = None
     if deadline_exceeded:
-        failure_status = "wall_clock_time_limit_exceeded"
+        failure_status = "online_decision_time_limit_exceeded"
     elif not validation["feasible"]:
         failure_status = "solution_validation_failed"
+    if not validation["feasible"]:
+        termination_status = "VALIDATION_FAILED"
+    elif deadline_exceeded:
+        termination_status = "DEADLINE_MISS"
+    elif optimization_budget_binding:
+        termination_status = "TIME_LIMIT_FEASIBLE"
+    else:
+        termination_status = "FEASIBLE"
     spec = BASELINE_SPECS[configuration]
     stage = {
         "stage": configuration,
         "baseline_family": spec["family"],
         "baseline_method": spec["method"],
         "baseline_fidelity": spec["fidelity"],
-        "status": "complete",
+        "status": termination_status,
         "runtime": search_time,
         "solver_runtime": 0.0,
         "model_build_time": 0.0,
-        "stage_wall_time": total_wall_time,
+        "stage_wall_time": online_decision_time,
         "first_incumbent_time": search_time,
         "stage_first_incumbent_time": search_time,
         "nodes": 0.0,
@@ -1311,6 +1326,9 @@ def solve_literature_baseline(
     return {
         "ok": validation["feasible"] and not deadline_exceeded,
         "failure_status": failure_status,
+        "termination_status": termination_status,
+        "decision_deadline_met": not deadline_exceeded,
+        "optimization_budget_binding": optimization_budget_binding,
         "configuration": configuration,
         "solution": solution,
         "validation": validation,
@@ -1349,10 +1367,14 @@ def solve_literature_baseline(
         "model_build_time": 0.0,
         "solver_time": 0.0,
         "algorithm_search_time": search_time,
-        "solution_extract_time": 0.0,
+        "solution_extract_time": solution_extract_time,
+        "model_dispose_time": 0.0,
+        "final_model_dispose_time": 0.0,
         "validation_time": validation_time,
-        "total_wall_time": total_wall_time,
-        "runtime": total_wall_time,
+        "online_decision_time": online_decision_time,
+        "audit_wall_time": audit_wall_time,
+        "total_wall_time": audit_wall_time,
+        "runtime": online_decision_time,
         "wall_time_limit": float(time_limit),
         "wall_time_tolerance": WALL_TIME_TOLERANCE_SECONDS,
         "postprocessing_time_reserve": postprocessing_reserve,

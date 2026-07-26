@@ -183,6 +183,10 @@ class ExperimentMetadataTest(unittest.TestCase):
             metadata["result_schema_version"], config.RESULT_SCHEMA_VERSION
         )
         self.assertEqual(
+            metadata["online_runtime_protocol"],
+            config.ONLINE_RUNTIME_PROTOCOL,
+        )
+        self.assertEqual(
             metadata["formal_core_configuration"],
             config.FORMAL_CORE_CONFIGURATION,
         )
@@ -206,6 +210,18 @@ class ExperimentMetadataTest(unittest.TestCase):
         self.assertEqual(metadata["temporal_protocol"]["time_bucket_hours"], 6)
         self.assertTrue(
             metadata["validation_profile"]["validate_each_execution_period"]
+        )
+        self.assertEqual(
+            metadata["validation_profile"]["online_time_end"],
+            "complete_executable_allocation_available",
+        )
+        self.assertIn(
+            "independent_validation",
+            metadata["validation_profile"]["online_time_excludes"],
+        )
+        self.assertEqual(
+            metadata["weight_profile"]["runtime"]["primary_metric"],
+            "online_decision_time",
         )
 
     def test_dependency_sensitivity_profile_is_recorded(self):

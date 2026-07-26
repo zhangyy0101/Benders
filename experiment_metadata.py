@@ -166,6 +166,9 @@ def collect_weight_profile(
             "utilization": config.QUALITY_POLISH_WEIGHT_UTILIZATION,
         },
         "runtime": {
+            "protocol": config.ONLINE_RUNTIME_PROTOCOL,
+            "primary_metric": "online_decision_time",
+            "audit_metric": "audit_wall_time",
             "wall_time_tolerance_seconds": config.WALL_TIME_TOLERANCE_SECONDS,
             "postprocessing_reserve_ratio": config.POSTPROCESSING_RESERVE_RATIO,
             "postprocessing_reserve_min_seconds": (
@@ -173,6 +176,15 @@ def collect_weight_profile(
             ),
             "postprocessing_reserve_max_seconds": (
                 config.POSTPROCESSING_RESERVE_MAX_SECONDS
+            ),
+            "solver_return_guard_ratio": (
+                config.SOLVER_RETURN_GUARD_RATIO
+            ),
+            "solver_return_guard_min_seconds": (
+                config.SOLVER_RETURN_GUARD_MIN_SECONDS
+            ),
+            "solver_return_guard_max_seconds": (
+                config.SOLVER_RETURN_GUARD_MAX_SECONDS
             ),
         },
     }
@@ -192,6 +204,7 @@ def collect_experiment_metadata(
         "problem_protocol": config.PROBLEM_PROTOCOL,
         "algorithm_version": config.ALGORITHM_VERSION,
         "result_schema_version": config.RESULT_SCHEMA_VERSION,
+        "online_runtime_protocol": config.ONLINE_RUNTIME_PROTOCOL,
         "formal_core_configuration": config.FORMAL_CORE_CONFIGURATION,
         "external_baseline_protocol": config.EXTERNAL_BASELINE_PROTOCOL,
         "preprocessing_implementation": (
@@ -231,6 +244,22 @@ def collect_experiment_metadata(
                 config.VALIDATE_EACH_EXECUTION_PERIOD
             ),
             "integer_solver_values_normalized_before_validation": True,
+            "online_time_start": "before_method_specific_preprocessing",
+            "online_time_end": "complete_executable_allocation_available",
+            "online_time_includes": [
+                "preprocessing",
+                "domain_selection",
+                "model_build",
+                "optimization",
+                "callbacks",
+                "repair_control",
+                "solution_extraction",
+            ],
+            "online_time_excludes": [
+                "independent_validation",
+                "final_model_disposal",
+                "artifact_serialization",
+            ],
             "wall_time_tolerance_seconds": (
                 config.WALL_TIME_TOLERANCE_SECONDS
             ),
@@ -248,6 +277,7 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "problem_protocol": metadata.get("problem_protocol"),
         "algorithm_version": metadata.get("algorithm_version"),
         "result_schema_version": metadata.get("result_schema_version"),
+        "online_runtime_protocol": metadata.get("online_runtime_protocol"),
         "formal_core_configuration": metadata.get("formal_core_configuration"),
         "external_baseline_protocol": metadata.get(
             "external_baseline_protocol"

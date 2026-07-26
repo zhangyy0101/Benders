@@ -127,6 +127,7 @@ class PilotExperimentOutputTest(unittest.TestCase):
                 {
                     "validation": {"feasible": True},
                     "failure_status": None,
+                    "termination_status": "TIME_LIMIT_FEASIBLE",
                     "impact_diagnostics": {
                         "propagated_pairs": [["V1", "G1"], ["V2", "G2"]],
                         "pressure_propagation": [["V1", "G1"]],
@@ -165,7 +166,8 @@ class PilotExperimentOutputTest(unittest.TestCase):
                 },
                 {
                     "validation": {"feasible": False},
-                    "failure_status": "wall_clock_time_limit_exceeded",
+                    "failure_status": "online_decision_time_limit_exceeded",
+                    "termination_status": "DEADLINE_MISS",
                     "impact_diagnostics": {
                         "propagated_pairs": [],
                         "pressure_propagation": [],
@@ -203,9 +205,13 @@ class PilotExperimentOutputTest(unittest.TestCase):
         diagnostics = pilot_diagnostics(result)
 
         self.assertEqual(
-            diagnostics["failure_status"], "wall_clock_time_limit_exceeded"
+            diagnostics["failure_status"],
+            "online_decision_time_limit_exceeded",
         )
         self.assertEqual(diagnostics["wall_clock_time_limit_exceeded"], 1)
+        self.assertEqual(diagnostics["online_deadline_miss_count"], 1)
+        self.assertEqual(diagnostics["time_limit_feasible_count"], 1)
+        self.assertEqual(diagnostics["feasible_termination_count"], 0)
         self.assertEqual(diagnostics["validation_failure_count"], 1)
         self.assertEqual(diagnostics["solved_cycle_count"], 2)
         self.assertEqual(diagnostics["propagation_triggered_count"], 1)
