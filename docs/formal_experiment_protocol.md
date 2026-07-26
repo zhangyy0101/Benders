@@ -30,8 +30,9 @@ model or the solution stages.
 
 - Problem protocol: `rolling-v4.3-oracle-certified`
 - Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.4.0`
-- Result schema: `rolling-results-v8`
+- Result schema: `rolling-results-v9`
 - Online runtime: `strict-online-decision-wall-v1`
+- Formal orchestration: `instance-sharded-parallel-v1`
 - Packing oracle: `full-horizon-integer-packing-v2`
 - Candidate core configuration: `full_bottleneck`
 - External baseline protocol: `adapted-literature-baselines-v1`
@@ -264,14 +265,20 @@ first serialized as `rolling-instance-bundle-v1`. The serializer preserves
 tuple-key dictionaries, tuples, and sets, and records both the case SHA-256 and
 the exact bundle-file SHA-256. The bundle stores the instance family, profile,
 seed, source window, source/calibration hashes, and frozen per-cycle time
-budget. Result schema `rolling-results-v8` repeats these identities in every
+budget. Result schema `rolling-results-v9` repeats these identities in every
 row.
 
 `scripts/prepare_formal_instances.py` creates or verifies bundles.
 It also writes `rolling-instance-index-v1`, containing the expected bundle and
-case hashes. `scripts/run_formal_matrix.py` requires that index in formal mode,
-verifies every file against it, and atomically checkpoints a common CSV and
-manifest. A formal run rejects:
+case hashes. `scripts/run_formal_matrix.py` verifies every file and writes one
+serial atomic checkpoint. For the formal main matrix,
+`scripts/run_formal_sharded_matrix.py` greedily balances complete instances by
+their frozen cycle budgets across two workers. Each worker uses one solver
+thread, processes all five methods for its assigned instances, and writes its
+own CSV and manifest. The controller continuously merges available rows in
+the original instance/method order and rejects missing, duplicate, or
+unexpected planned identities. Final metadata records every shard index, CSV,
+and manifest SHA-256. A formal run rejects:
 
 - seeds outside `1000`--`1009`;
 - a dirty or unidentifiable Git state;
@@ -694,12 +701,19 @@ python scripts/prepare_formal_instances.py \
 Run the paired five-method matrix from archived files:
 
 ```bash
-python scripts/run_formal_matrix.py \
-  --experiment-phase formal --experiment-set main \
-  --bundle-indexes \
+python scripts/run_formal_sharded_matrix.py \
+  --bundle-index \
     local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json \
+  --workers 2 --threads 1 \
   --output local_results/formal/runs/synthetic_main.csv
 ```
+
+The two workers execute different complete instances concurrently. Methods
+within each instance remain paired on the same worker. Parallelism changes only
+batch makespan: the mathematical model, method-specific preprocessing, solver
+thread count, per-cycle deadline, extraction boundary, and independent
+validation are unchanged. Worker checkpoints support `--resume`; a fresh run
+refuses to overwrite an existing final or shard output.
 
 The Aggregate-LP ablation and DRA-RPM sensitivity use the same bundles:
 

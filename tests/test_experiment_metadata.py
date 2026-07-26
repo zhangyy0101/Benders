@@ -187,6 +187,10 @@ class ExperimentMetadataTest(unittest.TestCase):
             config.ONLINE_RUNTIME_PROTOCOL,
         )
         self.assertEqual(
+            metadata["formal_orchestration_protocol"],
+            config.FORMAL_ORCHESTRATION_PROTOCOL,
+        )
+        self.assertEqual(
             metadata["formal_core_configuration"],
             config.FORMAL_CORE_CONFIGURATION,
         )

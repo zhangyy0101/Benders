@@ -4,8 +4,9 @@
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
 ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.4.0"
-RESULT_SCHEMA_VERSION = "rolling-results-v8"
+RESULT_SCHEMA_VERSION = "rolling-results-v9"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
+FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
 EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
 PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"

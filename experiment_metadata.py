@@ -205,6 +205,9 @@ def collect_experiment_metadata(
         "algorithm_version": config.ALGORITHM_VERSION,
         "result_schema_version": config.RESULT_SCHEMA_VERSION,
         "online_runtime_protocol": config.ONLINE_RUNTIME_PROTOCOL,
+        "formal_orchestration_protocol": (
+            config.FORMAL_ORCHESTRATION_PROTOCOL
+        ),
         "formal_core_configuration": config.FORMAL_CORE_CONFIGURATION,
         "external_baseline_protocol": config.EXTERNAL_BASELINE_PROTOCOL,
         "preprocessing_implementation": (
@@ -278,6 +281,9 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "algorithm_version": metadata.get("algorithm_version"),
         "result_schema_version": metadata.get("result_schema_version"),
         "online_runtime_protocol": metadata.get("online_runtime_protocol"),
+        "formal_orchestration_protocol": metadata.get(
+            "formal_orchestration_protocol"
+        ),
         "formal_core_configuration": metadata.get("formal_core_configuration"),
         "external_baseline_protocol": metadata.get(
             "external_baseline_protocol"

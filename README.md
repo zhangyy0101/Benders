@@ -283,8 +283,9 @@ between methods:
 
 1. `scripts/prepare_formal_instances.py` serializes each exact case to a
    hash-verified instance bundle and immutable index;
-2. `scripts/run_formal_matrix.py` verifies the index, loads the same bundles
-   for every paired method, and writes `rolling-results-v8` rows.
+2. `scripts/run_formal_sharded_matrix.py` verifies the index, balances whole
+   instances over independent workers, and merges their atomic checkpoints
+   into `rolling-results-v9` rows after exact identity auditing.
 
 The formal runner fixes ten held-out seeds (`1000`--`1009`), rejects dirty Git
 state and time overrides, and uses per-cycle budgets stored in each bundle:
@@ -292,6 +293,21 @@ state and time overrides, and uses per-cycle budgets stored in each bundle:
 matrix is `core_start`, `full_bottleneck`, `kp_dos`, `kp_sg`, and `dra_rpm`.
 The unrestricted `core` and direct `core_start_impact` variants are reserved
 for the separate internal-ablation panel.
+
+The formal main matrix uses two parallel instance workers by default. Each
+worker still uses one Gurobi thread and runs all five paired methods for its
+assigned instances. Workers never share a CSV: each writes an independent
+checkpoint and manifest, and the controller rejects missing, duplicate, or
+unexpected experiment identities before producing the common result. Per-cycle
+online times remain method runtimes, not total batch makespan.
+
+```bash
+python scripts/run_formal_sharded_matrix.py \
+  --bundle-index \
+    local_results/formal/instances/portmis_primary/portmis_instance_index.json \
+  --workers 2 --threads 1 \
+  --output local_results/formal/runs/public_main.csv
+```
 
 Example development smoke:
 
