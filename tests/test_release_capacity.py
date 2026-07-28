@@ -49,7 +49,11 @@ class ReleaseCapacityTest(unittest.TestCase):
         model.Params.OutputFlag = 0
         model.optimize()
         self.assertEqual(model.Status, GRB.OPTIMAL)
-        solution = extract_rolling_solution(variables, expressions)
+        solution = extract_rolling_solution(
+            variables,
+            expressions,
+            snapshot=data,
+        )
         self.assertEqual(solution["components"]["predicted_shortage"], 0)
         self.assertAlmostEqual(solution["reservation"]["Y1", "A", "G_STD"], 5)
         self.assertAlmostEqual(solution["reservation"]["Y1", "B", "G_HIGH"], 5)

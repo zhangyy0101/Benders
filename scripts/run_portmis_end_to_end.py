@@ -234,6 +234,8 @@ def build_portmis_rolling_case(
     nominal_outbound_rate_per_ship_period: int = (
         DEFAULT_OUTBOUND_BOXES_PER_6H
     ),
+    yard_bay_rows: Sequence[dict[str, str]] | None = None,
+    initial_inventory_rows: Sequence[dict[str, str]] | None = None,
 ) -> tuple[dict, dict]:
     """Map calibrated calls to the unchanged rolling-case data contract."""
     _validate_calibrated_rows(calls, groups)
@@ -368,33 +370,105 @@ def build_portmis_rolling_case(
         cycles=cycles,
     )
 
-    blocks = [f"B{index + 1:02d}" for index in range(num_blocks)]
-    bays = [
-        f"{block}_Y{position + 1:02d}"
-        for block in blocks
-        for position in range(bays_per_block)
-    ]
-    bay_block = {bay: bay.split("_Y")[0] for bay in bays}
-    bay_size = {
-        bay: 20 if index % 2 == 0 else 40 for index, bay in enumerate(bays)
-    }
-    capacity = {bay: int(bay_capacity) for bay in bays}
     heights = ("STD", "HIGH")
-    locked, locked_height, initialization_diagnostics = (
-        build_initial_locked_inventory(
-            bays=bays,
-            capacity=capacity,
-            bay_size=bay_size,
-            heights=heights,
-            target_utilization=initial_utilization,
-            seed=seed,
+    if yard_bay_rows is None:
+        if initial_inventory_rows is not None:
+            raise ValueError("initial_inventory_rows require yard_bay_rows")
+        blocks = [f"B{index + 1:02d}" for index in range(num_blocks)]
+        bays = [
+            f"{block}_Y{position + 1:02d}"
+            for block in blocks
+            for position in range(bays_per_block)
+        ]
+        bay_block = {bay: bay.split("_Y")[0] for bay in bays}
+        bay_size = {
+            bay: 20 if index % 2 == 0 else 40
+            for index, bay in enumerate(bays)
+        }
+        capacity = {bay: int(bay_capacity) for bay in bays}
+        locked, locked_height, initialization_diagnostics = (
+            build_initial_locked_inventory(
+                bays=bays,
+                capacity=capacity,
+                bay_size=bay_size,
+                heights=heights,
+                target_utilization=initial_utilization,
+                seed=seed,
+            )
         )
-    )
+        yard_source = "adapter_generated_regular_yard"
+    else:
+        if not yard_bay_rows:
+            raise ValueError("yard_bay_rows must be nonempty")
+        required = {"area", "bay", "size_ft", "capacity_boxes"}
+        if any(not required.issubset(row) for row in yard_bay_rows):
+            raise ValueError(f"yard_bay_rows require columns {sorted(required)}")
+        bays = [row["bay"] for row in yard_bay_rows]
+        if len(bays) != len(set(bays)):
+            raise ValueError("yard_bay_rows contain duplicate bays")
+        bay_block = {row["bay"]: row["area"] for row in yard_bay_rows}
+        blocks = list(dict.fromkeys(row["area"] for row in yard_bay_rows))
+        bay_size = {row["bay"]: int(row["size_ft"]) for row in yard_bay_rows}
+        capacity = {
+            row["bay"]: int(row["capacity_boxes"]) for row in yard_bay_rows
+        }
+        if set(bay_size.values()) - {20, 40}:
+            raise ValueError("calibrated yard supports only 20/40-foot bays")
+        if any(value <= 0 for value in capacity.values()):
+            raise ValueError("calibrated yard capacity must be positive")
+        inventory = list(initial_inventory_rows or [])
+        inventory_required = {
+            "bay", "old_ship", "locked_boxes", "height_class"
+        }
+        if any(not inventory_required.issubset(row) for row in inventory):
+            raise ValueError(
+                "initial_inventory_rows require bay, old_ship, locked_boxes, "
+                "and height_class"
+            )
+        locked = {}
+        locked_height = {}
+        for row in inventory:
+            bay = row["bay"]
+            if bay not in capacity:
+                continue
+            height = row["height_class"]
+            if height not in heights:
+                raise ValueError(f"unsupported initial height class: {height}")
+            key = (bay, row["old_ship"])
+            quantity = int(row["locked_boxes"])
+            if quantity <= 0:
+                continue
+            locked[key] = locked.get(key, 0) + quantity
+            locked_height[key] = height
+        per_bay_locked = {
+            bay: sum(q for (candidate, _ship), q in locked.items()
+                     if candidate == bay)
+            for bay in bays
+        }
+        if any(per_bay_locked[bay] > capacity[bay] for bay in bays):
+            raise ValueError("initial inventory exceeds calibrated bay capacity")
+        total_capacity = sum(capacity.values())
+        locked_quantity = sum(locked.values())
+        initialization_diagnostics = {
+            "requested_initial_utilization": (
+                locked_quantity / total_capacity if total_capacity else 0.0
+            ),
+            "realized_initial_utilization": (
+                locked_quantity / total_capacity if total_capacity else 0.0
+            ),
+            "initial_locked_quantity": locked_quantity,
+            "initial_total_capacity": total_capacity,
+            "initialization_shortfall": 0,
+        }
+        initial_utilization = initialization_diagnostics[
+            "realized_initial_utilization"
+        ]
+        yard_source = "yangshan_of_calibrated_virtual_yard"
 
     distance: dict[tuple[str, str], int] = {}
     for row in ordered_calls:
         ship = call_to_ship[row["call_id"]]
-        preferred = (_berth_number(row["facility_name"]) - 1) % num_blocks
+        preferred = (_berth_number(row["facility_name"]) - 1) % len(blocks)
         for block_index, block in enumerate(blocks):
             distance[ship, block] = 100 + 120 * abs(block_index - preferred)
 
@@ -517,8 +591,10 @@ def build_portmis_rolling_case(
         ),
         "active_ship_overlap": len(ships),
         "pod_count": len({attributes["pod"] for attributes in group_attrs.values()}),
-        "num_blocks": num_blocks,
-        "bays_per_block": bays_per_block,
+        "num_blocks": len(blocks),
+        "bays_per_block": (
+            bays_per_block if yard_bay_rows is None else None
+        ),
         "num_ships": len(ships),
         "source_family": "portmis_capacity_anchored_semi_synthetic",
         "source_epoch": epoch.isoformat(timespec="minutes"),
@@ -526,6 +602,7 @@ def build_portmis_rolling_case(
         "ship_to_call": ship_to_call,
         "source_schedule": source_schedule,
         "adapter_protocol_version": ADAPTER_PROTOCOL_VERSION,
+        "yard_source": yard_source,
     }
 
     booking_by_ship = {
@@ -562,7 +639,8 @@ def build_portmis_rolling_case(
         ],
         "case_scale": {
             "cycles": cycles,
-            "blocks": num_blocks,
+            "blocks": len(blocks),
+            "yard_source": yard_source,
             "bays": len(bays),
             "capacity_slots": sum(capacity.values()),
             "initial_locked_boxes": sum(locked.values()),

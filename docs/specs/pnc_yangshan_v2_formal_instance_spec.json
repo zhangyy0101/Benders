@@ -1,0 +1,196 @@
+{
+  "schema": "pnc-yangshan-formal-instance-spec-v1",
+  "data_protocol_version": "pnc-yangshan-formal-instance-v2",
+  "status": "frozen_before_formal_seed_generation",
+  "formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
+  "common": {
+    "call_count": 4,
+    "selected_area_count": 40,
+    "area_selection_rule": "fixed_count_whole_areas_ranked_by_observed_free_slots",
+    "minimum_free_factor": 3.0,
+    "time_budget_seconds_per_cycle": 60,
+    "forecast_error": 0.1,
+    "forecast_error_mode": "multiplicative",
+    "attribute_model": "yangshan_complete_voyage_profile_bootstrap",
+    "supported_sizes": [20, 40],
+    "supported_heights": ["STD", "HIGH"],
+    "yard_scope": "yangshan_of_only",
+    "packing_oracle_protocol": "full-horizon-integer-packing-v2"
+  },
+  "methods": {
+    "central_main": [
+      "core_start",
+      "full_bottleneck",
+      "kp_dos",
+      "kp_sg",
+      "dra_rpm"
+    ],
+    "robustness": ["core_start", "full_bottleneck"]
+  },
+  "profiles": [
+    {
+      "profile": "temporal_mar",
+      "paper_role": "temporal_robustness",
+      "source_period": "2026_03",
+      "source_window": ["2026-03-14", "2026-03-20"],
+      "selected_call_ids": [
+        "PNC_6517476473CFC602",
+        "PNC_434DDB2839EB8478",
+        "PNC_1D663A14F33C6680",
+        "PNC_8B23E37FCD801330"
+      ],
+      "observed_export_boxes": 4716,
+      "volume_factor": 1.0,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "robustness"
+    },
+    {
+      "profile": "temporal_apr",
+      "paper_role": "temporal_robustness",
+      "source_period": "2026_04",
+      "source_window": ["2026-04-14", "2026-04-20"],
+      "selected_call_ids": [
+        "PNC_7279513F8552202E",
+        "PNC_C5AC94858A184A76",
+        "PNC_BBDE38DE830DDB74",
+        "PNC_A2A274EB316B55E5"
+      ],
+      "observed_export_boxes": 4310,
+      "volume_factor": 1.0,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "robustness"
+    },
+    {
+      "profile": "temporal_jun",
+      "paper_role": "temporal_robustness",
+      "source_period": "2026_06",
+      "source_window": ["2026-06-14", "2026-06-20"],
+      "selected_call_ids": [
+        "PNC_FB6D474B0A4C0532",
+        "PNC_105A81E424E25386",
+        "PNC_C71DA8FD813C5966",
+        "PNC_D4A9E355EF549828"
+      ],
+      "observed_export_boxes": 4747,
+      "volume_factor": 1.0,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "robustness"
+    },
+    {
+      "profile": "volume_baseline",
+      "paper_role": "central_main_temporal_may_volume_1.0_yard_capacity_relief",
+      "source_period": "2026_05",
+      "source_window": ["2026-05-14", "2026-05-20"],
+      "selected_call_ids": [
+        "PNC_6B9DE97BF642517F",
+        "PNC_E1EEC4FBF3C8E281",
+        "PNC_636C20F4BF1E30E9",
+        "PNC_F6B06A8ACAD50E71"
+      ],
+      "observed_export_boxes": 4314,
+      "volume_factor": 1.0,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "central_main"
+    },
+    {
+      "profile": "volume_low",
+      "paper_role": "volume_sensitivity_0.8",
+      "source_period": "2026_05",
+      "source_window": ["2026-05-14", "2026-05-20"],
+      "selected_call_ids": [
+        "PNC_6B9DE97BF642517F",
+        "PNC_E1EEC4FBF3C8E281",
+        "PNC_636C20F4BF1E30E9",
+        "PNC_F6B06A8ACAD50E71"
+      ],
+      "observed_export_boxes": 4314,
+      "generated_export_boxes": 3451,
+      "volume_factor": 0.8,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "robustness"
+    },
+    {
+      "profile": "volume_high",
+      "paper_role": "volume_sensitivity_1.2",
+      "source_period": "2026_05",
+      "source_window": ["2026-05-14", "2026-05-20"],
+      "selected_call_ids": [
+        "PNC_6B9DE97BF642517F",
+        "PNC_E1EEC4FBF3C8E281",
+        "PNC_636C20F4BF1E30E9",
+        "PNC_F6B06A8ACAD50E71"
+      ],
+      "observed_export_boxes": 4314,
+      "generated_export_boxes": 5177,
+      "volume_factor": 1.2,
+      "yard_profile": "capacity_relief_080",
+      "method_set": "robustness"
+    },
+    {
+      "profile": "yard_observed",
+      "paper_role": "yard_sensitivity_observed",
+      "source_period": "2026_05",
+      "source_window": ["2026-05-14", "2026-05-20"],
+      "selected_call_ids": [
+        "PNC_6B9DE97BF642517F",
+        "PNC_E1EEC4FBF3C8E281",
+        "PNC_636C20F4BF1E30E9",
+        "PNC_F6B06A8ACAD50E71"
+      ],
+      "observed_export_boxes": 4314,
+      "volume_factor": 1.0,
+      "yard_profile": "observed_full",
+      "yard_reference": {
+        "selected_bays": 1526,
+        "capacity_boxes": 41335,
+        "initial_locked_boxes": 19535
+      },
+      "method_set": "robustness"
+    },
+    {
+      "profile": "yard_high_pressure",
+      "paper_role": "yard_sensitivity_high_pressure",
+      "source_period": "2026_05",
+      "source_window": ["2026-05-14", "2026-05-20"],
+      "selected_call_ids": [
+        "PNC_6B9DE97BF642517F",
+        "PNC_E1EEC4FBF3C8E281",
+        "PNC_636C20F4BF1E30E9",
+        "PNC_F6B06A8ACAD50E71"
+      ],
+      "observed_export_boxes": 4314,
+      "volume_factor": 1.0,
+      "yard_profile": "high_pressure",
+      "yard_reference": {
+        "selected_bays": 1518,
+        "capacity_boxes": 41121,
+        "initial_locked_boxes": 22798
+      },
+      "method_set": "robustness"
+    }
+  ],
+  "expected_counts": {
+    "profiles_per_seed": 8,
+    "formal_seed_count": 10,
+    "unique_bundle_count": 80,
+    "central_main_result_rows": 50,
+    "robustness_result_rows": 140,
+    "total_semisynthetic_result_rows": 190
+  },
+  "generation_gate": {
+    "open_formal_seeds_now": false,
+    "required_before_generation": [
+      "core_start_and_external_baseline_interface_preflight",
+      "clean_tested_git_commit",
+      "fixed_generation_command_and_output_root"
+    ],
+    "required_for_each_generated_bundle": [
+      "source_and_output_hashes",
+      "exact_selected_call_ids",
+      "PNC_export_total_reconciliation",
+      "model_attribute_domain_validation",
+      "OF_yard_validation",
+      "zero_shortage_integer_packing_certificate"
+    ]
+  }
+}

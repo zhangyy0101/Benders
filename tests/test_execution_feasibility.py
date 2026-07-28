@@ -51,6 +51,7 @@ class ExecutionFeasibilityTest(unittest.TestCase):
         self.assertEqual(metrics["planned_infeasible_quantity"], 5)
         self.assertEqual(metrics["fallback_placement_quantity"], 5)
         self.assertEqual(metrics["realized_unplaced"], 0)
+        self.assertEqual(metrics["pre_physical_recovery_unplaced"], 0)
         self.assertEqual(
             next_state["actual_inventory"][fallback_bay, self.ship, self.group], 5
         )
@@ -71,7 +72,9 @@ class ExecutionFeasibilityTest(unittest.TestCase):
         )
         state = initial_simulation_state(self.case)
         self.case["realized_ship_release_period"]["X"] = 10
-        state["actual_inventory"] = {(fallback_bay, "X", opposite_height_group): 1}
+        state["actual_inventory"] = {
+            (bay, "X", opposite_height_group): 1 for bay in compatible
+        }
         solution = {
             "reservation": {
                 (wrong_size_bay, self.ship, self.group): 5,
@@ -92,6 +95,51 @@ class ExecutionFeasibilityTest(unittest.TestCase):
         )
         report = validate_execution_state(self.case, next_state, 4)
         self.assertTrue(report["feasible"], report)
+
+    def test_unreserved_compatible_capacity_prevents_unplaced(self):
+        planned_bay, recovery_bay = self.compatible_bays()[:2]
+        state = initial_simulation_state(self.case)
+        self.case["realized_ship_release_period"]["X"] = 10
+        state["actual_inventory"] = {(planned_bay, "X", self.group): 10}
+        solution = {
+            "reservation": {(planned_bay, self.ship, self.group): 5},
+            "din": {(planned_bay, self.ship, self.group, 0): 5},
+        }
+        next_state, metrics = advance_state(self.case, state, solution)
+        self.assertEqual(metrics["realized_unplaced"], 0)
+        self.assertEqual(metrics["physical_recovery_placement_quantity"], 5)
+        self.assertEqual(metrics["pre_physical_recovery_unplaced"], 5)
+        self.assertEqual(metrics["fallback_placement_quantity"], 5)
+        self.assertEqual(
+            next_state["actual_inventory"][recovery_bay, self.ship, self.group],
+            5,
+        )
+        report = validate_execution_state(self.case, next_state, 4)
+        self.assertTrue(report["feasible"], report)
+
+    def test_physical_recovery_displaces_conflicting_future_reservation(self):
+        planned_bay, recovery_bay = self.compatible_bays()[:2]
+        state = initial_simulation_state(self.case)
+        self.case["realized_ship_release_period"]["X"] = 10
+        state["actual_inventory"] = {(planned_bay, "X", self.group): 10}
+        other_group = next(
+            group
+            for group, attrs in self.case["group_attrs"].items()
+            if attrs["size"] == self.case["group_attrs"][self.group]["size"]
+            and group != self.group
+        )
+        solution = {
+            "reservation": {
+                (planned_bay, self.ship, self.group): 5,
+                (recovery_bay, self.ship, other_group): 5,
+            },
+            "din": {(planned_bay, self.ship, self.group, 0): 5},
+        }
+        _next_state, metrics = advance_state(self.case, state, solution)
+        self.assertEqual(metrics["realized_unplaced"], 0)
+        self.assertEqual(metrics["physical_recovery_placement_quantity"], 5)
+        self.assertEqual(metrics["physical_recovery_displaced_reservation"], 5)
+        self.assertEqual(metrics["pre_physical_recovery_unplaced"], 5)
 
 
 if __name__ == "__main__":

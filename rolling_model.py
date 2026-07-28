@@ -475,8 +475,6 @@ def build_rolling_model(
         for n in forecast_periods_by_pair[j, g]
         for i in permitted_bays_by_pair[j, g]
     )
-    inventory_keys = [(i, j, g, n) for i, j, g in reserve_keys for n in periods]
-
     reserve_by_pair: dict[tuple[str, str], list[tuple[str, str, str]]] = defaultdict(list)
     reserve_by_bay: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     reserve_by_pair_block: dict[
@@ -518,7 +516,6 @@ def build_rolling_model(
 
     reserve = m.addVars(reserve_keys, vtype=GRB.INTEGER, lb=0, name="reservation")
     din = m.addVars(flow_keys, vtype=GRB.INTEGER, lb=0, name="din")
-    inv = m.addVars(inventory_keys, vtype=GRB.INTEGER, lb=0, name="inventory")
     shortage = m.addVars(
         [(j, g, n) for j, g in pairs for n in periods],
         vtype=GRB.INTEGER,
@@ -684,23 +681,17 @@ def build_rolling_model(
         pair_reserve = [reserve[key] for key in reserve_by_pair[j, g]]
         pair_flow = [din[key] for key in flow_by_pair[j, g]]
         m.addConstr(gp.quicksum(pair_reserve) == gp.quicksum(pair_flow), name=f"reserve_flow_{j}_{g}")
+        for i, _j, _g in reserve_by_pair[j, g]:
+            m.addConstr(
+                reserve[i, j, g]
+                == gp.quicksum(din[key] for key in flow_by_bay_pair[i, j, g]),
+                name=f"bay_reserve_flow_{i}_{j}_{g}",
+            )
         for n in periods:
             period_flow = gp.quicksum(
                 din[key] for key in flow_by_pair_period[j, g, n]
             )
             m.addConstr(period_flow + shortage[j, g, n] == d["forecast_arrivals"].get((j, g, n), 0))
-            for i, _j, _g in reserve_by_pair[j, g]:
-                initial = d["actual_inventory"].get((i, j, g), 0)
-                cumulative = gp.quicksum(
-                    din[key]
-                    for key in flow_by_bay_pair[i, j, g]
-                    if key[3] <= n
-                )
-                if ship_present_at(d, j, n):
-                    m.addConstr(inv[i, j, g, n] == initial + cumulative)
-                else:
-                    m.addConstr(inv[i, j, g, n] == 0)
-                m.addConstr(cumulative <= reserve[i, j, g])
         for k in d["blocks"]:
             for n in periods:
                 m.addConstr(
@@ -861,7 +852,6 @@ def build_rolling_model(
     variables = {
         "reservation": reserve,
         "din": din,
-        "inventory": inv,
         "shortage": shortage,
         "pod_bay_use": use,
         "bay_height": height,
@@ -902,6 +892,7 @@ def extract_rolling_solution(
     expressions: dict,
     *,
     model: gp.Model | None = None,
+    snapshot: dict | None = None,
 ) -> dict:
     """Extract a complete solution, using batched attributes when possible.
 
@@ -951,4 +942,27 @@ def extract_rolling_solution(
                 for (key, _variable), value, variable_type
                 in zip(items, values, variable_types)
             }
+    if snapshot is not None and "inventory" not in extracted:
+        din = extracted.get("din", {})
+        periods = tuple(snapshot["periods"])
+        by_bay_pair: dict[tuple[str, str, str], dict[int, float]] = defaultdict(
+            lambda: defaultdict(float)
+        )
+        for (bay, ship, group, period), quantity in din.items():
+            if quantity:
+                by_bay_pair[bay, ship, group][period] += quantity
+        inventory = {}
+        for bay, ship, group in extracted.get("reservation", {}):
+            cumulative = float(snapshot["actual_inventory"].get(
+                (bay, ship, group), 0
+            ))
+            period_flow = by_bay_pair[bay, ship, group]
+            for period in periods:
+                cumulative += period_flow.get(period, 0)
+                inventory[bay, ship, group, period] = (
+                    cumulative
+                    if ship_present_at(snapshot, ship, period)
+                    else 0
+                )
+        extracted["inventory"] = inventory
     return extracted | {"components": components}

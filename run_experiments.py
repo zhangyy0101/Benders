@@ -673,6 +673,15 @@ def result_row(
         "planned_infeasible_quantity": result["total_planned_infeasible_quantity"],
         "fallback_placement": result["total_fallback_placement_quantity"],
         "fallback_rate": result["fallback_rate"],
+        "physical_recovery_placement": result[
+            "total_physical_recovery_placement_quantity"
+        ],
+        "physical_recovery_displaced_reservation": result[
+            "total_physical_recovery_displaced_reservation"
+        ],
+        "pre_physical_recovery_unplaced": result[
+            "total_pre_physical_recovery_unplaced"
+        ],
         "realized_unplaced": result["total_realized_unplaced"],
         "unplaced_rate": result["unplaced_rate"],
         "realized_arrival_coverage_of_oracle_demand": (

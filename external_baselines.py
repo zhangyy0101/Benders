@@ -219,7 +219,13 @@ def _occupied_periods(d: dict, ship: str, arrival_period: int) -> tuple[int, ...
 
 @dataclass
 class _FeasibleAllocator:
-    """Incremental common-constraint decoder used by every literature method."""
+    """Incremental common-constraint decoder used by every literature method.
+
+    Static inventory, temporal-support, compatibility, job, and distance
+    indexes are cached here. These indexes only avoid repeated evaluation of
+    the same baseline inputs; they do not change a literature method's
+    ordering, reward, pricing, or feasibility rules.
+    """
 
     d: dict
     base_occupancy: dict[tuple[str, int], int] = field(default_factory=dict)
@@ -233,42 +239,78 @@ class _FeasibleAllocator:
     din: dict[tuple[str, str, str, int], int] = field(
         default_factory=lambda: defaultdict(int)
     )
+    occupied_period_cache: dict[tuple[str, int], tuple[int, ...]] = field(
+        default_factory=dict
+    )
+    compatible_blocks_cache: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    compatible_bays_cache: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    jobs_cache: tuple[Job, ...] = ()
+    mean_block_distance: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         attrs = self.d["group_attrs"]
+        locked_by_bay: dict[str, list[tuple[str, int]]] = defaultdict(list)
+        for (bay, old_ship), quantity in self.d["locked_inventory"].items():
+            if quantity > 0:
+                locked_by_bay[bay].append((old_ship, int(round(quantity))))
+        actual_by_bay: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
+        for (bay, ship, group), quantity in self.d["actual_inventory"].items():
+            if quantity > 0:
+                actual_by_bay[bay].append(
+                    (ship, group, int(round(quantity)))
+                )
         for bay in self.d["bays"]:
             for period in self.d["periods"]:
                 occupancy = 0
                 heights: set[str] = set()
-                for (item_bay, old_ship), quantity in self.d[
-                    "locked_inventory"
-                ].items():
-                    if (
-                        item_bay == bay
-                        and quantity > 0
-                        and self.d["locked_release_local"].get(
-                            (item_bay, old_ship), 10**9
-                        )
-                        > period
-                    ):
-                        occupancy += int(round(quantity))
+                for old_ship, quantity in locked_by_bay.get(bay, ()):
+                    if self.d["locked_release_local"].get(
+                        (bay, old_ship), 10**9
+                    ) > period:
+                        occupancy += quantity
                         height = self.d["locked_height"].get(
-                            (item_bay, old_ship)
+                            (bay, old_ship)
                         )
                         if height is not None:
                             heights.add(height)
-                for (item_bay, ship, group), quantity in self.d[
-                    "actual_inventory"
-                ].items():
-                    if (
-                        item_bay == bay
-                        and quantity > 0
-                        and ship_present_at(self.d, ship, period)
-                    ):
-                        occupancy += int(round(quantity))
+                for ship, group, quantity in actual_by_bay.get(bay, ()):
+                    if ship_present_at(self.d, ship, period):
+                        occupancy += quantity
                         heights.add(attrs[group]["height"])
                 self.base_occupancy[bay, period] = occupancy
                 self.base_heights[bay, period] = heights
+        self.jobs_cache = tuple(_jobs(self.d))
+        self.mean_block_distance = {
+            ship: sum(
+                self.d["distance"][ship, block] for block in self.d["blocks"]
+            )
+            / max(1, len(self.d["blocks"]))
+            for ship in self.d["active_ships"]
+        }
+
+    def jobs(self) -> tuple[Job, ...]:
+        return self.jobs_cache
+
+    def occupied_periods(
+        self, ship: str, arrival_period: int
+    ) -> tuple[int, ...]:
+        key = (ship, arrival_period)
+        if key not in self.occupied_period_cache:
+            self.occupied_period_cache[key] = _occupied_periods(
+                self.d, ship, arrival_period
+            )
+        return self.occupied_period_cache[key]
+
+    def compatible_bays(self, group: str) -> tuple[str, ...]:
+        if group not in self.compatible_bays_cache:
+            self.compatible_bays_cache[group] = tuple(
+                bay for bay in self.d["bays"] if compatible(self.d, bay, group)
+            )
+        return self.compatible_bays_cache[group]
 
     def feasible_quantity(
         self,
@@ -279,7 +321,7 @@ class _FeasibleAllocator:
     ) -> int:
         if not compatible(self.d, bay, group):
             return 0
-        periods = _occupied_periods(self.d, ship, arrival_period)
+        periods = self.occupied_periods(ship, arrival_period)
         if not periods:
             return 0
         height = self.d["group_attrs"][group]["height"]
@@ -318,21 +360,23 @@ class _FeasibleAllocator:
         if quantity <= 0:
             return 0
         height = self.d["group_attrs"][group]["height"]
-        for period in _occupied_periods(self.d, ship, arrival_period):
+        for period in self.occupied_periods(ship, arrival_period):
             self.planned_occupancy[bay, period] += quantity
             self.planned_heights[bay, period].add(height)
         self.din[bay, ship, group, arrival_period] += quantity
         return quantity
 
     def compatible_blocks(self, group: str) -> tuple[str, ...]:
-        return tuple(
-            block
-            for block in self.d["blocks"]
-            if any(
-                compatible(self.d, bay, group)
-                for bay in self.d["bays_in_block"][block]
+        if group not in self.compatible_blocks_cache:
+            self.compatible_blocks_cache[group] = tuple(
+                block
+                for block in self.d["blocks"]
+                if any(
+                    compatible(self.d, bay, group)
+                    for bay in self.d["bays_in_block"][block]
+                )
             )
-        )
+        return self.compatible_blocks_cache[group]
 
     def best_fit_bay(
         self,
@@ -393,7 +437,7 @@ def _solve_kp_dos(
     shortage: dict[tuple[str, str, int], int] = {}
     processed_jobs = 0
     priority_trace: list[dict] = []
-    for period, release, ship, group, quantity in _jobs(d):
+    for period, release, ship, group, quantity in allocator.jobs():
         blocks = tuple(
             sorted(
                 allocator.compatible_blocks(group),
@@ -454,10 +498,14 @@ def _kp_reduced_block_cost(
     block: str,
     ship: str,
     arrival_period: int,
+    occupied: tuple[int, ...] | None = None,
+    mean_distance: float | None = None,
 ) -> float:
-    distances = [d["distance"][ship, item] for item in d["blocks"]]
-    mean_distance = sum(distances) / max(1, len(distances))
-    occupied = _occupied_periods(d, ship, arrival_period)
+    if mean_distance is None:
+        distances = [d["distance"][ship, item] for item in d["blocks"]]
+        mean_distance = sum(distances) / max(1, len(distances))
+    if occupied is None:
+        occupied = _occupied_periods(d, ship, arrival_period)
     price = sum(prices[block, period] for period in occupied)
     return d["distance"][ship, block] / max(1e-9, mean_distance) + price
 
@@ -473,8 +521,8 @@ def _kp_relaxed_assignment(
     load: dict[tuple[str, int], int] = defaultdict(int)
     native_travel_cost = 0.0
     relaxed_shortage = 0
-    ships = sorted({ship for _period, _release, ship, _group, _qty in _jobs(d)})
-    jobs = _jobs(d)
+    jobs = allocator.jobs()
+    ships = sorted({ship for _period, _release, ship, _group, _qty in jobs})
     for ship in ships:
         local_load: dict[tuple[str, int], int] = defaultdict(int)
         ship_jobs = sorted(
@@ -482,7 +530,8 @@ def _kp_relaxed_assignment(
             key=lambda job: (-job[0], job[3]),
         )
         for period, _release, _ship, group, quantity in ship_jobs:
-            occupied = _occupied_periods(d, ship, period)
+            occupied = allocator.occupied_periods(ship, period)
+            mean_distance = allocator.mean_block_distance[ship]
             blocks = sorted(
                 allocator.compatible_blocks(group),
                 key=lambda block: (
@@ -492,6 +541,8 @@ def _kp_relaxed_assignment(
                         block=block,
                         ship=ship,
                         arrival_period=period,
+                        occupied=occupied,
+                        mean_distance=mean_distance,
                     ),
                     block,
                 ),
@@ -514,10 +565,6 @@ def _kp_relaxed_assignment(
                 for occupied_period in occupied:
                     local_load[block, occupied_period] += taken
                     load[block, occupied_period] += taken
-                distances = [
-                    d["distance"][ship, item] for item in d["blocks"]
-                ]
-                mean_distance = sum(distances) / max(1, len(distances))
                 native_travel_cost += (
                     taken
                     * d["distance"][ship, block]
@@ -539,10 +586,9 @@ def _kp_aggregate_dos_upper_bound(
     load: dict[tuple[str, int], int] = defaultdict(int)
     cost = 0.0
     shortage = 0
-    for period, _release, ship, group, quantity in _jobs(d):
-        occupied = _occupied_periods(d, ship, period)
-        distances = [d["distance"][ship, block] for block in d["blocks"]]
-        mean_distance = sum(distances) / max(1, len(distances))
+    for period, _release, ship, group, quantity in allocator.jobs():
+        occupied = allocator.occupied_periods(ship, period)
+        mean_distance = allocator.mean_block_distance[ship]
         blocks = sorted(
             allocator.compatible_blocks(group),
             key=lambda block: (
@@ -659,7 +705,7 @@ def _kp_subgradient_prices(
                 break
 
     preferred: dict[tuple[str, str, int], tuple[str, ...]] = {}
-    for period, _release, ship, group, _quantity in _jobs(d):
+    for period, _release, ship, group, _quantity in allocator.jobs():
         allocated = sorted(
             (
                 (quantity, block)
@@ -730,7 +776,9 @@ def _solve_kp_sg(
     diagnostics["pricing_time"] = time.perf_counter() - start
     shortage: dict[tuple[str, str, int], int] = {}
     block_rankings: list[dict] = []
-    for period, release, ship, group, quantity in _jobs(d):
+    for period, release, ship, group, quantity in allocator.jobs():
+        occupied = allocator.occupied_periods(ship, period)
+        mean_distance = allocator.mean_block_distance[ship]
         reduced_order = tuple(
             sorted(
                 allocator.compatible_blocks(group),
@@ -741,6 +789,8 @@ def _solve_kp_sg(
                         block=block,
                         ship=ship,
                         arrival_period=period,
+                        occupied=occupied,
+                        mean_distance=mean_distance,
                     ),
                     block,
                 ),
@@ -776,7 +826,7 @@ def _preferred_future_blocks(
     d: dict, allocator: _FeasibleAllocator
 ) -> dict[tuple[str, str, int], str]:
     result = {}
-    for period, _release, ship, group, _quantity in _jobs(d):
+    for period, _release, ship, group, _quantity in allocator.jobs():
         blocks = allocator.compatible_blocks(group)
         if blocks:
             result[ship, group, period] = min(
@@ -799,6 +849,9 @@ def _dra_reward(
     preferred_future: dict[tuple[str, str, int], str],
     parameters: dict[str, float] | None = None,
     static_cache: dict | None = None,
+    current_free: int | None = None,
+    next_quantity: int | None = None,
+    future_capacity: int | None = None,
 ) -> tuple[float, dict[str, float]]:
     parameters = parameters or DRA_PARAMETER_PROFILES["frozen"]
     block = d["bay_block"][bay]
@@ -867,7 +920,11 @@ def _dra_reward(
         d["distance"][ship, block] / max(1e-9, mean_distance) * 20.0
     )
 
-    free = allocator.feasible_quantity(bay, ship, group, period)
+    free = (
+        allocator.feasible_quantity(bay, ship, group, period)
+        if current_free is None
+        else current_free
+    )
     space_score = (
         -(free - remaining) / free * 10.0
         if free > remaining and free > 0
@@ -880,21 +937,23 @@ def _dra_reward(
         for index, value in enumerate(past_values)
     )
 
-    next_quantity = int(
-        round(d["forecast_arrivals"].get((ship, group, period + 1), 0))
-    )
+    if next_quantity is None:
+        next_quantity = int(
+            round(d["forecast_arrivals"].get((ship, group, period + 1), 0))
+        )
     if next_quantity <= 0:
         future_score = 0.0
     else:
-        future_capacity = max(
-            (
-                allocator.feasible_quantity(
-                    item, ship, group, period + 1
-                )
-                for item in d["bays_in_block"][block]
-            ),
-            default=0,
-        )
+        if future_capacity is None:
+            future_capacity = max(
+                (
+                    allocator.feasible_quantity(
+                        item, ship, group, period + 1
+                    )
+                    for item in d["bays_in_block"][block]
+                ),
+                default=0,
+            )
         future_score = (
             (future_capacity - next_quantity)
             / max(1, future_capacity)
@@ -963,35 +1022,72 @@ def _solve_dra_rpm(
             for period in d["periods"]
         },
         "future_pairs": future_pairs,
-        "mean_distance": {
-            ship: sum(
-                d["distance"][ship, block] for block in d["blocks"]
-            )
-            / max(1, len(d["blocks"]))
-            for ship in d["active_ships"]
-        },
+        "mean_distance": dict(allocator.mean_block_distance),
         "compatible_bays": {
-            group: tuple(
-                bay
-                for bay in d["bays"]
-                if compatible(d, bay, group)
-            )
+            group: allocator.compatible_bays(group)
             for group in d["group_attrs"]
         },
     }
     shortage: dict[tuple[str, str, int], int] = {}
     decisions: list[dict] = []
     reward_total = 0.0
-    for period, _release, ship, group, quantity in _jobs(d):
+    for period, _release, ship, group, quantity in allocator.jobs():
         remaining = quantity
+        if time.perf_counter() >= deadline:
+            shortage[ship, group, period] = remaining
+            continue
+        compatible_bays = static_cache["compatible_bays"][group]
+        free_by_bay: dict[str, int] = {}
+        initialization_complete = True
+        for bay in compatible_bays:
+            if time.perf_counter() >= deadline:
+                initialization_complete = False
+                break
+            free_by_bay[bay] = allocator.feasible_quantity(
+                bay, ship, group, period
+            )
+        if not initialization_complete:
+            shortage[ship, group, period] = remaining
+            continue
+        next_quantity = int(
+            round(
+                d["forecast_arrivals"].get(
+                    (ship, group, period + 1), 0
+                )
+            )
+        )
+        future_free_by_bay: dict[str, int] = {}
+        future_capacity_by_block: dict[str, int] = {}
+        if next_quantity > 0:
+            for bay in compatible_bays:
+                if time.perf_counter() >= deadline:
+                    initialization_complete = False
+                    break
+                future_free_by_bay[bay] = allocator.feasible_quantity(
+                    bay, ship, group, period + 1
+                )
+            if not initialization_complete:
+                shortage[ship, group, period] = remaining
+                continue
+            future_capacity_by_block = {
+                block: max(
+                    (
+                        future_free_by_bay.get(item, 0)
+                        for item in d["bays_in_block"][block]
+                    ),
+                    default=0,
+                )
+                for block in d["blocks"]
+            }
         while remaining > 0 and time.perf_counter() < deadline:
             candidates = []
-            for bay in static_cache["compatible_bays"][group]:
-                free = allocator.feasible_quantity(
-                    bay, ship, group, period
-                )
+            for bay in compatible_bays:
+                if time.perf_counter() >= deadline:
+                    break
+                free = free_by_bay[bay]
                 if free <= 0:
                     continue
+                block = d["bay_block"][bay]
                 reward, components = _dra_reward(
                     d,
                     allocator,
@@ -1005,8 +1101,14 @@ def _solve_dra_rpm(
                     preferred_future=preferred_future,
                     parameters=parameters,
                     static_cache=static_cache,
+                    current_free=free,
+                    next_quantity=next_quantity,
+                    future_capacity=(
+                        future_capacity_by_block.get(block)
+                        if next_quantity > 0
+                        else None
+                    ),
                 )
-                block = d["bay_block"][bay]
                 fit = (
                     (0, free - remaining)
                     if free >= remaining
@@ -1024,6 +1126,8 @@ def _solve_dra_rpm(
                     reward,
                     components,
                 ))
+            if time.perf_counter() >= deadline:
+                break
             if not candidates:
                 break
             _rank, bay, reward, reward_components = min(candidates)
@@ -1031,6 +1135,20 @@ def _solve_dra_rpm(
             if taken <= 0:
                 break
             block = d["bay_block"][bay]
+            free_by_bay[bay] = allocator.feasible_quantity(
+                bay, ship, group, period
+            )
+            if next_quantity > 0:
+                future_free_by_bay[bay] = allocator.feasible_quantity(
+                    bay, ship, group, period + 1
+                )
+                future_capacity_by_block[block] = max(
+                    (
+                        future_free_by_bay.get(item, 0)
+                        for item in d["bays_in_block"][block]
+                    ),
+                    default=0,
+                )
             remaining -= taken
             reward_total += reward
             block_period_pairs[block, period].add((ship, group))

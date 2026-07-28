@@ -1,0 +1,77 @@
+{
+  "schema": "formal-run-manifest-v2",
+  "status": "frozen_before_formal_seed_generation",
+  "formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
+  "common": {
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "candidate": "full_bottleneck",
+    "internal_comparator": "core_start",
+    "external_baselines": ["kp_dos", "kp_sg", "dra_rpm"],
+    "dra_parameter_profile": "frozen",
+    "physical_recovery_policy": "common_to_all_methods",
+    "result_schema": "rolling-results-v11",
+    "problem_protocol": "rolling-v4.4-physical-capacity-recovery",
+    "algorithm_version": "lead-aware-aggregate-lp-screened-repair-v1.4.7",
+    "external_baseline_protocol": "adapted-literature-baselines-v1.1-sparse-cached"
+  },
+  "semisynthetic": {
+    "specification": "docs/specs/pnc_yangshan_v2_formal_instance_spec.json",
+    "output_root": "local_results/protocol_v2_pnc_yangshan/formal_instances_v2",
+    "generation_command": [
+      "python",
+      "scripts/prepare_pnc_yangshan_v2_formal_instances.py",
+      "--output-root",
+      "local_results/protocol_v2_pnc_yangshan/formal_instances_v2"
+    ],
+    "partitions": [
+      {
+        "name": "central_main",
+        "bundle_count": 10,
+        "methods": ["core_start", "full_bottleneck", "kp_dos", "kp_sg", "dra_rpm"],
+        "expected_result_rows": 50,
+        "runner": "scripts/run_formal_sharded_matrix.py"
+      },
+      {
+        "name": "robustness",
+        "bundle_count": 70,
+        "methods": ["core_start", "full_bottleneck"],
+        "expected_result_rows": 140,
+        "runner": "scripts/run_formal_matrix.py"
+      }
+    ],
+    "expected_bundle_count": 80,
+    "expected_result_rows": 190
+  },
+  "fully_synthetic": {
+    "scale_profiles": ["small", "medium", "large", "xlarge"],
+    "pressure_profiles": ["ordinary", "high_pressure"],
+    "initial_utilization": 0.55,
+    "utilization_isolation": [0.25, 0.55, 0.65],
+    "baseline_forecast_error": 0.1,
+    "forecast_error_mode": "mixed",
+    "integer_certificate_required": true,
+    "roles": [
+      "computational_scale",
+      "controlled_pressure",
+      "forecast_error_sensitivity",
+      "internal_ablation",
+      "repair_mechanism"
+    ]
+  },
+  "reporting": {
+    "pool_semisynthetic_and_synthetic": false,
+    "primary_feasibility_metric": "final_unplaced",
+    "physical_recovery_reported_separately": true,
+    "runtime_metric": "online_decision_time",
+    "paired_statistics": true,
+    "confidence_level": 0.95
+  },
+  "prohibitions_after_seed_generation": [
+    "algorithm_or_parameter_tuning",
+    "changing_method_sets_after_observing results",
+    "overwriting_generated_bundles",
+    "dropping_failed_instances_without_protocol disclosure",
+    "pooling_preflight_rows_with_formal rows"
+  ]
+}

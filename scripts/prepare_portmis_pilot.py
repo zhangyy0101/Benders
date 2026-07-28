@@ -43,6 +43,10 @@ OFFICIAL_FILE_CATALOG_URL = (
 BPA_SINSUNDAE_PAGE = (
     "https://www.busanpa.com/index.bpa?menuCd=DOM_000000103001003005"
 )
+BPA_PNC_PAGE = (
+    "https://www.busanpa.com/index.bpa?menuCd=DOM_000000103001002005"
+)
+PNC_FACILITIES_PAGE = "https://www.pncport.com/eng/Info/details.do?id=MD025"
 PORTMIS_MAIN_URL = (
     "https://new.portmis.go.kr/portmis/websquare/websquare.jsp"
     "?w2xPath=/portmis/w2/main/index.xml"
@@ -81,7 +85,20 @@ VERIFIED_TERMINALS = {
         "official_capacity_teu_per_year": 2_236_000,
         "official_simultaneous_berths": 5,
         "mapping_basis": "facility names 신선대부두 1선석 through 5선석",
-    }
+    },
+    "NEW_PORT_PIER_2": {
+        "terminal_name": "Pusan Newport Terminal (PNC / DP World Busan)",
+        "operator": "Pusan Newport Co., Ltd. (PNC)",
+        "official_source": BPA_PNC_PAGE,
+        "operator_source": PNC_FACILITIES_PAGE,
+        "official_capacity_teu_per_year": 5_000_000,
+        "official_capacity_basis": "PNC states annual handling capacity above 5 million TEU",
+        "official_simultaneous_berths": 5,
+        "mapping_basis": (
+            "PORT-MIS facility code MSN subcodes 04--08, labelled "
+            "Busan New Port Pier 2 berths 1--5"
+        ),
+    },
 }
 
 STANDARD_FIELDS = (
@@ -879,8 +896,9 @@ def build_audit(
             "OpenAPI. Publication use requires an archived official fileData "
             "record and PORT-MIS UI definition that bind the provider view to "
             "this endpoint.",
-            "The primary SINSUNDAE mapping is verified against the Busan Port "
-            "Authority; non-primary clusters remain label-derived proxies.",
+            f"The primary {primary_cluster} mapping is verified against the "
+            "Busan Port Authority; non-primary clusters remain label-derived "
+            "proxies.",
             "Loaded cargo tonnage is not container moves or terminal throughput.",
             "Next port is a vessel-route field, not a per-container POD.",
             "Forecast trajectories, box attributes, yard state, and bay layout "
@@ -1016,7 +1034,9 @@ def render_report(
             "",
             f"- {OFFICIAL_DATA_PAGE}",
             f"- {OFFICIAL_FILE_PAGE}",
-            f"- {BPA_SINSUNDAE_PAGE}",
+            f"- {VERIFIED_TERMINALS[audit['scope']['primary_cluster']]['official_source']}"
+            if audit["scope"]["primary_cluster"] in VERIFIED_TERMINALS
+            else "- No independent terminal mapping source",
             "",
         ]
     )
@@ -1224,7 +1244,8 @@ def main() -> int:
             else "guest PORT-MIS query pilot"
         ),
         "terminal_mapping_sources": {
-            "SINSUNDAE": BPA_SINSUNDAE_PAGE,
+            cluster: details["official_source"]
+            for cluster, details in VERIFIED_TERMINALS.items()
         },
         "portal_contract": {
             "official_content_url": PORTMIS_MAIN_URL,

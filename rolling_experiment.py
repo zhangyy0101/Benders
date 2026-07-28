@@ -229,6 +229,15 @@ def run_rolling_case(
         "total_fallback_candidate_attempts": total(
             "execution_metrics", "fallback_candidate_attempts"
         ),
+        "total_physical_recovery_placement_quantity": total(
+            "execution_metrics", "physical_recovery_placement_quantity"
+        ),
+        "total_physical_recovery_displaced_reservation": total(
+            "execution_metrics", "physical_recovery_displaced_reservation"
+        ),
+        "total_pre_physical_recovery_unplaced": total(
+            "execution_metrics", "pre_physical_recovery_unplaced"
+        ),
         "fallback_rate": fallback / realized_arrivals if realized_arrivals else 0.0,
         "total_realized_unplaced": realized_unplaced,
         "unplaced_rate": realized_unplaced / realized_arrivals if realized_arrivals else 0.0,

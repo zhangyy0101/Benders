@@ -186,6 +186,11 @@ def collect_weight_profile(
             "solver_return_guard_max_seconds": (
                 config.SOLVER_RETURN_GUARD_MAX_SECONDS
             ),
+            "global_core_mip_focus": config.GLOBAL_CORE_MIP_FOCUS,
+            "global_core_heuristics": config.GLOBAL_CORE_HEURISTICS,
+            "global_core_start_node_limit": (
+                config.GLOBAL_CORE_START_NODE_LIMIT
+            ),
         },
     }
 

@@ -196,6 +196,52 @@ class ExternalLiteratureBaselineTest(unittest.TestCase):
             "maximize_equation_27",
         )
 
+    def test_cached_dra_reward_inputs_preserve_reward(self):
+        allocator = _FeasibleAllocator(self.snapshot)
+        period, _release, ship, group, quantity = allocator.jobs()[0]
+        preferred = _preferred_future_blocks(self.snapshot, allocator)
+        bay = next(
+            item
+            for item in allocator.compatible_bays(group)
+            if allocator.feasible_quantity(item, ship, group, period) > 0
+        )
+        free = allocator.feasible_quantity(bay, ship, group, period)
+        next_quantity = round(
+            self.snapshot["forecast_arrivals"].get(
+                (ship, group, period + 1), 0
+            )
+        )
+        block = self.snapshot["bay_block"][bay]
+        future_capacity = max(
+            (
+                allocator.feasible_quantity(
+                    item, ship, group, period + 1
+                )
+                for item in self.snapshot["bays_in_block"][block]
+            ),
+            default=0,
+        )
+        common = dict(
+            bay=bay,
+            ship=ship,
+            group=group,
+            period=period,
+            remaining=quantity,
+            history={},
+            block_period_pairs=defaultdict(set),
+            preferred_future=preferred,
+        )
+        reference = _dra_reward(self.snapshot, allocator, **common)
+        cached = _dra_reward(
+            self.snapshot,
+            allocator,
+            current_free=free,
+            next_quantity=next_quantity,
+            future_capacity=future_capacity,
+            **common,
+        )
+        self.assertEqual(reference, cached)
+
     def test_every_method_runs_through_two_rolling_cycles(self):
         for method in LITERATURE_CONFIGURATIONS:
             with self.subTest(method=method):

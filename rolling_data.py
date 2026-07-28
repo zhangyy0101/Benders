@@ -1475,6 +1475,73 @@ def feasible_take(
     )
 
 
+def physical_recovery_take(
+    case: dict,
+    state: dict,
+    actual_inventory: dict,
+    bay: str,
+    ship: str,
+    group: str,
+    absolute_period: int,
+    requested_quantity: int,
+) -> int:
+    """Return feasible emergency recourse without requiring a prior reservation.
+
+    Reservations guide the online plan but are not physical yard constraints.
+    The final execution recourse may therefore use any compatible bay that has
+    true residual capacity. Size, height, release, and capacity restrictions
+    remain identical to normal execution.
+    """
+    if requested_quantity <= 0 or not _realized_present(case, ship, absolute_period):
+        return 0
+    if case["bay_size"].get(bay) != case["group_attrs"][group]["size"]:
+        return 0
+    existing_heights = {
+        case["group_attrs"][g]["height"]
+        for (i, j, g), quantity in actual_inventory.items()
+        if i == bay
+        and quantity > 0
+        and _realized_present(case, j, absolute_period)
+    } | {
+        height
+        for (i, old_ship), height in state["locked_height"].items()
+        if i == bay and case["old_release_period"].get(old_ship, INF) > absolute_period
+    }
+    if existing_heights and case["group_attrs"][group]["height"] not in existing_heights:
+        return 0
+    return min(
+        int(requested_quantity),
+        _free_capacity(case, state, actual_inventory, bay, absolute_period),
+    )
+
+
+def _displace_bay_reservations(
+    reserve: dict,
+    bay: str,
+    quantity: int,
+    protected_key: tuple[str, str, str] | None = None,
+) -> int:
+    """Cancel future reservations displaced by unreserved physical recourse."""
+    left = max(0, int(quantity))
+    displaced = 0
+    keys = sorted(
+        (
+            key
+            for key, value in reserve.items()
+            if key[0] == bay and key != protected_key and value > 0
+        ),
+        key=lambda key: (key[1], key[2]),
+    )
+    for key in keys:
+        if left <= 0:
+            break
+        take = min(left, max(0, int(reserve[key])))
+        reserve[key] -= take
+        left -= take
+        displaced += take
+    return displaced
+
+
 def validate_execution_state(case: dict, state: dict, absolute_period: int) -> dict:
     """Validate realized bay capacity, size, height, releases, and nonnegativity."""
     violations: dict[str, float] = {}
@@ -1680,6 +1747,9 @@ def advance_state(case: dict, state: dict, solution: dict) -> tuple[dict, dict]:
         "fallback_placement_quantity": 0,
         "fallback_candidate_attempts": 0,
         "fallback_success_quantity": 0,
+        "physical_recovery_placement_quantity": 0,
+        "physical_recovery_displaced_reservation": 0,
+        "pre_physical_recovery_unplaced": 0,
         "realized_unplaced": 0,
         "realized_distance": 0.0,
         "realized_in_out_conflict": 0.0,
@@ -1798,6 +1868,89 @@ def advance_state(case: dict, state: dict, solution: dict) -> tuple[dict, dict]:
                     block = case["bay_block"][bay]
                     metrics["fallback_placement_quantity"] += take
                     metrics["fallback_success_quantity"] += take
+                    metrics["realized_distance"] += take * case["distance"][ship, block]
+                    metrics["realized_in_out_conflict"] += (
+                        take * realized_outbound.get(block, 0) / max(1, outbound_peak)
+                    )
+            metrics["pre_physical_recovery_unplaced"] += left
+            if left > 0:
+                target_height = case["group_attrs"][group]["height"]
+                support = {
+                    (j, case["group_attrs"][g]["pod"], bay)
+                    for (bay, j, g), quantity in actual.items()
+                    if quantity > 0 and _realized_present(case, j, absolute)
+                }
+                physical_candidates = []
+                for bay in case["bays"]:
+                    free = _free_capacity(
+                        case, execution_state, actual, bay, absolute
+                    )
+                    if free <= 0:
+                        continue
+                    live_heights = {
+                        case["group_attrs"][g]["height"]
+                        for (i, j, g), quantity in actual.items()
+                        if i == bay
+                        and quantity > 0
+                        and _realized_present(case, j, absolute)
+                    } | {
+                        height
+                        for (i, old_ship), height in locked_height.items()
+                        if i == bay
+                        and case["old_release_period"].get(old_ship, INF) > absolute
+                    }
+                    if live_heights and target_height not in live_heights:
+                        continue
+                    block = case["bay_block"][bay]
+                    reserved_here = max(
+                        0, int(reserve.get((bay, ship, group), 0))
+                    )
+                    physical_candidates.append((
+                        (
+                            int(bool(live_heights) is False),
+                            int(bool(planned_blocks) and block not in planned_blocks),
+                            int((ship, pod, bay) not in support),
+                            realized_outbound.get(block, 0) / max(1, outbound_peak),
+                            case["distance"][ship, block],
+                            -reserved_here,
+                            -free,
+                            bay,
+                        ),
+                        bay,
+                    ))
+                for _ranking, bay in sorted(physical_candidates):
+                    if left <= 0:
+                        break
+                    take = physical_recovery_take(
+                        case,
+                        execution_state,
+                        actual,
+                        bay,
+                        ship,
+                        group,
+                        absolute,
+                        left,
+                    )
+                    if not take:
+                        continue
+                    key = (bay, ship, group)
+                    own_reservation = min(take, max(0, int(reserve.get(key, 0))))
+                    if own_reservation:
+                        reserve[key] -= own_reservation
+                    unreserved_take = take - own_reservation
+                    displaced = _displace_bay_reservations(
+                        reserve,
+                        bay,
+                        unreserved_take,
+                        protected_key=key,
+                    )
+                    actual[key] = actual.get(key, 0) + take
+                    left -= take
+                    block = case["bay_block"][bay]
+                    metrics["fallback_placement_quantity"] += take
+                    metrics["fallback_success_quantity"] += take
+                    metrics["physical_recovery_placement_quantity"] += take
+                    metrics["physical_recovery_displaced_reservation"] += displaced
                     metrics["realized_distance"] += take * case["distance"][ship, block]
                     metrics["realized_in_out_conflict"] += (
                         take * realized_outbound.get(block, 0) / max(1, outbound_peak)

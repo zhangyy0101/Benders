@@ -576,11 +576,13 @@ class PilotModelFormulationTest(unittest.TestCase):
         reference_solution = extract_rolling_solution(
             variables,
             expressions,
+            snapshot=snapshot,
         )
         batched_solution = extract_rolling_solution(
             variables,
             expressions,
             model=model,
+            snapshot=snapshot,
         )
         self.assertEqual(batched_solution, reference_solution)
 

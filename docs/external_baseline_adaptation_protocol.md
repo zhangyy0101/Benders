@@ -185,6 +185,25 @@ Formal claims use paired instance/seed comparisons under the common
 evaluator. Native reward and Lagrangian quantities explain behavior but are
 never compared directly with the candidate's normalized objective.
 
+### Cached implementation v1.1
+
+Protocol identifier `adapted-literature-baselines-v1.1-sparse-cached`
+replaces repeated evaluation of immutable inputs with exact caches:
+
+- locked and actual inventory are indexed by bay;
+- jobs, ship/arrival occupied periods, compatible bays/blocks, and mean
+  ship-to-block distance are cached;
+- KP-SG reuses those immutable values inside its subgradient iterations;
+- DRA-RPM computes current compatible-bay capacity once per job and computes
+  next-period capacity once per block, updating only the selected bay and
+  block after a placement.
+
+The KP relaxation, subgradient step, stopping parameters, DRA reward
+equations, method parameters, candidate ordering, deterministic tie-breaking,
+common decoder, constraints, and online time boundary are unchanged. Fixed
+nonbinding test snapshots reproduce identical `din`, reservation, and
+shortage dictionaries before and after caching.
+
 Before formal experiments:
 
 1. test demand conservation, integrality, size, height, capacity, release and

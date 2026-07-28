@@ -28,15 +28,16 @@ This document defines the publication-oriented interface before public-data
 calibration and final benchmark execution.  It does not change the mathematical
 model or the solution stages.
 
-- Problem protocol: `rolling-v4.3-oracle-certified`
-- Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.4.0`
-- Result schema: `rolling-results-v9`
+- Problem protocol: `rolling-v4.4-physical-capacity-recovery`
+- Algorithm: `lead-aware-aggregate-lp-screened-repair-v1.4.7`
+- Result schema: `rolling-results-v11`
 - Online runtime: `strict-online-decision-wall-v1`
 - Formal orchestration: `instance-sharded-parallel-v1`
 - Packing oracle: `full-horizon-integer-packing-v2`
 - Candidate core configuration: `full_bottleneck`
-- External baseline protocol: `adapted-literature-baselines-v1`
-- Preprocessing implementation: `lead-aware-aggregate-lp-sparse-indexed-v3`
+- External baseline protocol:
+  `adapted-literature-baselines-v1.1-sparse-cached`
+- Preprocessing implementation: `lead-aware-aggregate-lp-sparse-indexed-v5`
 
 The candidate core computes a lead-aware forecast buffer and evaluates nested
 `N0`--`N2` domains with a continuous block-size-height-period capacity LP.
@@ -121,6 +122,13 @@ Solver time, extraction time, disposal time, validation time, first-incumbent
 time, node count, repair stages, and final-stage gap are secondary diagnostics.
 A missing multiobjective Gurobi gap is reported as null and must not be
 converted to zero.
+
+On a shared workstation, publication runs must execute sequentially. Parallel
+instance shards are permitted only when workers have isolated CPU and memory
+resources sufficient to preserve each declared online wall budget. Setting
+one Gurobi thread per worker alone is not resource isolation: concurrent
+Python model construction and memory pressure can change incumbent
+availability inside a wall-clock limit.
 
 ## Required comparison methods
 
@@ -257,6 +265,16 @@ The final study should keep three families distinct:
 Generator code, source-to-field mapping, distributions, seeds, and generated
 instance files must be archived.  The existing Pilot cases remain development
 evidence and are not reused as the sole formal evidence.
+
+For protocol V2, the authoritative allocation of these families is
+`docs/pnc_yangshan_formal_data_allocation.md`. The primary public-data-
+calibrated family is PNC--Yangshan, not the historical Sinsundae/PORT-MIS
+demand construction. PNC--Yangshan is used for external validity and its
+temporal, export-volume, and yard-calibration robustness panels. Fully
+synthetic data are used for computational scale, controlled pressure,
+forecast-error sensitivity, internal ablation, and repair reachability.
+Historical PORT-MIS formal-window sections below are retained as V1 provenance
+and do not define the V2 formal instance matrix.
 
 ### Immutable instance-bundle workflow
 

@@ -2,14 +2,14 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.3-oracle-certified"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.4.0"
-RESULT_SCHEMA_VERSION = "rolling-results-v9"
+PROBLEM_PROTOCOL = "rolling-v4.4-physical-capacity-recovery"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.4.7"
+RESULT_SCHEMA_VERSION = "rolling-results-v11"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
-EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1"
-PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v3"
+EXTERNAL_BASELINE_PROTOCOL = "adapted-literature-baselines-v1.1-sparse-cached"
+PREPROCESSING_IMPLEMENTATION = "lead-aware-aggregate-lp-sparse-indexed-v5"
 PACKING_ORACLE_PROTOCOL = "full-horizon-integer-packing-v2"
 SYNTHETIC_PRESSURE_PROTOCOL = (
     "aggregate-size-period-target-integer-certified-v1"
@@ -69,6 +69,9 @@ FORMAL_TIME_BUDGETS_SECONDS = {
 SOLVER_RETURN_GUARD_RATIO = .10
 SOLVER_RETURN_GUARD_MIN_SECONDS = .25
 SOLVER_RETURN_GUARD_MAX_SECONDS = 12.0
+GLOBAL_CORE_MIP_FOCUS = 1
+GLOBAL_CORE_HEURISTICS = .20
+GLOBAL_CORE_START_NODE_LIMIT = 2000
 FORMAL_PUBLIC_WINDOWS = {
     "public_small": {
         "start_date": "2025-07-04",

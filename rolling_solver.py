@@ -41,6 +41,9 @@ from config import (
     IMPACT_SCORE_DISTANCE_WEIGHT,
     IMPACT_SCORE_OUTBOUND_WEIGHT,
     IMPACT_SCORE_STABILITY_WEIGHT,
+    GLOBAL_CORE_HEURISTICS,
+    GLOBAL_CORE_MIP_FOCUS,
+    GLOBAL_CORE_START_NODE_LIMIT,
     QUALITY_POLISH_BLOCKS_PER_PAIR,
     QUALITY_POLISH_ENABLED,
     QUALITY_POLISH_PAIR_RATIO,
@@ -967,7 +970,6 @@ def _block_scores(
         for group in attrs
         for block in d["blocks"]
     }
-
     for ship, group in sorted(_dependency_pairs(d)):
         pair = (ship, group)
         height = attrs[group]["height"]
@@ -1280,25 +1282,54 @@ def _solution_residual_capacity(
     occupied_heights: dict[tuple[str, int], set[str]] = {}
     attrs = d["group_attrs"]
     planned_flow = solution.get("din", {})
+    locked_by_bay: dict[str, list[tuple[str, float, str | None]]] = defaultdict(list)
+    for (bay, old_ship), quantity in d["locked_inventory"].items():
+        locked_by_bay[bay].append((
+            old_ship,
+            quantity,
+            d["locked_height"].get((bay, old_ship)),
+        ))
+    actual_by_bay: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    for (bay, ship, group), quantity in d["actual_inventory"].items():
+        actual_by_bay[bay].append((ship, group, quantity))
+    planned_by_bay: dict[
+        str, list[tuple[str, str, int, float]]
+    ] = defaultdict(list)
+    for (bay, ship, group, arrival), quantity in planned_flow.items():
+        planned_by_bay[bay].append((ship, group, arrival, quantity))
+    relevant_ships = {
+        ship
+        for entries in actual_by_bay.values()
+        for ship, _group, _quantity in entries
+    } | {
+        ship
+        for entries in planned_by_bay.values()
+        for ship, _group, _arrival, _quantity in entries
+    }
+    presence = {
+        (ship, period): ship_present_at(d, ship, period)
+        for ship in relevant_ships
+        for period in d["periods"]
+    }
     for bay in d["bays"]:
+        locked_entries = locked_by_bay[bay]
+        actual_entries = actual_by_bay[bay]
+        planned_entries = planned_by_bay[bay]
         for period in d["periods"]:
             locked = sum(
                 quantity
-                for (i, old_ship), quantity in d["locked_inventory"].items()
-                if i == bay
-                and d["locked_release_local"].get((i, old_ship), INF) > period
+                for old_ship, quantity, _height in locked_entries
+                if d["locked_release_local"].get((bay, old_ship), INF) > period
             )
             actual = sum(
                 quantity
-                for (i, ship, _group), quantity in d["actual_inventory"].items()
-                if i == bay and ship_present_at(d, ship, period)
+                for ship, _group, quantity in actual_entries
+                if presence[ship, period]
             )
             planned = sum(
                 quantity
-                for (i, ship, _group, arrival), quantity in planned_flow.items()
-                if i == bay
-                and arrival <= period
-                and ship_present_at(d, ship, period)
+                for ship, _group, arrival, quantity in planned_entries
+                if arrival <= period and presence[ship, period]
             )
             residual[bay, period] = max(
                 0.0,
@@ -1306,24 +1337,21 @@ def _solution_residual_capacity(
             )
             heights = {
                 height
-                for (i, old_ship), height in d["locked_height"].items()
-                if i == bay
-                and d["locked_release_local"].get((i, old_ship), INF) > period
+                for old_ship, _quantity, height in locked_entries
+                if height is not None
+                and d["locked_release_local"].get((bay, old_ship), INF) > period
             }
             heights |= {
                 attrs[group]["height"]
-                for (i, ship, group), quantity in d["actual_inventory"].items()
-                if i == bay
-                and quantity > 1e-6
-                and ship_present_at(d, ship, period)
+                for ship, group, quantity in actual_entries
+                if quantity > 1e-6 and presence[ship, period]
             }
             heights |= {
                 attrs[group]["height"]
-                for (i, ship, group, arrival), quantity in planned_flow.items()
-                if i == bay
-                and arrival <= period
+                for ship, group, arrival, quantity in planned_entries
+                if arrival <= period
                 and quantity > 1e-6
-                and ship_present_at(d, ship, period)
+                and presence[ship, period]
             }
             occupied_heights[bay, period] = heights
     return residual, occupied_heights
@@ -1340,9 +1368,19 @@ def _bottleneck_minimal_expansion(
     seed: int,
 ) -> tuple[dict, dict]:
     """Select a minimum set of added pair-block domains covering shortage."""
+    selector_started = time.perf_counter()
     allowed = {pair: list(bays) for pair, bays in current_allowed.items()}
     residual, occupied_heights = _solution_residual_capacity(d, solution)
     attrs = d["group_attrs"]
+    compatible_bays_by_group_block = {
+        (group, block): tuple(
+            bay
+            for bay in d["bays_in_block"][block]
+            if compatible(d, bay, group)
+        )
+        for group in {pair[1] for pair in shortage_pairs}
+        for block in d["blocks"]
+    }
     deficits: dict[tuple[Pair, int], float] = {}
     for pair in sorted(shortage_pairs):
         ship, group = pair
@@ -1378,9 +1416,8 @@ def _bottleneck_minimal_expansion(
             for period in d["periods"]:
                 value = sum(
                     residual[bay, period]
-                    for bay in d["bays_in_block"][block]
-                    if compatible(d, bay, group)
-                    and (
+                    for bay in compatible_bays_by_group_block[group, block]
+                    if (
                         not occupied_heights[bay, period]
                         or target_height in occupied_heights[bay, period]
                     )
@@ -1429,10 +1466,21 @@ def _bottleneck_minimal_expansion(
         and deficits[pair, period] > 1e-6
     )
     take = model.addVars(take_keys, lb=0.0, name="covered_capacity")
+    take_by_pair_period: dict[
+        tuple[str, str, int], list
+    ] = defaultdict(list)
+    take_by_block_period_size: dict[
+        tuple[str, int, int], list
+    ] = defaultdict(list)
     for ship, group, block, period in take_keys:
+        variable = take[ship, group, block, period]
+        take_by_pair_period[ship, group, period].append(variable)
+        take_by_block_period_size[
+            block, period, attrs[group]["size"]
+        ].append(variable)
         pair = (ship, group)
         model.addConstr(
-            take[ship, group, block, period]
+            variable
             <= capacity[pair, block, period] * z[ship, group, block]
         )
     for pair in sorted(shortage_pairs):
@@ -1441,22 +1489,12 @@ def _bottleneck_minimal_expansion(
             deficit = deficits[pair, period]
             if deficit <= 1e-6:
                 continue
-            terms = [
-                take[j, g, block, n]
-                for j, g, block, n in take_keys
-                if (j, g) == pair and n == period
-            ]
+            terms = take_by_pair_period[ship, group, period]
             model.addConstr(gp.quicksum(terms) >= deficit)
     for block in d["blocks"]:
         for period in d["periods"]:
             for size in sorted({attrs[pair[1]]["size"] for pair in shortage_pairs}):
-                terms = [
-                    take[ship, group, candidate_block, n]
-                    for ship, group, candidate_block, n in take_keys
-                    if candidate_block == block
-                    and n == period
-                    and attrs[group]["size"] == size
-                ]
+                terms = take_by_block_period_size[block, period, size]
                 if not terms:
                     continue
                 block_residual = sum(
@@ -1475,6 +1513,14 @@ def _bottleneck_minimal_expansion(
         ),
         GRB.MINIMIZE,
     )
+    elapsed_before_optimize = time.perf_counter() - selector_started
+    remaining_time = time_limit - elapsed_before_optimize
+    if remaining_time <= 0:
+        diagnostics["status"] = "selector_budget_exhausted_before_optimize"
+        diagnostics["selector_runtime"] = elapsed_before_optimize
+        model.dispose()
+        return allowed, diagnostics
+    model.Params.TimeLimit = max(.01, remaining_time)
     started = time.perf_counter()
     model.optimize()
     diagnostics["selector_runtime"] = time.perf_counter() - started
@@ -2396,19 +2442,36 @@ def solve_rolling_snapshot(
                 release_opportunity_blocks,
             )
         budget = None
-        if settings["impact_region"] and level < 3 and name != "quality_polish":
-            budget = math.ceil(
-                budget_info["allowance"] * (1, 1.5, 2.5)[min(level, 2)]
+        if (
+            settings["impact_region"]
+            and name not in ("quality_polish", "global_repair")
+        ):
+            # The initial aggregate-routed global core is still an ordinary
+            # rolling decision and must not obtain a zero-shortage incumbent
+            # by discarding most of the previous plan. Only the explicit
+            # post-shortage global safety repair may lift this budget.
+            expansion_factor = (
+                (1, 1.5, 2.5)[min(level, 2)]
+                if level < 3
+                else 1
             )
+            budget = math.ceil(budget_info["allowance"] * expansion_factor)
         initial_impact_stage = (
             name == "impact_region"
             or name == "aggregate_screened_impact_region"
         )
         if settings["progressive_repair"] and initial_impact_stage:
             requested_stage_time = min(remaining_wall, max(.05, .35 * time_limit))
-        elif settings["progressive_repair"] and (
-            name.startswith("adaptive_repair") or name == "bottleneck_repair"
-        ):
+        elif settings["progressive_repair"] and name == "bottleneck_repair":
+            # The selected bottleneck model is the primary recovery model.
+            # Splitting its remaining window mechanically with a subsequent
+            # global model made both stages too short to return a reliable
+            # incumbent on large snapshots.  Give the screened repair the
+            # complete remaining optimization window; the controller already
+            # routes directly to global recovery when selection cannot produce
+            # a usable repair domain.
+            requested_stage_time = remaining_wall
+        elif settings["progressive_repair"] and name.startswith("adaptive_repair"):
             requested_stage_time = min(remaining_wall, max(.05, remaining_wall / 2))
         else:
             requested_stage_time = remaining_wall
@@ -2476,6 +2539,15 @@ def solve_rolling_snapshot(
         model.Params.Threads = threads
         model.Params.Seed = seed
         model.Params.MIPGap = mip_gap
+        if level == 3:
+            # Large global snapshots previously spent almost the entire
+            # online window before producing an incumbent. Favor feasible
+            # solutions and give the sparse previous-plan MIP start a bounded
+            # repair search; the lexicographic objectives and validation are
+            # unchanged.
+            model.Params.MIPFocus = GLOBAL_CORE_MIP_FOCUS
+            model.Params.Heuristics = GLOBAL_CORE_HEURISTICS
+            model.Params.StartNodeLimit = GLOBAL_CORE_START_NODE_LIMIT
         solver_return_guard = solver_return_guard_seconds(
             time_limit,
             solver_budget,
@@ -2613,6 +2685,7 @@ def solve_rolling_snapshot(
                 variables,
                 expressions,
                 model=model,
+                snapshot=d,
             )
             candidate["components"]["predicted_shortage"] = float(
                 sum(candidate["shortage"].values())
@@ -2856,7 +2929,9 @@ def solve_rolling_snapshot(
                         else:
                             stages.append((3, "global_repair", None))
                         repair_expansions += 1
-                    elif name == "bottleneck_repair":
+                    elif name == "bottleneck_repair" and not record.get(
+                        "has_solution"
+                    ):
                         stages.append((3, "global_repair", None))
                         repair_expansions += 1
                 elif name == "impact_region":
