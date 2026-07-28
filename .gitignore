@@ -39,3 +39,6 @@ baseline/**/logs/
 artifacts/
 release_artifacts/
 local_results/
+
+# Local terminal data (large and potentially restricted)
+data_analysis/
