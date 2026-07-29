@@ -14,6 +14,22 @@ from scripts.run_formal_sharded_matrix import (
 
 
 class FormalShardedMatrixTest(unittest.TestCase):
+    def test_optional_numeric_identity_survives_csv_round_trip(self):
+        planned = {
+            "instance": "irregular-yard",
+            "bays_per_block": None,
+            "configuration": "core_start",
+        }
+        restored = {
+            "instance": "irregular-yard",
+            "bays_per_block": "",
+            "configuration": "core_start",
+        }
+        self.assertEqual(
+            experiment_identity(planned),
+            experiment_identity(restored),
+        )
+
     def test_budget_balancing_preserves_every_entry_once(self):
         entries = [
             {

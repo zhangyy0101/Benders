@@ -74,7 +74,13 @@ EXPERIMENT_ID_DEFAULTS = {
 
 
 def _identity_value(field: str, value: object) -> str:
-    if field in NUMERIC_EXPERIMENT_ID_FIELDS and value is not None:
+    # CSV round-tripping represents optional numeric ``None`` as an empty
+    # field.  Normalize both forms before numeric formatting so sharded
+    # checkpoints for irregular real-yard layouts have the same identity as
+    # their in-memory plans.
+    if value is None or value == "":
+        return ""
+    if field in NUMERIC_EXPERIMENT_ID_FIELDS:
         return format(float(value), ".12g")
     return str(value)
 
