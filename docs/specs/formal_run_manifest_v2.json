@@ -44,6 +44,8 @@
     "expected_result_rows": 190
   },
   "fully_synthetic": {
+    "exact_matrix_specification": "docs/specs/fully_synthetic_formal_matrix_v1.json",
+    "status": "matrix_frozen_70_forecast_bundles_pending",
     "scale_profiles": ["small", "medium", "large", "xlarge"],
     "pressure_profiles": ["ordinary", "high_pressure"],
     "initial_utilization": 0.55,
@@ -57,7 +59,12 @@
       "forecast_error_sensitivity",
       "internal_ablation",
       "repair_mechanism"
-    ]
+    ],
+    "existing_certified_performance_bundles": 110,
+    "missing_forecast_error_bundles": 70,
+    "expected_performance_result_rows": 680,
+    "expected_mechanism_result_rows": 60,
+    "expected_total_result_rows": 740
   },
   "reporting": {
     "pool_semisynthetic_and_synthetic": false,

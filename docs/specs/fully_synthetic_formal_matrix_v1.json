@@ -1,0 +1,161 @@
+{
+  "schema": "fully-synthetic-formal-matrix-v1",
+  "status": "frozen_before_missing_bundle_generation",
+  "formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
+  "common": {
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "sequential_shared_workstation": true,
+    "candidate": "full_bottleneck",
+    "internal_comparator": "core_start",
+    "external_baselines": ["kp_dos", "kp_sg", "dra_rpm"],
+    "forecast_baseline_error": 0.1,
+    "forecast_baseline_mode": "mixed",
+    "performance_bundle_requires_zero_shortage_integer_certificate": true,
+    "physical_recovery_policy": "common_to_all_methods",
+    "result_schema": "rolling-results-v11",
+    "problem_protocol": "rolling-v4.4-physical-capacity-recovery",
+    "algorithm_version": "lead-aware-aggregate-lp-screened-repair-v1.4.7"
+  },
+  "panels": [
+    {
+      "panel": "scale_pressure",
+      "paper_role": "computational_scale_and_controlled_pressure",
+      "data_status": "generated_and_certified",
+      "index": "local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json",
+      "sizes": ["small", "medium", "large", "xlarge"],
+      "pressure_profiles": ["ordinary", "high_pressure"],
+      "initial_utilization": 0.55,
+      "forecast_error": 0.1,
+      "forecast_error_mode": "mixed",
+      "methods": ["core_start", "full_bottleneck", "kp_dos", "kp_sg", "dra_rpm"],
+      "bundle_count": 80,
+      "expected_result_rows": 400,
+      "time_budget_policy": {
+        "small": 20,
+        "medium": 20,
+        "large": 60,
+        "xlarge": 120
+      },
+      "output": "local_results/formal/runs_v2/synthetic_scale_pressure.csv"
+    },
+    {
+      "panel": "initial_utilization",
+      "paper_role": "initial_yard_load_sensitivity",
+      "data_status": "generated_and_certified",
+      "indexes": [
+        "local_results/formal/instances/synthetic_utilization_u025/synthetic_instance_index.json",
+        "local_results/formal/instances/synthetic_utilization_u055/synthetic_instance_index.json",
+        "local_results/formal/instances/synthetic_utilization_u065/synthetic_instance_index.json"
+      ],
+      "size": "medium",
+      "initial_utilization_levels": [0.25, 0.55, 0.65],
+      "ship_volume_factor": 1.0,
+      "forecast_error": 0.1,
+      "forecast_error_mode": "mixed",
+      "methods": ["core_start", "full_bottleneck"],
+      "bundle_count": 30,
+      "expected_result_rows": 60,
+      "time_budget_seconds": 20,
+      "output": "local_results/formal/runs_v2/synthetic_initial_utilization.csv"
+    },
+    {
+      "panel": "forecast_error",
+      "paper_role": "forecast_error_magnitude_and_mechanism_sensitivity",
+      "data_status": "partially_generated",
+      "base_case": {
+        "size": "medium",
+        "initial_utilization": 0.55,
+        "ship_volume_factor": 1.0,
+        "capacity_pressure_profile": null,
+        "time_budget_seconds": 20
+      },
+      "magnitude_profiles": [
+        {"profile": "error_000_mixed", "forecast_error": 0.0, "forecast_error_mode": "mixed"},
+        {"profile": "error_010_mixed", "forecast_error": 0.1, "forecast_error_mode": "mixed"},
+        {"profile": "error_020_mixed", "forecast_error": 0.2, "forecast_error_mode": "mixed"},
+        {"profile": "error_030_mixed", "forecast_error": 0.3, "forecast_error_mode": "mixed"}
+      ],
+      "mechanism_profiles_at_error_010": [
+        {"profile": "error_010_multiplicative", "forecast_error": 0.1, "forecast_error_mode": "multiplicative"},
+        {"profile": "error_010_timing_shift", "forecast_error": 0.1, "forecast_error_mode": "timing_shift"},
+        {"profile": "error_010_booking_add_cancel", "forecast_error": 0.1, "forecast_error_mode": "booking_add_cancel"},
+        {"profile": "error_010_ship_correlated", "forecast_error": 0.1, "forecast_error_mode": "ship_correlated"},
+        {"profile": "error_010_mixed", "forecast_error": 0.1, "forecast_error_mode": "mixed"}
+      ],
+      "unique_profile_count": 8,
+      "existing_profiles": ["error_010_mixed"],
+      "profiles_to_generate": [
+        "error_000_mixed",
+        "error_020_mixed",
+        "error_030_mixed",
+        "error_010_multiplicative",
+        "error_010_timing_shift",
+        "error_010_booking_add_cancel",
+        "error_010_ship_correlated"
+      ],
+      "methods": ["core_start", "full_bottleneck"],
+      "bundle_count": 80,
+      "existing_bundle_count": 10,
+      "missing_bundle_count": 70,
+      "expected_result_rows": 160,
+      "output": "local_results/formal/runs_v2/synthetic_forecast_error.csv"
+    },
+    {
+      "panel": "internal_ablation",
+      "paper_role": "candidate_component_ablation",
+      "data_status": "reuse_generated_scale_pressure_subset",
+      "source_index": "local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json",
+      "subset_profile": "medium_ordinary",
+      "methods": ["core", "core_start", "core_start_impact", "full_bottleneck"],
+      "bundle_count": 10,
+      "expected_result_rows": 40,
+      "time_budget_seconds": 20,
+      "output": "local_results/formal/runs_v2/synthetic_internal_ablation.csv"
+    },
+    {
+      "panel": "aggregate_ablation",
+      "paper_role": "aggregate_lp_routing_ablation",
+      "data_status": "reuse_generated_scale_pressure_subset",
+      "source_index": "local_results/formal/instances/synthetic_scale_pressure/synthetic_instance_index.json",
+      "subset_profile": "medium_ordinary",
+      "methods": ["full_bottleneck", "full_bottleneck_no_aggregate"],
+      "bundle_count": 10,
+      "expected_result_rows": 20,
+      "time_budget_seconds": 20,
+      "output": "local_results/formal/runs_v2/synthetic_aggregate_ablation.csv"
+    },
+    {
+      "panel": "repair_mechanism",
+      "paper_role": "repair_path_reachability_only",
+      "data_status": "generated_mechanism_instances",
+      "index": "local_results/formal/instances/controlled_repair_pressure/pressure_instance_index.json",
+      "pressure_levels": ["nearby", "global"],
+      "methods": ["full_direct", "full_bottleneck", "full"],
+      "bundle_count": 20,
+      "expected_result_rows": 60,
+      "time_budget_seconds": 20,
+      "integer_certificate_required": false,
+      "pool_with_performance_panels": false,
+      "output": "local_results/formal/runs_v2/synthetic_repair_mechanism.csv"
+    }
+  ],
+  "counts": {
+    "performance_bundle_uses": 210,
+    "unique_performance_bundles_after_generation": 180,
+    "mechanism_bundles": 20,
+    "existing_performance_bundles": 110,
+    "missing_performance_bundles": 70,
+    "expected_performance_result_rows": 680,
+    "expected_mechanism_result_rows": 60,
+    "expected_total_result_rows": 740
+  },
+  "reporting_rules": [
+    "never pool semi-synthetic and fully synthetic observations",
+    "never pool repair-mechanism rows with certified performance rows",
+    "report forecast magnitude and forecast mechanism as separate subpanels",
+    "report physical recovery separately from final unplaced quantity",
+    "use paired instance-seed comparisons and two-sided Wilcoxon tests",
+    "do not tune algorithms or objective weights from formal outcomes"
+  ]
+}
