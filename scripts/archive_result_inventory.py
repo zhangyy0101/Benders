@@ -34,7 +34,11 @@ def git_value(*args: str) -> str | None:
 
 
 def build_inventory(roots: list[Path], *, label: str) -> dict[str, object]:
-    resolved_roots = [root.resolve() for root in roots]
+    root_pairs = [
+        (root.as_posix().rstrip("/"), root.resolve())
+        for root in roots
+    ]
+    resolved_roots = [resolved for _display, resolved in root_pairs]
     missing = [str(root) for root in resolved_roots if not root.is_dir()]
     if missing:
         raise FileNotFoundError(f"inventory roots do not exist: {missing}")
@@ -42,7 +46,7 @@ def build_inventory(roots: list[Path], *, label: str) -> dict[str, object]:
     records: list[dict[str, object]] = []
     root_summaries: list[dict[str, object]] = []
     aggregate = hashlib.sha256()
-    for root in resolved_roots:
+    for display_root, root in root_pairs:
         root_records: list[dict[str, object]] = []
         for path in sorted(
             (item for item in root.rglob("*") if item.is_file()),
@@ -52,7 +56,7 @@ def build_inventory(roots: list[Path], *, label: str) -> dict[str, object]:
             relative_path = path.relative_to(root).as_posix()
             digest = sha256_file(path)
             record = {
-                "root": root.as_posix(),
+                "root": display_root,
                 "relative_path": relative_path,
                 "bytes": stat.st_size,
                 "modified_utc": datetime.fromtimestamp(
@@ -61,13 +65,13 @@ def build_inventory(roots: list[Path], *, label: str) -> dict[str, object]:
                 "sha256": digest,
             }
             canonical = (
-                f"{root.as_posix()}\0{relative_path}\0{stat.st_size}\0{digest}\n"
+                f"{display_root}\0{relative_path}\0{stat.st_size}\0{digest}\n"
             )
             aggregate.update(canonical.encode("utf-8"))
             records.append(record)
             root_records.append(record)
         root_summaries.append({
-            "path": root.as_posix(),
+            "path": display_root,
             "file_count": len(root_records),
             "total_bytes": sum(int(item["bytes"]) for item in root_records),
         })

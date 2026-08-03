@@ -55,8 +55,8 @@
     "inventory": "local_results/archive/objective_equal_weight_freeze_v1/inventory.json",
     "inventory_file_count": 1139,
     "inventory_total_bytes": 508076290,
-    "inventory_aggregate_sha256": "0af5eba1b82a8156ce35fe1b588c9cbe00bb58f68fbe3cff271eac8ba5a040a6",
-    "inventory_file_sha256": "4e33c4fe0cd1b7cfe89a501e68478a06350c7983d4d07b32b58d8edefb27e3d5"
+    "inventory_aggregate_sha256": "857d5680c3cc3fe1d9641435b82567add52ca1e2ad3d85fac7eaf830fa5aa2a9",
+    "inventory_file_sha256": "bb1d654ff65fa473119ec6dca9156dabe70328a42ce6e12d5376c6e2713806af"
   },
   "baseline_test_gate": {
     "command": "python -m pytest -q",

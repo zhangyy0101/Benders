@@ -23,6 +23,7 @@ class ArchiveResultInventoryTest(unittest.TestCase):
             )
             self.assertEqual(first["file_count"], 2)
             self.assertEqual(first["total_bytes"], 2)
+            self.assertEqual(first["roots"][0]["path"], root.as_posix())
             self.assertEqual(first["aggregate_sha256"], second["aggregate_sha256"])
             self.assertEqual(
                 first["files"][0]["sha256"], hashlib.sha256(b"a").hexdigest()

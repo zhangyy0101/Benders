@@ -13,7 +13,7 @@ The ignored local result roots `local_results/protocol_v2_pnc_yangshan`,
 Their non-destructive inventory is
 `local_results/archive/objective_equal_weight_freeze_v1/inventory.json`. It
 contains 1,139 files totaling 508,076,290 bytes, with aggregate SHA-256
-`0af5eba1b82a8156ce35fe1b588c9cbe00bb58f68fbe3cff271eac8ba5a040a6`.
+`857d5680c3cc3fe1d9641435b82567add52ca1e2ad3d85fac7eaf830fa5aa2a9`.
 No revision run may resume from, overwrite, or merge with those artifacts.
 
 ## Planned objective revision
