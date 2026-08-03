@@ -1,0 +1,68 @@
+{
+  "schema": "formal-run-manifest-v3",
+  "status": "development_before_objective_revision",
+  "parent_freeze": {
+    "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
+    "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
+    "algorithm_version": "lead-aware-aggregate-lp-screened-repair-v1.4.7",
+    "result_schema": "rolling-results-v11",
+    "formal_manifest": "docs/specs/formal_run_manifest_v2.json"
+  },
+  "planned_revision": {
+    "development_branch": "research/tre-objective-normalization-v2",
+    "problem_protocol": "rolling-v4.5-reachable-objective-scaling",
+    "algorithm_version": "lead-aware-aggregate-lp-screened-repair-v1.5.0",
+    "result_schema": "rolling-results-v12",
+    "normalization": "reachable_snapshot_upper_bounds_v2",
+    "primary_operation_weight_profile": "business",
+    "output_root": "local_results/protocol_v3_tre_objective"
+  },
+  "operation_weight_profiles": {
+    "equal_weight_ablation": {
+      "distance": 0.25,
+      "balance": 0.25,
+      "concentration": 0.25,
+      "in_out_conflict": 0.25
+    },
+    "weak": {
+      "distance": 0.325,
+      "balance": 0.275,
+      "concentration": 0.225,
+      "in_out_conflict": 0.175
+    },
+    "business": {
+      "distance": 0.4,
+      "balance": 0.3,
+      "concentration": 0.2,
+      "in_out_conflict": 0.1
+    },
+    "strong_distance": {
+      "distance": 0.55,
+      "balance": 0.25,
+      "concentration": 0.15,
+      "in_out_conflict": 0.05
+    }
+  },
+  "evaluation_boundary": {
+    "old_formal_outputs_exist": true,
+    "old_formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
+    "old_formal_seed_role_after_revision": "historical_exploratory_re_evaluation",
+    "new_untouched_confirmatory_set_required": true,
+    "confirmatory_set": null,
+    "freeze_condition": "select and register a new untouched seed set or independent operational window before formal execution"
+  },
+  "local_archive": {
+    "inventory": "local_results/archive/objective_equal_weight_freeze_v1/inventory.json",
+    "inventory_file_count": 1139,
+    "inventory_total_bytes": 508076290,
+    "inventory_aggregate_sha256": "0af5eba1b82a8156ce35fe1b588c9cbe00bb58f68fbe3cff271eac8ba5a040a6",
+    "inventory_file_sha256": "4e33c4fe0cd1b7cfe89a501e68478a06350c7983d4d07b32b58d8edefb27e3d5"
+  },
+  "baseline_test_gate": {
+    "command": "python -m pytest -q",
+    "passed_tests": 135,
+    "passed_subtests": 9,
+    "status": "passed"
+  },
+  "freeze_authorization": false
+}
