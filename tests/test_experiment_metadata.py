@@ -242,6 +242,17 @@ class ExperimentMetadataTest(unittest.TestCase):
             config.DEPENDENCY_PROFILES["conservative"]["path_threshold"],
         )
 
+    def test_operation_weight_sensitivity_profile_is_recorded(self):
+        profile = collect_weight_profile(
+            operation_weight_profile="strong_distance"
+        )
+        operations = profile["operations"]
+        self.assertEqual(operations["profile"], "strong_distance")
+        self.assertAlmostEqual(operations["distance"], .55)
+        self.assertAlmostEqual(operations["balance"], .25)
+        self.assertAlmostEqual(operations["concentration"], .15)
+        self.assertAlmostEqual(operations["in_out_conflict"], .05)
+
     def test_aggregate_domain_ladder_protocol_is_recorded(self):
         profile = collect_weight_profile()
         ladder = profile["aggregate_domain_ladder"]

@@ -60,10 +60,16 @@ recomputes canonical stability values directly from reservation and shortage.
 ## Fixed objective scales and occupancy balance
 
 One unrestricted scale dictionary is calculated before stage-specific
-candidate domains are built. Its concentration bound uses every compatible
-`(ship, POD, bay)` combination; distance and conflict use total forecast
-quantity; occupancy balance uses the number of block-period deviations. Every
-stage receives this same dictionary.
+candidate domains are built. Only ship/group pairs with positive optimizer-
+visible arrivals contribute to its reachable support and quantity bounds. The
+concentration scale counts their distinct compatible `(ship, POD, bay)`
+supports. Distance uses their total positive forecast quantity times the
+maximum reachable ship--block distance, and conflict uses the same quantity.
+For \(K\) blocks, the tight universal per-period bound on the sum of absolute
+utilization deviations from their mean is
+\(2\lfloor K^2/4\rfloor/K\); the occupancy-balance scale multiplies this by the
+number of periods. Every restricted and global stage receives this same
+dictionary.
 
 Block balance is inventory occupancy utilization, not equipment workload. For
 each block and period, occupancy is divided by that block's own total bay

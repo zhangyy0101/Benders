@@ -19,6 +19,9 @@ from config import (  # noqa: E402
     DEPENDENCY_PROFILES,
     FORMAL_ORCHESTRATION_PROTOCOL,
     FORMAL_PRIMARY_CONFIGURATIONS,
+    FORMAL_RESULT_AUTHORIZED,
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
 )
 from experiment_metadata import (  # noqa: E402
     collect_experiment_metadata,
@@ -143,6 +146,7 @@ def _formal_context(
     threads: int,
     mip_gap: float,
     dependency_profile: str,
+    operation_weight_profile: str,
 ) -> tuple[dict, dict, dict[tuple[str, ...], tuple[int, int]], int]:
     paths, _expected, index_records = _paths_from_indexes(
         [str(source_index)],
@@ -165,6 +169,7 @@ def _formal_context(
                 seed,
                 budget,
                 baseline_parameter_profile="frozen",
+                operation_weight_profile=operation_weight_profile,
                 instance_metadata=instance_metadata,
             )
             if identity in identity_order:
@@ -176,6 +181,7 @@ def _formal_context(
         mip_gap=mip_gap,
         time_limit=max(item[3] for item in bundles),
         dependency_profile=dependency_profile,
+        operation_weight_profile=operation_weight_profile,
         experiment_phase="formal",
     )
     metadata.update({
@@ -207,6 +213,7 @@ def _formal_context(
         "instance_indexes": index_records,
         "configurations": list(FORMAL_PRIMARY_CONFIGURATIONS),
         "baseline_parameter_profiles": ["frozen"],
+        "operation_weight_profile": operation_weight_profile,
         "threads": threads,
         "mip_gap": mip_gap,
         "dependency_profile": dependency_profile,
@@ -320,6 +327,11 @@ def main() -> int:
         default="current",
     )
     parser.add_argument(
+        "--operation-weight-profile",
+        choices=tuple(OPERATION_WEIGHT_PROFILES),
+        default=OPERATION_WEIGHT_PROFILE,
+    )
+    parser.add_argument(
         "--output",
         default="local_results/formal/runs/public_main.csv",
     )
@@ -330,6 +342,11 @@ def main() -> int:
         parser.error("sharded execution requires at least two workers")
     if args.threads < 1:
         parser.error("threads must be positive")
+    if not FORMAL_RESULT_AUTHORIZED:
+        parser.error(
+            "formal execution is not authorized for objective version 1.5.0; "
+            "register a new untouched confirmatory set first"
+        )
 
     source_index = Path(args.bundle_index).resolve()
     final_output = Path(args.output).resolve()
@@ -357,6 +374,7 @@ def main() -> int:
             threads=args.threads,
             mip_gap=args.mip_gap,
             dependency_profile=args.dependency_profile,
+            operation_weight_profile=args.operation_weight_profile,
         )
     )
     if metadata.get("git_dirty") is not False:
@@ -387,6 +405,8 @@ def main() -> int:
             str(args.mip_gap),
             "--dependency-profile",
             args.dependency_profile,
+            "--operation-weight-profile",
+            args.operation_weight_profile,
             "--output",
             str(output_path),
         ]

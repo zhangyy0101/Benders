@@ -1,6 +1,7 @@
 """Multi-cycle simulator with distinct forecast, revision, and execution metrics."""
 from __future__ import annotations
 
+from config import OPERATION_WEIGHT_PROFILE, OPERATION_WEIGHT_PROFILES
 from external_baselines import (
     LITERATURE_CONFIGURATIONS,
     solve_literature_baseline,
@@ -28,8 +29,15 @@ def run_rolling_case(
     configuration: str = "full_bottleneck",
     dependency_profile: str = "current",
     baseline_parameter_profile: str = "frozen",
+    operation_weight_profile: str = OPERATION_WEIGHT_PROFILE,
 ) -> dict:
     """Optimize each rolling cycle under a common online-decision limit."""
+    if operation_weight_profile not in OPERATION_WEIGHT_PROFILES:
+        raise ValueError(
+            "operation_weight_profile must be one of "
+            f"{tuple(OPERATION_WEIGHT_PROFILES)}"
+        )
+    operation_weights = dict(OPERATION_WEIGHT_PROFILES[operation_weight_profile])
     state = initial_simulation_state(case)
     method_state: dict = {}
     cycles: list[dict] = []
@@ -55,6 +63,7 @@ def run_rolling_case(
                 configuration=configuration,
                 method_state=method_state,
                 parameter_profile=baseline_parameter_profile,
+                operation_weights=operation_weights,
             )
             method_state = result.get("method_state", {})
         else:
@@ -66,6 +75,7 @@ def run_rolling_case(
                 seed=seed + state["cycle"],
                 configuration=configuration,
                 dependency_profile=dependency_profile,
+                operation_weights=operation_weights,
             )
         components = result["solution"]["components"] if result.get("solution") else {}
         forecast = {
@@ -87,6 +97,19 @@ def run_rolling_case(
             "in_out_conflict_normalized": components.get(
                 "in_out_conflict_normalized"
             ),
+            **{
+                key: components.get(key)
+                for key in (
+                    "concentration_scale",
+                    "occupancy_balance_scale",
+                    "distance_scale",
+                    "in_out_conflict_scale",
+                    "concentration_weighted",
+                    "occupancy_balance_weighted",
+                    "distance_weighted",
+                    "in_out_conflict_weighted",
+                )
+            },
         }
         revision = {key: components.get(key) for key in REVISION_KEYS}
         cycle_row = {
@@ -205,6 +228,8 @@ def run_rolling_case(
         "ok": all(row.get("ok", True) for row in cycles),
         "termination_status": termination_status,
         "configuration": configuration,
+        "operation_weight_profile": operation_weight_profile,
+        "operation_weights": operation_weights,
         "cycles": cycles,
         "final_state": state,
         "total_runtime": total_online_decision,

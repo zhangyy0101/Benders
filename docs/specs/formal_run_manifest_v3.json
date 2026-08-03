@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "development_before_objective_revision",
+  "status": "implementation_complete_preflight_pending",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -63,6 +63,20 @@
     "passed_tests": 135,
     "passed_subtests": 9,
     "status": "passed"
+  },
+  "implementation_test_gate": {
+    "command": "python -m pytest -q",
+    "passed_tests": 148,
+    "passed_subtests": 9,
+    "status": "passed"
+  },
+  "development_smoke_gate": {
+    "instance": "pilot_small_seed100",
+    "profiles": ["business", "strong_distance"],
+    "configurations": ["core"],
+    "all_feasible": true,
+    "all_zero_realized_unplaced": true,
+    "result_root": "local_results/protocol_v3_tre_objective"
   },
   "freeze_authorization": false
 }

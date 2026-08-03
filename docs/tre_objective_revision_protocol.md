@@ -16,9 +16,9 @@ contains 1,139 files totaling 508,076,290 bytes, with aggregate SHA-256
 `857d5680c3cc3fe1d9641435b82567add52ca1e2ad3d85fac7eaf830fa5aa2a9`.
 No revision run may resume from, overwrite, or merge with those artifacts.
 
-## Planned objective revision
+## Objective revision implementation
 
-Development occurs on `research/tre-objective-normalization-v2`. The planned
+Development occurs on `research/tre-objective-normalization-v2`. The implemented
 version identities are:
 
 - problem protocol: `rolling-v4.5-reachable-objective-scaling`;
@@ -31,6 +31,21 @@ The shortage--stability--operations lexicographic priorities remain unchanged.
 Only the third-priority operations score is revised. Its scale dictionary must
 still be calculated once from the unrestricted snapshot and reused by every
 restricted and global stage.
+
+For positive optimizer-visible arrival quantity \(Q^+\), reachable support set
+\(\mathcal S^+\), maximum reachable distance \(d_{max}^+\), \(K\) blocks, and
+\(N\) periods, the implemented scales are:
+
+- concentration: \(\max(1, |\mathcal S^+|)\);
+- occupancy balance:
+  \(\max(1, N\,2\lfloor K^2/4\rfloor/K)\);
+- distance: \(\max(1, Q^+d_{max}^+)\);
+- inbound/outbound conflict: \(\max(1, Q^+)\).
+
+Zero-arrival, out-of-domain, and post-release pairs do not enlarge the first,
+third, or fourth scales. The selected profile is passed explicitly to the MIP
+and literature-baseline evaluator, recorded in experiment identity and
+metadata, and separated by the summarizer.
 
 The primary business profile is fixed before implementation as distance 0.40,
 balance 0.30, concentration 0.20, and inbound/outbound conflict 0.10. The

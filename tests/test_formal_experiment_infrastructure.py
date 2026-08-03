@@ -448,6 +448,18 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
         )
         self.assertNotEqual(frozen, low)
 
+        strong = planned_experiment_identity(
+            "case",
+            case,
+            "dra_rpm",
+            100,
+            1,
+            baseline_parameter_profile="frozen",
+            operation_weight_profile="strong_distance",
+            instance_metadata={"instance_bundle_sha256": "a"},
+        )
+        self.assertNotEqual(frozen, strong)
+
 
 if __name__ == "__main__":
     unittest.main()

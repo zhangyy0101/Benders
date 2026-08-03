@@ -15,7 +15,10 @@ if str(ROOT) not in sys.path:
 from config import (  # noqa: E402
     DEPENDENCY_PROFILES,
     FORMAL_PRIMARY_CONFIGURATIONS,
+    FORMAL_RESULT_AUTHORIZED,
     FORMAL_SEEDS,
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
 )
 from experiment_metadata import (  # noqa: E402
     collect_experiment_metadata,
@@ -55,6 +58,7 @@ EXPERIMENT_SET_CONFIGURATIONS = {
     "public_temporal_robustness": ("core_start", "full_bottleneck"),
     "repair_mechanism": ("full_direct", "full_bottleneck", "full"),
     "dra_sensitivity": ("dra_rpm",),
+    "operation_weight_sensitivity": ("core_start", "full_bottleneck"),
 }
 
 
@@ -171,6 +175,11 @@ def main() -> int:
         default="current",
     )
     parser.add_argument(
+        "--operation-weight-profile",
+        choices=tuple(OPERATION_WEIGHT_PROFILES),
+        default=OPERATION_WEIGHT_PROFILE,
+    )
+    parser.add_argument(
         "--output",
         default="local_results/formal/runs/formal_results.csv",
     )
@@ -232,6 +241,7 @@ def main() -> int:
         mip_gap=args.mip_gap,
         time_limit=max_budget,
         dependency_profile=args.dependency_profile,
+        operation_weight_profile=args.operation_weight_profile,
         experiment_phase=args.experiment_phase,
     )
     metadata.update({
@@ -242,6 +252,11 @@ def main() -> int:
         ),
     })
     if args.experiment_phase == "formal":
+        if not FORMAL_RESULT_AUTHORIZED:
+            parser.error(
+                "formal execution is not authorized for objective version "
+                "1.5.0; register a new untouched confirmatory set first"
+            )
         unexpected = sorted(
             {item[2] for item in bundles} - set(FORMAL_SEEDS)
         )
@@ -310,6 +325,11 @@ def main() -> int:
                 parser.error(
                     "formal main matrix must use the frozen DRA-RPM profile"
                 )
+            if args.operation_weight_profile != OPERATION_WEIGHT_PROFILE:
+                parser.error(
+                    "formal main matrix must use the frozen business "
+                    "operation-weight profile"
+                )
 
     requested_matrix = {
         "experiment_set": args.experiment_set,
@@ -331,6 +351,7 @@ def main() -> int:
         "threads": args.threads,
         "mip_gap": args.mip_gap,
         "dependency_profile": args.dependency_profile,
+        "operation_weight_profile": args.operation_weight_profile,
         "time_budget_policy": metadata["time_budget_policy"],
     }
     expected_row_count = len(bundles) * len(method_profiles)
@@ -372,6 +393,7 @@ def main() -> int:
                 seed,
                 budget,
                 baseline_parameter_profile=parameter_profile,
+                operation_weight_profile=args.operation_weight_profile,
                 instance_metadata=instance_metadata,
             )
             if identity in completed:
@@ -386,6 +408,7 @@ def main() -> int:
                 configuration=configuration,
                 dependency_profile=args.dependency_profile,
                 baseline_parameter_profile=parameter_profile,
+                operation_weight_profile=args.operation_weight_profile,
             )
             checkpoint(result_row(
                 instance,

@@ -3,13 +3,20 @@ import unittest
 from gurobipy import GRB
 
 from config import (
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
     OPERATION_WEIGHT_BALANCE,
     OPERATION_WEIGHT_CONCENTRATION,
     OPERATION_WEIGHT_DISTANCE,
     OPERATION_WEIGHT_IN_OUT_CONFLICT,
 )
 from rolling_data import _realized_space_metrics
-from rolling_model import build_rolling_model, compute_objective_scales, extract_rolling_solution
+from rolling_model import (
+    build_rolling_model,
+    compute_objective_scales,
+    extract_rolling_solution,
+    resolve_operation_weights,
+)
 
 
 def objective_snapshot():
@@ -43,12 +50,13 @@ def objective_snapshot():
     }
 
 
-def solve_fixed(snapshot, allowed):
+def solve_fixed(snapshot, allowed, *, operation_weights=None):
     scales = compute_objective_scales(snapshot)
     model, variables, expressions = build_rolling_model(
         snapshot,
         allowed_bays=allowed,
         objective_scales=scales,
+        operation_weights=operation_weights,
     )
     for key, variable in variables["reservation"].items():
         target = 5 if key == ("Y1", "V", "G") else 0
@@ -84,6 +92,7 @@ class ObjectiveScaleAndOccupancyTest(unittest.TestCase):
             self.assertAlmostEqual(local[field], global_result[field], places=8, msg=field)
         self.assertEqual(local["concentration_scale"], 2)
         self.assertEqual(global_result["concentration_scale"], 2)
+        self.assertEqual(local["occupancy_balance_scale"], 2)
         expected_score = (
             OPERATION_WEIGHT_CONCENTRATION * local["concentration_normalized"]
             + OPERATION_WEIGHT_BALANCE * local["occupancy_balance_normalized"]
@@ -94,6 +103,90 @@ class ObjectiveScaleAndOccupancyTest(unittest.TestCase):
         self.assertAlmostEqual(
             local["normalized_operations_score"], expected_score, places=8
         )
+        self.assertEqual(OPERATION_WEIGHT_PROFILE, "business")
+        self.assertAlmostEqual(local["distance_weight"], .4)
+        self.assertAlmostEqual(local["occupancy_balance_weight"], .3)
+        self.assertAlmostEqual(local["concentration_weight"], .2)
+        self.assertAlmostEqual(local["in_out_conflict_weight"], .1)
+        self.assertAlmostEqual(
+            local["normalized_operations_score"],
+            local["concentration_weighted"]
+            + local["occupancy_balance_weighted"]
+            + local["distance_weighted"]
+            + local["in_out_conflict_weighted"],
+        )
+
+    def test_scales_exclude_pairs_without_positive_reachable_flow(self):
+        snapshot = objective_snapshot()
+        baseline = compute_objective_scales(snapshot)
+        snapshot["remaining_demand"]["W", "G"] = 7
+        snapshot["active_ships"].append("W")
+        snapshot["ship_release_local"]["W"] = 10
+        snapshot["distance"]["W", "K1"] = 100
+        snapshot["distance"]["W", "K2"] = 200
+        self.assertEqual(compute_objective_scales(snapshot), baseline)
+
+    def test_balance_uses_tight_universal_deviation_bound(self):
+        snapshot = objective_snapshot()
+        snapshot["blocks"].append("K3")
+        snapshot["bays"].append("Y3")
+        snapshot["bay_block"]["Y3"] = "K3"
+        snapshot["bays_in_block"]["K3"] = ["Y3"]
+        snapshot["bay_size"]["Y3"] = 20
+        snapshot["capacity"]["Y3"] = 10
+        snapshot["distance"]["V", "K3"] = 3
+        scales = compute_objective_scales(snapshot)
+        self.assertAlmostEqual(scales["occupancy_balance_scale"], 8 / 3)
+        self.assertEqual(scales["concentration_scale"], 3)
+        self.assertEqual(scales["distance_scale"], 15)
+
+    def test_scales_reject_invalid_physical_coefficients(self):
+        snapshot = objective_snapshot()
+        snapshot["distance"]["V", "K1"] = -1
+        with self.assertRaisesRegex(ValueError, "transport distances"):
+            compute_objective_scales(snapshot)
+
+        snapshot = objective_snapshot()
+        snapshot["forecast_outbound"]["K1", 0] = -1
+        with self.assertRaisesRegex(ValueError, "outbound quantities"):
+            compute_objective_scales(snapshot)
+
+    def test_explicit_sensitivity_profile_changes_only_weighted_score(self):
+        snapshot = objective_snapshot()
+        business = solve_fixed(snapshot, None)
+        equal = solve_fixed(
+            snapshot,
+            None,
+            operation_weights=OPERATION_WEIGHT_PROFILES[
+                "equal_weight_ablation"
+            ],
+        )
+        for field in (
+            "concentration_raw",
+            "occupancy_balance_raw",
+            "distance_raw",
+            "in_out_conflict_raw",
+            "concentration_normalized",
+            "occupancy_balance_normalized",
+            "distance_normalized",
+            "in_out_conflict_normalized",
+        ):
+            self.assertAlmostEqual(business[field], equal[field], msg=field)
+        self.assertNotAlmostEqual(
+            business["normalized_operations_score"],
+            equal["normalized_operations_score"],
+        )
+
+    def test_operation_weight_validation_rejects_incomplete_profiles(self):
+        with self.assertRaisesRegex(ValueError, "missing"):
+            resolve_operation_weights({})
+        with self.assertRaisesRegex(ValueError, "at least one"):
+            resolve_operation_weights({
+                "concentration": 0,
+                "balance": 0,
+                "distance": 0,
+                "in_out_conflict": 0,
+            })
 
     def test_actual_support_prevents_mip_new_bay_charge(self):
         snapshot = objective_snapshot()

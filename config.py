@@ -2,9 +2,9 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.4-physical-capacity-recovery"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.4.7"
-RESULT_SCHEMA_VERSION = "rolling-results-v11"
+PROBLEM_PROTOCOL = "rolling-v4.5-reachable-objective-scaling"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.5.0"
+RESULT_SCHEMA_VERSION = "rolling-results-v12"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
@@ -20,6 +20,9 @@ SYNTHETIC_PRESSURE_PROTOCOL = (
 DEVELOPMENT_SEEDS = (100, 101, 102)
 PREFLIGHT_SEEDS = (700, 701, 702)
 FORMAL_SEEDS = tuple(range(1000, 1010))
+# Version 1.5.0 was defined after outputs for FORMAL_SEEDS existed.  Keep formal
+# execution closed until a new untouched confirmatory set is registered.
+FORMAL_RESULT_AUTHORIZED = False
 
 # Synthetic formal panels separate computational size, initial yard
 # utilization, and capacity pressure.  The pressure targets are peak
@@ -204,11 +207,46 @@ STABILITY_BLOCK_REALLOCATION_WEIGHT=1.0
 STABILITY_BASE_RATIO=.10
 STABILITY_CHANGE_RATIO=.50
 
-OPERATION_OBJECTIVE_NORMALIZATION = "unrestricted_snapshot_scales"
-OPERATION_WEIGHT_CONCENTRATION=1.0
-OPERATION_WEIGHT_BALANCE=1.0
-OPERATION_WEIGHT_DISTANCE=1.0
-OPERATION_WEIGHT_IN_OUT_CONFLICT=1.0
+OPERATION_OBJECTIVE_NORMALIZATION = "reachable_snapshot_upper_bounds_v2"
+OPERATION_WEIGHT_PROFILE = "business"
+OPERATION_WEIGHT_PROFILES = {
+    "equal_weight_ablation": {
+        "concentration": .25,
+        "balance": .25,
+        "distance": .25,
+        "in_out_conflict": .25,
+    },
+    "weak": {
+        "concentration": .225,
+        "balance": .275,
+        "distance": .325,
+        "in_out_conflict": .175,
+    },
+    "business": {
+        "concentration": .20,
+        "balance": .30,
+        "distance": .40,
+        "in_out_conflict": .10,
+    },
+    "strong_distance": {
+        "concentration": .15,
+        "balance": .25,
+        "distance": .55,
+        "in_out_conflict": .05,
+    },
+}
+OPERATION_WEIGHT_CONCENTRATION = OPERATION_WEIGHT_PROFILES[
+    OPERATION_WEIGHT_PROFILE
+]["concentration"]
+OPERATION_WEIGHT_BALANCE = OPERATION_WEIGHT_PROFILES[
+    OPERATION_WEIGHT_PROFILE
+]["balance"]
+OPERATION_WEIGHT_DISTANCE = OPERATION_WEIGHT_PROFILES[
+    OPERATION_WEIGHT_PROFILE
+]["distance"]
+OPERATION_WEIGHT_IN_OUT_CONFLICT = OPERATION_WEIGHT_PROFILES[
+    OPERATION_WEIGHT_PROFILE
+]["in_out_conflict"]
 
 ADAPTIVE_BLOCK_BATCH_RATIO=.20
 ADAPTIVE_GLOBAL_BYPASS_ENABLED=True

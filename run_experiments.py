@@ -10,7 +10,10 @@ from pathlib import Path
 from config import (
     DEPENDENCY_PROFILES,
     FORECAST_ERROR_MODES,
+    FORMAL_RESULT_AUTHORIZED,
     FORMAL_SEEDS,
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
     PREFLIGHT_SEEDS,
 )
 from external_baselines import (
@@ -51,6 +54,7 @@ EXPERIMENT_ID_FIELDS = (
     "outbound_rate",
     "release_delay_periods",
     "configuration",
+    "operation_weight_profile",
     "baseline_parameter_profile",
     "instance_bundle_sha256",
     "seed",
@@ -61,6 +65,7 @@ NUMERIC_EXPERIMENT_ID_FIELDS = set(EXPERIMENT_ID_FIELDS) - {
     "oracle_case_class",
     "forecast_error_mode",
     "configuration",
+    "operation_weight_profile",
     "baseline_parameter_profile",
     "instance_bundle_sha256",
 }
@@ -69,6 +74,7 @@ EXPERIMENT_ID_DEFAULTS = {
     "ship_volume_factor": 1.0,
     "oracle_case_class": "not_evaluated",
     "baseline_parameter_profile": "not_applicable",
+    "operation_weight_profile": OPERATION_WEIGHT_PROFILE,
     "instance_bundle_sha256": "",
 }
 
@@ -104,6 +110,7 @@ def planned_experiment_identity(
     time_limit: float,
     *,
     baseline_parameter_profile: str = "frozen",
+    operation_weight_profile: str = OPERATION_WEIGHT_PROFILE,
     instance_metadata: dict[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Build the same identity without solving the experiment."""
@@ -122,6 +129,7 @@ def planned_experiment_identity(
         "outbound_rate": case["nominal_outbound_rate_per_ship_period"],
         "release_delay_periods": case["release_delay_periods"],
         "configuration": configuration,
+        "operation_weight_profile": operation_weight_profile,
         "baseline_parameter_profile": (
             baseline_parameter_profile
             if configuration == "dra_rpm" else "not_applicable"
@@ -760,6 +768,24 @@ def result_row(
         "mean_cycle_predicted_in_out_conflict_normalized": forecast_mean(
             "in_out_conflict_normalized"
         ),
+        "mean_cycle_concentration_scale": forecast_mean("concentration_scale"),
+        "mean_cycle_occupancy_balance_scale": forecast_mean(
+            "occupancy_balance_scale"
+        ),
+        "mean_cycle_distance_scale": forecast_mean("distance_scale"),
+        "mean_cycle_in_out_conflict_scale": forecast_mean(
+            "in_out_conflict_scale"
+        ),
+        "mean_cycle_concentration_weighted": forecast_mean(
+            "concentration_weighted"
+        ),
+        "mean_cycle_occupancy_balance_weighted": forecast_mean(
+            "occupancy_balance_weighted"
+        ),
+        "mean_cycle_distance_weighted": forecast_mean("distance_weighted"),
+        "mean_cycle_in_out_conflict_weighted": forecast_mean(
+            "in_out_conflict_weighted"
+        ),
         "stages": json.dumps(
             [cycle.get("final_stage") for cycle in result["cycles"]]
         ),
@@ -817,6 +843,11 @@ def main() -> int:
         choices=DEPENDENCY_PROFILES,
         default="current",
     )
+    parser.add_argument(
+        "--operation-weight-profile",
+        choices=tuple(OPERATION_WEIGHT_PROFILES),
+        default=OPERATION_WEIGHT_PROFILE,
+    )
     parser.add_argument("--outbound-rate", type=int, default=150)
     parser.add_argument("--release-delay-periods", type=int, default=0)
     parser.add_argument("--containers-per-ship-low", type=int)
@@ -858,6 +889,7 @@ def main() -> int:
         mip_gap=args.mip_gap,
         time_limit=args.time,
         dependency_profile=args.dependency_profile,
+        operation_weight_profile=args.operation_weight_profile,
         experiment_phase=args.experiment_phase,
     )
     allowed_phase_seeds = {
@@ -874,6 +906,11 @@ def main() -> int:
                 f"{sorted(allowed_phase_seeds[args.experiment_phase])}; "
                 f"unexpected={unexpected}"
             )
+    if args.experiment_phase == "formal" and not FORMAL_RESULT_AUTHORIZED:
+        parser.error(
+            "formal execution is not authorized for objective version 1.5.0; "
+            "register a new untouched confirmatory set first"
+        )
     require_clean_git = args.require_clean_git or args.experiment_phase == "formal"
     if require_clean_git and metadata.get("git_dirty") is not False:
         parser.error(
@@ -894,6 +931,7 @@ def main() -> int:
         "threads": args.threads,
         "mip_gap": args.mip_gap,
         "dependency_profile": args.dependency_profile,
+        "operation_weight_profile": args.operation_weight_profile,
         "outbound_rate": args.outbound_rate,
         "release_delay_periods": args.release_delay_periods,
         "containers_per_ship_low": args.containers_per_ship_low,
@@ -1001,6 +1039,9 @@ def main() -> int:
                                     baseline_parameter_profile=(
                                         args.baseline_parameter_profile
                                     ),
+                                    operation_weight_profile=(
+                                        args.operation_weight_profile
+                                    ),
                                 )
                                 if identity in completed:
                                     print(
@@ -1018,6 +1059,9 @@ def main() -> int:
                                     dependency_profile=args.dependency_profile,
                                     baseline_parameter_profile=(
                                         args.baseline_parameter_profile
+                                    ),
+                                    operation_weight_profile=(
+                                        args.operation_weight_profile
                                     ),
                                 )
                                 row = result_row(
@@ -1044,6 +1088,7 @@ def main() -> int:
                     seed,
                     args.time,
                     baseline_parameter_profile=args.baseline_parameter_profile,
+                    operation_weight_profile=args.operation_weight_profile,
                 )
                 if identity in completed:
                     print(f"resume: skipping {identity}", flush=True)
@@ -1057,6 +1102,7 @@ def main() -> int:
                     configuration=configuration,
                     dependency_profile=args.dependency_profile,
                     baseline_parameter_profile=args.baseline_parameter_profile,
+                    operation_weight_profile=args.operation_weight_profile,
                 )
                 row = result_row(
                     f"pressure_{level}",

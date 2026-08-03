@@ -4,7 +4,12 @@ from __future__ import annotations
 import argparse
 import json
 
-from config import DEPENDENCY_PROFILES, FORECAST_ERROR_MODES
+from config import (
+    DEPENDENCY_PROFILES,
+    FORECAST_ERROR_MODES,
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
+)
 from external_baselines import CONFIGURATIONS
 from rolling_data import build_repair_pressure_case, build_synthetic_rolling_case
 from rolling_experiment import run_rolling_case
@@ -99,6 +104,11 @@ def parser() -> argparse.ArgumentParser:
         choices=DEPENDENCY_PROFILES,
         default="current",
     )
+    result.add_argument(
+        "--operation-weight-profile",
+        choices=tuple(OPERATION_WEIGHT_PROFILES),
+        default=OPERATION_WEIGHT_PROFILE,
+    )
     result.add_argument("--output")
     return result
 
@@ -138,6 +148,7 @@ def main() -> int:
         seed=args.seed,
         configuration=args.configuration,
         dependency_profile=args.dependency_profile,
+        operation_weight_profile=args.operation_weight_profile,
     )
     summary = {key: value for key, value in result.items() if key != "final_state"}
     print(json.dumps(serial(summary), indent=2, ensure_ascii=False))

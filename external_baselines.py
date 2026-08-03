@@ -4,18 +4,20 @@ from __future__ import annotations
 import math
 import time
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Callable, TypeAlias
 
 from config import (
     EXTERNAL_BASELINE_PROTOCOL,
-    OPERATION_WEIGHT_BALANCE,
-    OPERATION_WEIGHT_CONCENTRATION,
-    OPERATION_WEIGHT_DISTANCE,
-    OPERATION_WEIGHT_IN_OUT_CONFLICT,
     WALL_TIME_TOLERANCE_SECONDS,
 )
-from rolling_model import compatible, compute_objective_scales, ship_present_at
+from rolling_model import (
+    compatible,
+    compute_objective_scales,
+    resolve_operation_weights,
+    ship_present_at,
+)
 from rolling_solver import (
     CONFIGURATIONS as CORE_CONFIGURATIONS,
     canonical_stability_metrics,
@@ -1185,6 +1187,8 @@ def _build_common_solution(
     d: dict,
     allocator: _FeasibleAllocator,
     shortage_values: dict[tuple[str, str, int], int],
+    *,
+    operation_weights: Mapping[str, float] | None = None,
 ) -> tuple[dict, dict]:
     din = {
         key: int(value)
@@ -1292,11 +1296,16 @@ def _build_common_solution(
     conflict_normalized = (
         conflict_raw / scales["in_out_conflict_scale"]
     )
+    weights = resolve_operation_weights(operation_weights)
+    concentration_weighted = weights["concentration"] * concentration_normalized
+    occupancy_balance_weighted = weights["balance"] * balance_normalized
+    distance_weighted = weights["distance"] * distance_normalized
+    conflict_weighted = weights["in_out_conflict"] * conflict_normalized
     normalized_operations_score = (
-        OPERATION_WEIGHT_CONCENTRATION * concentration_normalized
-        + OPERATION_WEIGHT_BALANCE * balance_normalized
-        + OPERATION_WEIGHT_DISTANCE * distance_normalized
-        + OPERATION_WEIGHT_IN_OUT_CONFLICT * conflict_normalized
+        concentration_weighted
+        + occupancy_balance_weighted
+        + distance_weighted
+        + conflict_weighted
     )
     components = {
         "predicted_shortage": float(sum(shortage.values())),
@@ -1319,6 +1328,14 @@ def _build_common_solution(
         "occupancy_balance_normalized": balance_normalized,
         "distance_normalized": distance_normalized,
         "in_out_conflict_normalized": conflict_normalized,
+        "concentration_weight": weights["concentration"],
+        "occupancy_balance_weight": weights["balance"],
+        "distance_weight": weights["distance"],
+        "in_out_conflict_weight": weights["in_out_conflict"],
+        "concentration_weighted": concentration_weighted,
+        "occupancy_balance_weighted": occupancy_balance_weighted,
+        "distance_weighted": distance_weighted,
+        "in_out_conflict_weighted": conflict_weighted,
         "normalized_operations_score": normalized_operations_score,
         **{name: float(value) for name, value in scales.items()},
     }
@@ -1345,6 +1362,7 @@ def solve_literature_baseline(
     seed: int = 0,
     method_state: dict | None = None,
     parameter_profile: str = "frozen",
+    operation_weights: Mapping[str, float] | None = None,
 ) -> dict:
     """Solve one visible snapshot using an adapted published heuristic."""
     del seed  # All three frozen adaptations use deterministic tie-breaking.
@@ -1389,7 +1407,12 @@ def solve_literature_baseline(
         preprocessing_time = float(diagnostics.get("pricing_time", 0.0))
     search_time = time.perf_counter() - started
     extract_started = time.perf_counter()
-    solution, scales = _build_common_solution(d, allocator, shortage)
+    solution, scales = _build_common_solution(
+        d,
+        allocator,
+        shortage,
+        operation_weights=operation_weights,
+    )
     solution_extract_time = time.perf_counter() - extract_started
     online_decision_time = time.perf_counter() - started
     validation_started = time.perf_counter()

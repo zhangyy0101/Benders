@@ -2,6 +2,7 @@ import time
 import unittest
 from collections import defaultdict
 
+from config import OPERATION_WEIGHT_PROFILES
 from external_baselines import (
     CONFIGURATIONS,
     LITERATURE_CONFIGURATIONS,
@@ -96,6 +97,25 @@ class ExternalLiteratureBaselineTest(unittest.TestCase):
                     )
                 self.assertIsNone(result["final_stage_mip_gap"])
                 self.assertEqual(result["stages"][0]["nodes"], 0.0)
+
+    def test_common_evaluator_uses_selected_operation_weights(self):
+        weights = OPERATION_WEIGHT_PROFILES["strong_distance"]
+        result = solve_literature_baseline(
+            self.snapshot,
+            configuration="kp_dos",
+            time_limit=2,
+            operation_weights=weights,
+        )
+        components = result["solution"]["components"]
+        self.assertAlmostEqual(components["distance_weight"], .55)
+        self.assertAlmostEqual(components["occupancy_balance_weight"], .25)
+        self.assertAlmostEqual(
+            components["normalized_operations_score"],
+            components["concentration_weighted"]
+            + components["occupancy_balance_weighted"]
+            + components["distance_weighted"]
+            + components["in_out_conflict_weighted"],
+        )
 
     def test_methods_are_deterministic_and_exposed_to_the_cli(self):
         self.assertTrue(set(LITERATURE_CONFIGURATIONS).issubset(CONFIGURATIONS))

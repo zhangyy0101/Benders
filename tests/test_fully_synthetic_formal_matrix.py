@@ -17,12 +17,22 @@ class FullySyntheticFormalMatrixTests(unittest.TestCase):
             tuple(config.FORMAL_SEEDS),
         )
         common = self.spec["common"]
-        self.assertEqual(common["algorithm_version"], config.ALGORITHM_VERSION)
-        self.assertEqual(common["problem_protocol"], config.PROBLEM_PROTOCOL)
         self.assertEqual(
-            common["result_schema"], config.RESULT_SCHEMA_VERSION
+            common["algorithm_version"],
+            "lead-aware-aggregate-lp-screened-repair-v1.4.7",
         )
+        self.assertEqual(
+            common["problem_protocol"],
+            "rolling-v4.4-physical-capacity-recovery",
+        )
+        self.assertEqual(common["result_schema"], "rolling-results-v11")
         self.assertTrue(common["sequential_shared_workstation"])
+
+    def test_historical_matrix_is_not_silently_relabelled_as_current(self):
+        common = self.spec["common"]
+        self.assertNotEqual(common["algorithm_version"], config.ALGORITHM_VERSION)
+        self.assertNotEqual(common["problem_protocol"], config.PROBLEM_PROTOCOL)
+        self.assertNotEqual(common["result_schema"], config.RESULT_SCHEMA_VERSION)
 
     def test_panel_and_result_counts_reconcile(self):
         panels = {row["panel"]: row for row in self.spec["panels"]}

@@ -62,9 +62,16 @@ def collect_gurobi_version() -> str | None:
 
 def collect_weight_profile(
     dependency_profile: str = "current",
+    operation_weight_profile: str = config.OPERATION_WEIGHT_PROFILE,
 ) -> dict[str, dict[str, object]]:
     """Collect algorithm weights and thresholds directly from configuration."""
     dependency_thresholds = config.DEPENDENCY_PROFILES[dependency_profile]
+    if operation_weight_profile not in config.OPERATION_WEIGHT_PROFILES:
+        raise ValueError(
+            "operation_weight_profile must be one of "
+            f"{tuple(config.OPERATION_WEIGHT_PROFILES)}"
+        )
+    operation_weights = config.OPERATION_WEIGHT_PROFILES[operation_weight_profile]
     return {
         "stability": {
             "cancel": config.STABILITY_CANCEL_WEIGHT,
@@ -75,10 +82,8 @@ def collect_weight_profile(
         },
         "operations": {
             "normalization": config.OPERATION_OBJECTIVE_NORMALIZATION,
-            "concentration": config.OPERATION_WEIGHT_CONCENTRATION,
-            "balance": config.OPERATION_WEIGHT_BALANCE,
-            "distance": config.OPERATION_WEIGHT_DISTANCE,
-            "in_out_conflict": config.OPERATION_WEIGHT_IN_OUT_CONFLICT,
+            "profile": operation_weight_profile,
+            **operation_weights,
         },
         "dependency": {
             "enabled": config.DEPENDENCY_PROPAGATION_ENABLED,
@@ -201,6 +206,7 @@ def collect_experiment_metadata(
     mip_gap: float,
     time_limit: float,
     dependency_profile: str = "current",
+    operation_weight_profile: str = config.OPERATION_WEIGHT_PROFILE,
     experiment_phase: str = "development",
 ) -> dict[str, object]:
     """Collect one immutable metadata record for an experiment batch."""
@@ -235,6 +241,7 @@ def collect_experiment_metadata(
         "mip_gap": float(mip_gap),
         "time_limit": float(time_limit),
         "dependency_profile": dependency_profile,
+        "operation_weight_profile": operation_weight_profile,
         "stability_formulation": (
             "exact_big_m"
             if config.USE_EXACT_STABILITY_BIG_M
@@ -272,7 +279,10 @@ def collect_experiment_metadata(
                 config.WALL_TIME_TOLERANCE_SECONDS
             ),
         },
-        "weight_profile": collect_weight_profile(dependency_profile),
+        "weight_profile": collect_weight_profile(
+            dependency_profile,
+            operation_weight_profile,
+        ),
     }
 
 
@@ -303,6 +313,7 @@ def csv_metadata_fields(metadata: dict[str, object]) -> dict[str, object]:
         "threads": metadata.get("threads"),
         "mip_gap": metadata.get("mip_gap"),
         "dependency_profile": metadata.get("dependency_profile"),
+        "operation_weight_profile": metadata.get("operation_weight_profile"),
         "stability_formulation": metadata.get("stability_formulation"),
         "weight_profile": json.dumps(
             metadata.get("weight_profile", {}),

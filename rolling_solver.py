@@ -5,6 +5,7 @@ import math
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Mapping
 from typing import TypeAlias
 
 import gurobipy as gp
@@ -2172,6 +2173,7 @@ def solve_rolling_snapshot(
     impact_threshold: float = .10,
     configuration: str = "full_bottleneck",
     dependency_profile: str = "current",
+    operation_weights: Mapping[str, float] | None = None,
     verbose: bool = False,
 ) -> dict:
     if dependency_profile not in DEPENDENCY_PROFILES:
@@ -2487,6 +2489,7 @@ def solve_rolling_snapshot(
             shortage_allowed=True,
             stability_budget=budget,
             objective_scales=objective_scales,
+            operation_weights=operation_weights,
         )
         build_time = time.perf_counter() - build_started
         timing["model_build_time"] += build_time

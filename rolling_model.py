@@ -1,7 +1,9 @@
 """Six-hour stability-aware rolling bay-slot allocation MIP."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
+from collections.abc import Mapping
 
 import gurobipy as gp
 from gurobipy import GRB
@@ -18,6 +20,40 @@ from config import (
 )
 
 INF = 10**9
+OPERATION_WEIGHT_KEYS = (
+    "concentration",
+    "balance",
+    "distance",
+    "in_out_conflict",
+)
+
+
+def resolve_operation_weights(
+    weights: Mapping[str, float] | None = None,
+) -> dict[str, float]:
+    """Return a validated operations-weight dictionary."""
+    source = (
+        weights
+        if weights is not None
+        else {
+            "concentration": OPERATION_WEIGHT_CONCENTRATION,
+            "balance": OPERATION_WEIGHT_BALANCE,
+            "distance": OPERATION_WEIGHT_DISTANCE,
+            "in_out_conflict": OPERATION_WEIGHT_IN_OUT_CONFLICT,
+        }
+    )
+    missing = sorted(set(OPERATION_WEIGHT_KEYS) - set(source))
+    extra = sorted(set(source) - set(OPERATION_WEIGHT_KEYS))
+    if missing or extra:
+        raise ValueError(
+            f"operation weight keys differ: missing={missing}, extra={extra}"
+        )
+    result = {key: float(source[key]) for key in OPERATION_WEIGHT_KEYS}
+    if any(not math.isfinite(value) or value < 0 for value in result.values()):
+        raise ValueError("operation weights must be finite and nonnegative")
+    if sum(result.values()) <= 0:
+        raise ValueError("at least one operation weight must be positive")
+    return result
 
 
 def compatible(d: dict, bay: str, group: str) -> bool:
@@ -416,22 +452,64 @@ def existing_blocks(d: dict, ship: str, group: str, period: int = 0) -> set[str]
 
 
 def compute_objective_scales(d: dict) -> dict[str, float]:
-    """Compute stage-invariant objective scales from the unrestricted snapshot."""
+    """Compute reachable upper-reference scales from the unrestricted snapshot."""
     attrs = d["group_attrs"]
-    full_support = {
+    modeled_pairs = set(d["remaining_demand"])
+    positive_forecast = [
+        (ship, group, period, float(quantity))
+        for (ship, group, period), quantity in d["forecast_arrivals"].items()
+        if (
+            quantity > 0
+            and (ship, group) in modeled_pairs
+            and ship_present_at(d, ship, period)
+        )
+    ]
+    active_pairs = {(ship, group) for ship, group, _period, _q in positive_forecast}
+    reachable_support = {
         (ship, attrs[group]["pod"], bay)
-        for ship, group in d["remaining_demand"]
+        for ship, group in active_pairs
         for bay in d["bays"]
         if compatible(d, bay, group)
     }
-    total_forecast = sum(d["forecast_arrivals"].values())
+    reachable_distances = [
+        float(d["distance"][ship, block])
+        for ship, group in active_pairs
+        for block in d["blocks"]
+        if any(
+            compatible(d, bay, group)
+            for bay in d["bays_in_block"][block]
+        )
+    ]
+    if any(
+        not math.isfinite(distance) or distance < 0
+        for distance in reachable_distances
+    ):
+        raise ValueError(
+            "reachable transport distances must be finite and nonnegative"
+        )
+    if any(
+        not math.isfinite(float(quantity)) or quantity < 0
+        for quantity in d["forecast_outbound"].values()
+    ):
+        raise ValueError("forecast outbound quantities must be finite and nonnegative")
+    total_forecast = sum(entry[3] for entry in positive_forecast)
+    block_count = len(d["blocks"])
+    period_count = len(d["periods"])
+    # For K values in [0, 1], the tight universal upper bound on the sum of
+    # absolute deviations from their mean is 2*floor(K^2/4)/K.
+    balance_per_period = (
+        2.0 * ((block_count * block_count) // 4) / block_count
+        if block_count else 0.0
+    )
     return {
-        "concentration_scale": float(max(1, len(full_support))),
-        "occupancy_balance_scale": float(max(1, len(d["blocks"]) * len(d["periods"]))),
-        "distance_scale": float(
-            max(1, total_forecast * max(d["distance"].values(), default=1))
+        "concentration_scale": float(max(1, len(reachable_support))),
+        "occupancy_balance_scale": float(
+            max(1.0, period_count * balance_per_period)
         ),
-        "in_out_conflict_scale": float(max(1, total_forecast)),
+        "distance_scale": float(
+            max(1.0, total_forecast * max(reachable_distances, default=0.0))
+        ),
+        "in_out_conflict_scale": float(max(1.0, total_forecast)),
     }
 
 
@@ -442,6 +520,7 @@ def build_rolling_model(
     shortage_allowed: bool = True,
     stability_budget: float | None = None,
     objective_scales: dict[str, float] | None = None,
+    operation_weights: Mapping[str, float] | None = None,
     use_exact_stability_big_m: bool | None = None,
 ) -> tuple[gp.Model, dict, dict]:
     m = gp.Model("rolling_6h_bay_allocation")
@@ -466,9 +545,12 @@ def build_rolling_model(
     reserve_keys = sorted(set(reserve_keys))
     forecast_periods_by_pair: dict[tuple[str, str], list[int]] = defaultdict(list)
     pair_set = set(pairs)
+    positive_forecast_pairs: set[tuple[str, str]] = set()
     for j, g, n in sorted(d["forecast_arrivals"]):
         if (j, g) in pair_set and ship_present_at(d, j, n):
             forecast_periods_by_pair[j, g].append(n)
+            if d["forecast_arrivals"][j, g, n] > 0:
+                positive_forecast_pairs.add((j, g))
     flow_keys = sorted(
         (i, j, g, n)
         for j, g in pairs
@@ -815,7 +897,12 @@ def build_rolling_model(
         + STABILITY_NEW_BAY_WEIGHT * new_use.sum()
         + STABILITY_BLOCK_REALLOCATION_WEIGHT * block_reallocation
     )
-    concentration_raw = use.sum()
+    reachable_use_keys = {
+        (j, attrs[g]["pod"], i)
+        for i, j, g in reserve_keys
+        if (j, g) in positive_forecast_pairs
+    }
+    concentration_raw = gp.quicksum(use[key] for key in reachable_use_keys)
     occupancy_balance_raw = utilization_dev.sum()
     distance_raw = gp.quicksum(
         d["distance"][j, k] * share[j, k, g, n]
@@ -833,11 +920,16 @@ def build_rolling_model(
     )
     distance_normalized = distance_raw / scales["distance_scale"]
     conflict_normalized = conflict_raw / scales["in_out_conflict_scale"]
+    weights = resolve_operation_weights(operation_weights)
+    concentration_weighted = weights["concentration"] * concentration_normalized
+    occupancy_balance_weighted = weights["balance"] * occupancy_balance_normalized
+    distance_weighted = weights["distance"] * distance_normalized
+    conflict_weighted = weights["in_out_conflict"] * conflict_normalized
     normalized_operations_score = (
-        OPERATION_WEIGHT_CONCENTRATION * concentration_normalized
-        + OPERATION_WEIGHT_BALANCE * occupancy_balance_normalized
-        + OPERATION_WEIGHT_DISTANCE * distance_normalized
-        + OPERATION_WEIGHT_IN_OUT_CONFLICT * conflict_normalized
+        concentration_weighted
+        + occupancy_balance_weighted
+        + distance_weighted
+        + conflict_weighted
     )
     m.ModelSense = GRB.MINIMIZE
     m.setObjectiveN(shortage_obj, 0, priority=3, name="shortage")
@@ -881,6 +973,14 @@ def build_rolling_model(
         "occupancy_balance_normalized": occupancy_balance_normalized,
         "distance_normalized": distance_normalized,
         "in_out_conflict_normalized": conflict_normalized,
+        "concentration_weight": weights["concentration"],
+        "occupancy_balance_weight": weights["balance"],
+        "distance_weight": weights["distance"],
+        "in_out_conflict_weight": weights["in_out_conflict"],
+        "concentration_weighted": concentration_weighted,
+        "occupancy_balance_weighted": occupancy_balance_weighted,
+        "distance_weighted": distance_weighted,
+        "in_out_conflict_weighted": conflict_weighted,
         "normalized_operations_score": normalized_operations_score,
         **{name: float(value) for name, value in scales.items()},
     }

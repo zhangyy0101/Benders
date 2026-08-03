@@ -25,6 +25,7 @@ SCENARIO_FIELDS = (
     "forecast_error_mode",
     "outbound_rate",
     "time_limit",
+    "operation_weight_profile",
 )
 DEFAULT_METRICS = (
     "ok",
