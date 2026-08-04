@@ -310,6 +310,10 @@ The current implementation identifiers are
 The authoritative change and experiment boundary is
 `docs/tre_objective_revision_protocol.md`, and the current machine-readable
 state is `docs/specs/formal_run_manifest_v3.json`.
+The v1.7.1 development gate has passed; its 72-row main matrix, separate
+mechanism evidence, profile-isolation checks, and observed trade-offs are
+reported in `docs/reports/tre_v171_development_gate.md`. Preflight and formal
+execution remain separate gates.
 
 Formal execution is intentionally closed while
 `FORMAL_RESULT_AUTHORIZED=False`. Opening formal seeds, running a formal

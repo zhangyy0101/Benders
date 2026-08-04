@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "implementation_complete_development_gate_pending",
+  "status": "development_gate_passed_preflight_pending",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -78,6 +78,30 @@
     "root_cause": "time-limited occupancy-balance epigraph slack was reported as physical objective accounting",
     "v1.7.1_resolution": "canonical flow-based operations components replace modeled expression values before incumbent comparison and validation"
   },
+  "development_gate": {
+    "status": "passed",
+    "git_commit": "ba3a7266c27c3ab7ff2fde35cf6397d9d8b89c9b",
+    "git_tag": "rolling-v4.6-objective-only-stability-development-v2",
+    "seeds": [100, 101, 102],
+    "certified_instance_count": 18,
+    "main_expected_rows": 72,
+    "main_completed_rows": 72,
+    "failed_rows": 0,
+    "validation_failures": 0,
+    "deadline_misses": 0,
+    "score_identity_failures": 0,
+    "max_score_identity_error": 5.551115123125783e-17,
+    "hard_stability_budget_enabled_rows": 0,
+    "mechanism_completed_rows": 6,
+    "mechanism_repair_triggered_rows": 3,
+    "sensitivity_profile_smoke_count": 4,
+    "main_csv_sha256": "3afcd2e60f0e5e026981f8198f633e4738f7c762f9cbf4e795527848b58899bd",
+    "main_manifest_sha256": "0d03490e858444dcfbcf9b1d444c1e844cb2657d7f5e8e9021bbd7e576390858",
+    "summary_sha256": "f80ebd96a99418bee4dd6f7532b7ba01f03250ef4f2444b3a62c5ce43aae9b80",
+    "mechanism_csv_sha256": "e8a8bdc3b8b5134d8ba9ae975af0d60dc9431ed22557d40c5fcbead77475a5a0",
+    "mechanism_manifest_sha256": "887f7b84b265e4fe9a9349776910c1bcda10f194dd0de0b57a3e0ee3d1fa1657",
+    "report": "docs/reports/tre_v171_development_gate.md"
+  },
   "publication_analysis_policy": {
     "confidence_interval": "two-sided Student-t 95%",
     "paired_test": "two-sided Wilcoxon with at least five nonzero pairs",
@@ -85,7 +109,7 @@
     "mixed_protocol_default": "reject",
     "formal_manifest_default": "required_complete_all_ok"
   },
-  "development_smoke_gate": {
+  "historical_development_smoke_gate": {
     "evidence_role": "historical_pre_v1.7_development_only",
     "instance": "pilot_small_seed100",
     "profiles": ["business", "strong_distance"],

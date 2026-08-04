@@ -80,7 +80,7 @@ method revised after formal outcomes have been inspected requires a new
 held-out set, those seeds may be reused only for historical or exploratory
 paired re-evaluation of the objective change.
 
-Before version 1.7.0 is authorized for a confirmatory formal run, register an
+Before version 1.7.1 is authorized for a confirmatory formal run, register an
 untouched seed set or an independent operational time window in the V3
 manifest. Do not select the primary weight profile from any V3 result. All
 profile definitions, normalization equations, evaluation panels, and stopping
@@ -93,6 +93,17 @@ differences, and their p-values receive a Holm correction within each metric
 family. The default formal audit rejects mixed protocols or commits, duplicate
 identities, failed/invalid/late rows, missing bundle hashes, unexpected seeds,
 provisional public sources, score-accounting gaps, and incomplete manifests.
+
+## Version 1.7.1 development gate
+
+The 72-row oracle-certified main development matrix completed on seeds
+100--102 with zero failed rows, validation failures, deadline misses, dirty
+identities, or normalized-score accounting failures. A separate six-row
+mechanism panel reached bottleneck repair, and the main panel reached residual
+shortage global recovery. Four isolated one-row profile smokes verified weight
+profile identity without using their outcomes to select the business weights.
+The complete development-only evidence and observed KPI trade-offs are recorded
+in `docs/reports/tre_v171_development_gate.md`.
 
 ## Gates before a new formal tag
 
