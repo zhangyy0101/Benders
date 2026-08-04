@@ -4,7 +4,7 @@
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.6-objective-only-stability"
 ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.1"
-RESULT_SCHEMA_VERSION = "rolling-results-v15"
+RESULT_SCHEMA_VERSION = "rolling-results-v16"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"

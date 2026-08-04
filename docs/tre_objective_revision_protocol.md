@@ -23,7 +23,7 @@ version identities are:
 
 - problem protocol: `rolling-v4.6-objective-only-stability`;
 - candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.1`;
-- result schema: `rolling-results-v15`;
+- result schema: `rolling-results-v16`;
 - normalization: `reachable_snapshot_upper_bounds_v2`;
 - new local root: `local_results/protocol_v3_tre_objective`.
 
@@ -104,6 +104,16 @@ shortage global recovery. Four isolated one-row profile smokes verified weight
 profile identity without using their outcomes to select the business weights.
 The complete development-only evidence and observed KPI trade-offs are recorded
 in `docs/reports/tre_v171_development_gate.md`.
+
+Result schema v16 is a reporting-only correction made after the development
+gate. The batch manifest retains the core MIP stability formulation, while
+each result row records the formulation/accounting used by the executed
+method. Formal auditing rejects a literature-baseline row unless it reports
+`common_ex_post_accounting`; core rows must report `epigraph_only` or
+`exact_big_m`. Default analysis includes planned infeasibility, fallback,
+pre-recovery shortfall, physical recovery, displaced reservations, and final
+unplaced quantity. These fields already exist in the sealed development CSV,
+so this revision requires re-summarization but not re-optimization.
 
 ## Gates before a new formal tag
 

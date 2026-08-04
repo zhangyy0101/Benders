@@ -99,3 +99,12 @@ configuration isolation only and were not used to choose the primary weights.
 The v1.7.1 development gate passes. This authorizes freezing a preflight
 candidate, not a formal run. The primary empirical weights remain prespecified,
 and `FORMAL_RESULT_AUTHORIZED` remains false.
+
+## Post-gate reporting clarification
+
+Result schema v16 was introduced after this sealed v15 development matrix to
+record method-specific stability accounting and to include the complete
+execution-recovery funnel in default summaries. It changes no optimization,
+rolling execution, or physical recovery decision. The stored development CSV
+already contains every recovery field, and the four internal rows correctly
+used `epigraph_only`; therefore the development optimization was not rerun.

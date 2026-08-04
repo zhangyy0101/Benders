@@ -224,6 +224,11 @@ def collect_experiment_metadata(
     experiment_phase: str = "development",
 ) -> dict[str, object]:
     """Collect one immutable metadata record for an experiment batch."""
+    core_stability_formulation = (
+        "exact_big_m"
+        if config.USE_EXACT_STABILITY_BIG_M
+        else "epigraph_only"
+    )
     return {
         **collect_git_metadata(),
         "problem_protocol": config.PROBLEM_PROTOCOL,
@@ -256,11 +261,12 @@ def collect_experiment_metadata(
         "time_limit": float(time_limit),
         "dependency_profile": dependency_profile,
         "operation_weight_profile": operation_weight_profile,
-        "stability_formulation": (
-            "exact_big_m"
-            if config.USE_EXACT_STABILITY_BIG_M
-            else "epigraph_only"
-        ),
+        "stability_formulation": core_stability_formulation,
+        "stability_formulation_scope": "core_model_batch_default",
+        "stability_formulation_by_method_family": {
+            "core": core_stability_formulation,
+            "literature_baseline": "common_ex_post_accounting",
+        },
         "temporal_protocol": {
             "rolling_cycle_hours": config.ROLLING_CYCLE_HOURS,
             "receiving_window_hours": config.RECEIVING_WINDOW_HOURS,

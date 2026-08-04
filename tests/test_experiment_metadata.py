@@ -211,6 +211,16 @@ class ExperimentMetadataTest(unittest.TestCase):
         self.assertEqual(metadata["mip_gap"], .02)
         self.assertEqual(metadata["time_limit"], 7.0)
         self.assertIn(metadata["stability_formulation"], ("epigraph_only", "exact_big_m"))
+        self.assertEqual(
+            metadata["stability_formulation_scope"],
+            "core_model_batch_default",
+        )
+        self.assertEqual(
+            metadata["stability_formulation_by_method_family"][
+                "literature_baseline"
+            ],
+            "common_ex_post_accounting",
+        )
         self.assertEqual(metadata["temporal_protocol"]["time_bucket_hours"], 6)
         self.assertTrue(
             metadata["validation_profile"]["validate_each_execution_period"]

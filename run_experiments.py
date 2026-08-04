@@ -687,6 +687,10 @@ def result_row(
         "seed": seed,
         "time_limit": time_limit,
         **csv_metadata_fields(metadata),
+        # Batch metadata records the core MIP formulation.  Each row records
+        # the method actually executed so adapted literature baselines are not
+        # mislabeled as epigraph MIPs.
+        "stability_formulation": result["stability_formulation"],
         "ok": result["ok"],
         "termination_status": result["termination_status"],
         "total_online_decision_time": result[

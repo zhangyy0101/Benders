@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "development_gate_passed_preflight_pending",
+  "status": "development_gate_passed_reporting_v16_preflight_freeze_pending",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -12,7 +12,7 @@
     "development_branch": "research/tre-objective-normalization-v2",
     "problem_protocol": "rolling-v4.6-objective-only-stability",
     "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.1",
-    "result_schema": "rolling-results-v15",
+    "result_schema": "rolling-results-v16",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",
     "residual_shortage_policy": "bottleneck residual shortage enters global repair when the reserved in-budget window remains",
@@ -68,7 +68,7 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 166,
+    "passed_tests": 168,
     "passed_subtests": 9,
     "status": "passed"
   },
@@ -101,6 +101,58 @@
     "mechanism_csv_sha256": "e8a8bdc3b8b5134d8ba9ae975af0d60dc9431ed22557d40c5fcbead77475a5a0",
     "mechanism_manifest_sha256": "887f7b84b265e4fe9a9349776910c1bcda10f194dd0de0b57a3e0ee3d1fa1657",
     "report": "docs/reports/tre_v171_development_gate.md"
+  },
+  "reporting_revision": {
+    "result_schema": "rolling-results-v16",
+    "optimization_behavior_changed": false,
+    "execution_behavior_changed": false,
+    "development_optimization_rerun_required": false,
+    "method_specific_stability_accounting": true,
+    "external_baseline_stability_accounting": "common_ex_post_accounting",
+    "default_recovery_funnel_metrics": [
+      "planned_infeasible_quantity",
+      "fallback_placement",
+      "pre_physical_recovery_unplaced",
+      "physical_recovery_placement",
+      "physical_recovery_displaced_reservation",
+      "realized_unplaced"
+    ],
+    "verification": "unit tests plus one adapted-literature-baseline row smoke before preflight freeze"
+  },
+  "preflight_plan": {
+    "seeds": [700, 701, 702],
+    "instance_index_count": 3,
+    "certified_bundle_count": 24,
+    "all_zero_shortage_oracle_certified": true,
+    "time_budget_seconds_per_cycle": [60],
+    "methods": [
+      "core_start",
+      "full_bottleneck",
+      "kp_dos",
+      "kp_sg",
+      "dra_rpm"
+    ],
+    "expected_main_rows": 120,
+    "operation_weight_profile": "business",
+    "baseline_parameter_profile": "frozen",
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "indexes": [
+      {
+        "path": "local_results/protocol_v2_pnc_yangshan/assembled_instances/preflight/pnc_yangshan_v2_semisynthetic_preflight_index.json",
+        "sha256": "9d7078193b812c38de13a5f4fcc7c1166957c8e5ae3cfd49b3228b7f63793332"
+      },
+      {
+        "path": "local_results/protocol_v2_pnc_yangshan/assembled_instances/preflight_seed701/pnc_yangshan_v2_semisynthetic_preflight_index.json",
+        "sha256": "dd0bc8e1a94e1fb9bf337cde4bdd5cc0731d8fa871b3aee9cadace54e1c2164a"
+      },
+      {
+        "path": "local_results/protocol_v2_pnc_yangshan/assembled_instances/preflight_seed702/pnc_yangshan_v2_semisynthetic_preflight_index.json",
+        "sha256": "23f4dc3cd4305e3fdec73bb121419ca48a39f747a95d102690a4932426c48713"
+      }
+    ],
+    "output_root_template": "local_results/protocol_v3_tre_objective/preflight/<candidate_commit>/main_gate",
+    "formal_authorization_after_preflight": false
   },
   "publication_analysis_policy": {
     "confidence_interval": "two-sided Student-t 95%",

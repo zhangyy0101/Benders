@@ -3,6 +3,7 @@ import unittest
 
 from config import ALGORITHM_VERSION, PROBLEM_PROTOCOL, RESULT_SCHEMA_VERSION
 from analysis.summarize_experiments import (
+    DEFAULT_METRICS,
     artifact_audit,
     describe,
     method_label,
@@ -18,6 +19,7 @@ def _row(
     profile: str = "not_applicable",
     seed: int = 1000,
 ):
+    is_literature_baseline = configuration in {"kp_dos", "kp_sg", "dra_rpm"}
     return {
         "instance": "case_seed1000",
         "instance_bundle_sha256": "abc",
@@ -28,6 +30,14 @@ def _row(
         "outbound_rate": "150",
         "time_limit": "20",
         "configuration": configuration,
+        "baseline_protocol": (
+            "adapted-literature-baselines-v1.1-sparse-cached"
+            if is_literature_baseline else None
+        ),
+        "stability_formulation": (
+            "common_ex_post_accounting"
+            if is_literature_baseline else "epigraph_only"
+        ),
         "baseline_parameter_profile": profile,
         "seed": str(seed),
         "ok": "True",
@@ -62,6 +72,17 @@ def _row(
 
 
 class FormalAnalysisTests(unittest.TestCase):
+    def test_default_metrics_include_execution_recovery_funnel(self):
+        for metric in (
+            "planned_infeasible_quantity",
+            "fallback_placement",
+            "pre_physical_recovery_unplaced",
+            "physical_recovery_placement",
+            "physical_recovery_displaced_reservation",
+            "realized_unplaced",
+        ):
+            self.assertIn(metric, DEFAULT_METRICS)
+
     def test_small_sample_interval_uses_student_t(self):
         result = describe([1.0, 2.0])
         self.assertEqual(result["ci95_method"], "student_t")
@@ -134,6 +155,23 @@ class FormalAnalysisTests(unittest.TestCase):
         self.assertEqual(audit["formal_missing_bundle_hash_count"], 1)
         self.assertEqual(audit["formal_unexpected_seed_count"], 1)
         self.assertEqual(audit["formal_provisional_public_source_count"], 1)
+
+    def test_formal_audit_rejects_method_mismatched_stability_accounting(self):
+        rows = [
+            {
+                **_row("kp_dos", 0),
+                "stability_formulation": "epigraph_only",
+            }
+        ]
+        audit = artifact_audit(rows)
+        self.assertEqual(
+            audit["formal_stability_formulation_mismatch_count"], 1
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "mismatched stability formulation",
+        ):
+            summarize(rows, ("realized_unplaced",))
 
 
 if __name__ == "__main__":

@@ -304,7 +304,7 @@ checkpoint from a complete requested matrix through `row_count`,
 The current implementation identifiers are
 `rolling-v4.6-objective-only-stability`,
 `lead-aware-aggregate-lp-residual-global-repair-v1.7.1`, and
-`rolling-results-v15`. Its primary operation profile is `business`
+`rolling-results-v16`. Its primary operation profile is `business`
 (`distance=0.40`, `balance=0.30`, `concentration=0.20`,
 `in_out_conflict=0.10`); the other frozen profiles are sensitivity cases.
 The authoritative change and experiment boundary is
@@ -314,6 +314,13 @@ The v1.7.1 development gate has passed; its 72-row main matrix, separate
 mechanism evidence, profile-isolation checks, and observed trade-offs are
 reported in `docs/reports/tre_v171_development_gate.md`. Preflight and formal
 execution remain separate gates.
+
+Result schema v16 is a reporting-only revision. Each CSV row now identifies
+the stability accounting actually used by that method: core MIP rows report
+the configured epigraph/exact formulation and adapted literature baselines
+report common ex-post accounting. Default summaries also include the complete
+execution-recovery funnel. The optimization, execution, and recovery policies
+are unchanged from the v1.7.1 development gate.
 
 Formal execution is intentionally closed while
 `FORMAL_RESULT_AUTHORIZED=False`. Opening formal seeds, running a formal

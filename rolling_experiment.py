@@ -1,7 +1,11 @@
 """Multi-cycle simulator with distinct forecast, revision, and execution metrics."""
 from __future__ import annotations
 
-from config import OPERATION_WEIGHT_PROFILE, OPERATION_WEIGHT_PROFILES
+from config import (
+    OPERATION_WEIGHT_PROFILE,
+    OPERATION_WEIGHT_PROFILES,
+    USE_EXACT_STABILITY_BIG_M,
+)
 from external_baselines import (
     LITERATURE_CONFIGURATIONS,
     solve_literature_baseline,
@@ -219,6 +223,22 @@ def run_rolling_case(
         for row in cycles
         if not row.get("skipped") and row.get("termination_status")
     ]
+    stability_formulation = (
+        "common_ex_post_accounting"
+        if configuration in LITERATURE_CONFIGURATIONS
+        else "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
+    )
+    observed_stability_formulations = {
+        row["stability_formulation"]
+        for row in cycles
+        if not row.get("skipped") and row.get("stability_formulation")
+    }
+    if observed_stability_formulations - {stability_formulation}:
+        raise RuntimeError(
+            "rolling cycles reported inconsistent stability formulations: "
+            f"expected={stability_formulation}, "
+            f"observed={sorted(observed_stability_formulations)}"
+        )
     if "VALIDATION_FAILED" in termination_statuses:
         termination_status = "VALIDATION_FAILED"
     elif "DEADLINE_MISS" in termination_statuses:
@@ -231,6 +251,7 @@ def run_rolling_case(
         "ok": all(row.get("ok", True) for row in cycles),
         "termination_status": termination_status,
         "configuration": configuration,
+        "stability_formulation": stability_formulation,
         "operation_weight_profile": operation_weight_profile,
         "operation_weights": operation_weights,
         "cycles": cycles,

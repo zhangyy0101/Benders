@@ -65,6 +65,11 @@ DEFAULT_METRICS = (
     "total_validation_time",
     "time_limit_feasible_count",
     "online_deadline_miss_count",
+    "planned_infeasible_quantity",
+    "fallback_placement",
+    "pre_physical_recovery_unplaced",
+    "physical_recovery_placement",
+    "physical_recovery_displaced_reservation",
     "realized_unplaced",
     "unplaced_rate",
     "fallback_rate",
@@ -345,6 +350,12 @@ def artifact_audit(rows: list[dict]) -> dict:
         except (TypeError, ValueError):
             return False
 
+    def valid_stability_formulation(row: dict) -> bool:
+        formulation = row.get("stability_formulation")
+        if row.get("baseline_protocol") not in (None, ""):
+            return formulation == "common_ex_post_accounting"
+        return formulation in ("epigraph_only", "exact_big_m")
+
     return {
         "row_count": len(rows),
         "failed_row_count": sum(_number(row, "ok") == 0 for row in rows),
@@ -386,6 +397,9 @@ def artifact_audit(rows: list[dict]) -> dict:
             and str(row.get("source_publication_ready", "")).lower()
             != "true"
             for row in formal_rows
+        ),
+        "formal_stability_formulation_mismatch_count": sum(
+            not valid_stability_formulation(row) for row in formal_rows
         ),
         "formal_score_identity_unchecked_count": sum(
             index not in score_checked_indexes
@@ -454,6 +468,10 @@ def publication_consistency_errors(
         (
             "formal rows with provisional public sources",
             audit["formal_provisional_public_source_count"],
+        ),
+        (
+            "formal rows with mismatched stability formulation",
+            audit["formal_stability_formulation_mismatch_count"],
         ),
         ("normalized-score identity failures", audit["score_identity_failure_count"]),
         (

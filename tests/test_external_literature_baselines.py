@@ -316,6 +316,15 @@ class ExternalLiteratureBaselineTest(unittest.TestCase):
         self.assertEqual(
             row["baseline_fidelity"], "adapted_algorithmic_core"
         )
+        self.assertEqual(
+            result["stability_formulation"],
+            "common_ex_post_accounting",
+        )
+        self.assertEqual(
+            row["stability_formulation"],
+            "common_ex_post_accounting",
+        )
+        self.assertEqual(metadata["stability_formulation"], "epigraph_only")
 
 
 if __name__ == "__main__":
