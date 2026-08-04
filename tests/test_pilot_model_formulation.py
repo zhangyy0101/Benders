@@ -545,6 +545,32 @@ class PilotModelFormulationTest(unittest.TestCase):
             for name in variable_names
         ))
 
+    def test_solver_canonicalizes_time_limited_balance_epigraph(self):
+        slack = 123.0
+
+        def extract_with_balance_slack(*args, **kwargs):
+            solution = extract_rolling_solution(*args, **kwargs)
+            solution["components"]["occupancy_balance_raw"] += slack
+            return solution
+
+        with patch(
+            "rolling_solver.extract_rolling_solution",
+            side_effect=extract_with_balance_slack,
+        ):
+            result = solve_rolling_snapshot(
+                objective_snapshot(),
+                time_limit=2,
+                configuration="core",
+                seed=0,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["validation"]["feasible"])
+        self.assertAlmostEqual(
+            result["stages"][0]["occupancy_balance_epigraph_slack"],
+            slack,
+        )
+
     def test_restricted_build_timeout_transition_preserves_safety_path(self):
         self.assertEqual(
             _restricted_build_timeout_transition(

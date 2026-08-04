@@ -2873,6 +2873,26 @@ def solve_rolling_snapshot(
             candidate["components"]["predicted_shortage"] = float(
                 sum(candidate["shortage"].values())
             )
+            # Absolute-deviation variables are epigraphs.  At a time limit the
+            # third-priority operations objective may not have tightened them,
+            # so expression values are not reliable physical accounting.  Use
+            # extracted flows for incumbent comparison and downstream audit,
+            # just as stability is canonicalized below.
+            modeled_balance = float(
+                candidate["components"]["occupancy_balance_raw"]
+            )
+            canonical_operations = evaluate_operation_components(
+                d,
+                candidate["reservation"],
+                candidate["din"],
+                objective_scales=objective_scales,
+                operation_weights=operation_weights,
+            )
+            record["occupancy_balance_epigraph_slack"] = abs(
+                modeled_balance
+                - canonical_operations["occupancy_balance_raw"]
+            )
+            candidate["components"].update(canonical_operations)
             canonical = canonical_stability_metrics(
                 d,
                 candidate["reservation"],

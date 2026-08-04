@@ -89,6 +89,7 @@ DEFAULT_METRICS = (
     "mean_cycle_predicted_occupancy_balance_normalized",
     "mean_cycle_predicted_distance_normalized",
     "mean_cycle_predicted_in_out_conflict_normalized",
+    "max_occupancy_balance_epigraph_slack",
     "realized_distance",
     "realized_in_out_conflict",
     "mean_realized_bays_per_ship_pod",

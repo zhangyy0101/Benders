@@ -435,6 +435,12 @@ def pilot_diagnostics(result: dict) -> dict:
         for stage in cycle.get("stages", [])
         if stage.get("stability_epigraph_max_slack") is not None
     ]
+    balance_epigraph_slack = [
+        float(stage["occupancy_balance_epigraph_slack"])
+        for cycle in cycles
+        for stage in cycle.get("stages", [])
+        if stage.get("occupancy_balance_epigraph_slack") is not None
+    ]
     validation_failures = sum(
         cycle.get("validation") is not None
         and not bool(cycle["validation"].get("feasible"))
@@ -551,6 +557,10 @@ def pilot_diagnostics(result: dict) -> dict:
             polish_improved / polish_triggered if polish_triggered else 0.0
         ),
         "max_stability_epigraph_slack": max(epigraph_slack, default=None),
+        "max_occupancy_balance_epigraph_slack": max(
+            balance_epigraph_slack,
+            default=None,
+        ),
     }
 
 

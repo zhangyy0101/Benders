@@ -204,6 +204,7 @@ class PilotExperimentOutputTest(unittest.TestCase):
                             "stage": "global_repair",
                             "dependency_expansion_count": 2,
                             "stability_epigraph_max_slack": 1e-8,
+                            "occupancy_balance_epigraph_slack": 4.5,
                         }
                     ],
                 },
@@ -289,6 +290,10 @@ class PilotExperimentOutputTest(unittest.TestCase):
         self.assertEqual(diagnostics["quality_polish_improved_count"], 1)
         self.assertAlmostEqual(diagnostics["quality_polish_improvement_rate"], .5)
         self.assertEqual(diagnostics["max_stability_epigraph_slack"], 1e-8)
+        self.assertEqual(
+            diagnostics["max_occupancy_balance_epigraph_slack"],
+            4.5,
+        )
 
 
 if __name__ == "__main__":

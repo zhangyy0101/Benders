@@ -303,8 +303,8 @@ checkpoint from a complete requested matrix through `row_count`,
 
 The current implementation identifiers are
 `rolling-v4.6-objective-only-stability`,
-`lead-aware-aggregate-lp-residual-global-repair-v1.7.0`, and
-`rolling-results-v14`. Its primary operation profile is `business`
+`lead-aware-aggregate-lp-residual-global-repair-v1.7.1`, and
+`rolling-results-v15`. Its primary operation profile is `business`
 (`distance=0.40`, `balance=0.30`, `concentration=0.20`,
 `in_out_conflict=0.10`); the other frozen profiles are sensitivity cases.
 The authoritative change and experiment boundary is

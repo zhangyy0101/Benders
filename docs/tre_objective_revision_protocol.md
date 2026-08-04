@@ -22,8 +22,8 @@ Development occurs on `research/tre-objective-normalization-v2`. The implemented
 version identities are:
 
 - problem protocol: `rolling-v4.6-objective-only-stability`;
-- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.0`;
-- result schema: `rolling-results-v14`;
+- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.1`;
+- result schema: `rolling-results-v15`;
 - normalization: `reachable_snapshot_upper_bounds_v2`;
 - new local root: `local_results/protocol_v3_tre_objective`.
 
@@ -58,6 +58,12 @@ physical `reservation` and `din` flows. The audit independently recomputes all
 four raw components, their scales, normalized and weighted values, the total
 operations score, and the exact support/new-support indicators; it does not
 trust the MIP expressions or heuristic-side accounting.
+
+Development version 1.7.0 exposed that a time-limited third-priority solve can
+leave the absolute utilization-deviation epigraph above its physical value.
+Version 1.7.1 therefore replaces every extracted operations component with the
+canonical flow-based evaluation before incumbent comparison and validation;
+the modeled-versus-canonical balance slack is retained as a diagnostic only.
 
 The primary business profile is fixed before implementation as distance 0.40,
 balance 0.30, concentration 0.20, and inbound/outbound conflict 0.10. The

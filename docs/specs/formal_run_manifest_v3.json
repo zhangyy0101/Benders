@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "implementation_complete_preflight_pending",
+  "status": "implementation_complete_development_gate_pending",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -11,8 +11,8 @@
   "planned_revision": {
     "development_branch": "research/tre-objective-normalization-v2",
     "problem_protocol": "rolling-v4.6-objective-only-stability",
-    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.0",
-    "result_schema": "rolling-results-v14",
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.1",
+    "result_schema": "rolling-results-v15",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",
     "residual_shortage_policy": "bottleneck residual shortage enters global repair when the reserved in-budget window remains",
@@ -68,9 +68,15 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 165,
+    "passed_tests": 166,
     "passed_subtests": 9,
     "status": "passed"
+  },
+  "development_findings": {
+    "v1.7.0_status": "stopped_after_independent_validation_failure",
+    "completed_rows_before_stop": 3,
+    "root_cause": "time-limited occupancy-balance epigraph slack was reported as physical objective accounting",
+    "v1.7.1_resolution": "canonical flow-based operations components replace modeled expression values before incumbent comparison and validation"
   },
   "publication_analysis_policy": {
     "confidence_interval": "two-sided Student-t 95%",
