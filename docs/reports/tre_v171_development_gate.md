@@ -1,10 +1,10 @@
 # TRE v1.7.1 development gate
 
-Date: 2026-08-04  
-Experiment phase: development only  
-Seeds: 100, 101, 102  
-Candidate commit: `ba3a7266c27c3ab7ff2fde35cf6397d9d8b89c9b`  
-Candidate tag: `rolling-v4.6-objective-only-stability-development-v2`
+- Date: 2026-08-04
+- Experiment phase: development only
+- Seeds: 100, 101, 102
+- Candidate commit: `ba3a7266c27c3ab7ff2fde35cf6397d9d8b89c9b`
+- Candidate tag: `rolling-v4.6-objective-only-stability-development-v2`
 
 ## Development finding and correction
 
