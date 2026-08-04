@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import (  # noqa: E402
+    ALGORITHM_VERSION,
     DEPENDENCY_PROFILES,
     FORMAL_PRIMARY_CONFIGURATIONS,
     FORMAL_RESULT_AUTHORIZED,
@@ -109,10 +110,18 @@ def _paths_from_indexes(
             raise ValueError(
                 f"formal matrix requires a formal instance index: {index_path}"
             )
+        if require_formal and payload.get("formal_results_authorized") is not True:
+            raise ValueError(
+                "formal matrix requires an explicitly authorized instance index: "
+                f"{index_path}"
+            )
         index_records.append({
             "path": index_path.as_posix(),
             "sha256": sha256_file(index_path),
             "experiment_phase": payload.get("experiment_phase"),
+            "formal_results_authorized": payload.get(
+                "formal_results_authorized"
+            ),
         })
         for entry in payload["entries"]:
             path = (
@@ -254,8 +263,9 @@ def main() -> int:
     if args.experiment_phase == "formal":
         if not FORMAL_RESULT_AUTHORIZED:
             parser.error(
-                "formal execution is not authorized for objective version "
-                "1.5.0; register a new untouched confirmatory set first"
+                "formal execution is not authorized for algorithm "
+                f"{ALGORITHM_VERSION}; register a new untouched confirmatory "
+                "set first"
             )
         unexpected = sorted(
             {item[2] for item in bundles} - set(FORMAL_SEEDS)

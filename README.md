@@ -84,10 +84,14 @@ is reused by every stage.
 Stability is computed per `(ship, group)`, preventing one group's shortage from
 offsetting another group's cancellation. Actual inventory contributes to
 existing spatial support but not to the cancellable plan baseline. The default
-formulation is epigraph-only and removes four families of stability binaries.
-`USE_EXACT_STABILITY_BIG_M=True` retains the exact binary formulation for
+formulation is epigraph-only for the three positive-part quantities that enter
+the stability objective. Pair discretionary cancellation is derived only in
+canonical accounting, not represented by a free model variable.
+`USE_EXACT_STABILITY_BIG_M=True` retains three exact binary families for
 diagnostic comparison. Independent canonical accounting validates accepted
-solutions.
+solutions. There is no hard plan-revision budget: stability is controlled only
+by the second lexicographic objective, so an artificial allowance can never
+force additional shortage in a restricted or global domain.
 
 Forecast arrivals at or after planned release are rejected by snapshot
 validation. Model construction also omits their inbound-flow variables, so an
@@ -110,7 +114,9 @@ The recommended `full_bottleneck` configuration:
 6. otherwise solves the exact integer `N0` Impact Region with a MIP start;
 7. solves a granularity-guarded minimum pair-block cover only after the integer
    incumbent exposes shortage;
-8. restores the unrestricted compatible domain if shortage remains.
+8. reserves a bounded part of the same online window and restores the
+   unrestricted compatible domain if the bottleneck incumbent still has
+   shortage.
 
 The aggregate LP is explicitly a screening relaxation, not a bay-level
 feasibility certificate. Integer bay packing, no-mixed-height constraints, and
@@ -214,6 +220,23 @@ explicitly `None` when the attributes are unavailable; root relaxation is also
 
 ## Running
 
+The reproducible reference environment is Python 3.12 with the exact package
+versions in `requirements.txt`. Create an isolated environment and install it
+before running tests or scripts:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pytest -q
+```
+
+Gurobi also requires a valid local licence. Package installation alone does
+not supply that licence. The repository currently has no declared software
+licence; redistribution terms must therefore be chosen by the repository
+owner before a public archival release.
+
 Run one case:
 
 ```bash
@@ -276,9 +299,51 @@ silently mixing results. The manifest distinguishes a successful partial
 checkpoint from a complete requested matrix through `row_count`,
 `expected_row_count`, and `complete`.
 
-## Frozen formal-instance workflow
+## Current TRE submission workflow
 
-Publication runs use a two-step interface so case generation cannot change
+The current implementation identifiers are
+`rolling-v4.6-objective-only-stability`,
+`lead-aware-aggregate-lp-residual-global-repair-v1.7.0`, and
+`rolling-results-v14`. Its primary operation profile is `business`
+(`distance=0.40`, `balance=0.30`, `concentration=0.20`,
+`in_out_conflict=0.10`); the other frozen profiles are sensitivity cases.
+The authoritative change and experiment boundary is
+`docs/tre_objective_revision_protocol.md`, and the current machine-readable
+state is `docs/specs/formal_run_manifest_v3.json`.
+
+Formal execution is intentionally closed while
+`FORMAL_RESULT_AUTHORIZED=False`. Opening formal seeds, running a formal
+matrix, or labeling results as confirmatory requires first registering a new
+untouched confirmatory set and then explicitly changing that flag in a clean,
+frozen commit. Both the generator and matrix runner enforce this gate, and a
+formal index must itself contain `formal_results_authorized=true`.
+
+Once that prerequisite has been documented and authorized, the sole PNC--
+Yangshan formal bundle generator is:
+
+```powershell
+python scripts/prepare_pnc_yangshan_v2_formal_instances.py `
+  --output-root local_results/protocol_v3_tre_objective/formal_instances
+```
+
+The resulting central index is consumed without a time-budget override:
+
+```powershell
+python scripts/run_formal_sharded_matrix.py `
+  --bundle-index local_results/protocol_v3_tre_objective/formal_instances/pnc_yangshan_v2_central_main_index.json `
+  --workers 2 --threads 1 `
+  --output local_results/protocol_v3_tre_objective/runs/public_main.csv
+```
+
+`analysis/summarize_experiments.py` defaults to a strict publication audit for
+formal CSVs: it rejects mixed protocols or commits, duplicate identities,
+failed/late/invalid rows, non-held-out seeds, missing bundle hashes,
+provisional sources, and incomplete manifests. `--exploratory` is an explicit
+escape hatch and labels the resulting report as non-publication analysis.
+
+## Historical PORT-MIS formal workflow
+
+The earlier PORT-MIS protocol used a two-step interface so case generation could not change
 between methods:
 
 1. `scripts/prepare_formal_instances.py` serializes each exact case to a

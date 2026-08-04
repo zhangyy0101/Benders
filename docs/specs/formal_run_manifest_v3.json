@@ -10,11 +10,13 @@
   },
   "planned_revision": {
     "development_branch": "research/tre-objective-normalization-v2",
-    "problem_protocol": "rolling-v4.5-reachable-objective-scaling",
-    "algorithm_version": "lead-aware-aggregate-lp-screened-repair-v1.5.0",
-    "result_schema": "rolling-results-v12",
+    "problem_protocol": "rolling-v4.6-objective-only-stability",
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.0",
+    "result_schema": "rolling-results-v14",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",
+    "residual_shortage_policy": "bottleneck residual shortage enters global repair when the reserved in-budget window remains",
+    "stability_policy": "second lexicographic objective only; no hard stability budget in any domain",
     "output_root": "local_results/protocol_v3_tre_objective"
   },
   "operation_weight_profiles": {
@@ -66,11 +68,19 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 148,
+    "passed_tests": 165,
     "passed_subtests": 9,
     "status": "passed"
   },
+  "publication_analysis_policy": {
+    "confidence_interval": "two-sided Student-t 95%",
+    "paired_test": "two-sided Wilcoxon with at least five nonzero pairs",
+    "multiple_comparison_correction": "Holm within metric",
+    "mixed_protocol_default": "reject",
+    "formal_manifest_default": "required_complete_all_ok"
+  },
   "development_smoke_gate": {
+    "evidence_role": "historical_pre_v1.7_development_only",
     "instance": "pilot_small_seed100",
     "profiles": ["business", "strong_distance"],
     "configurations": ["core"],

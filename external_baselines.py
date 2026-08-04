@@ -14,8 +14,9 @@ from config import (
 )
 from rolling_model import (
     compatible,
-    compute_objective_scales,
-    resolve_operation_weights,
+    evaluate_operation_components,
+    existing_support,
+    reservation_support,
     ship_present_at,
 )
 from rolling_solver import (
@@ -1242,71 +1243,21 @@ def _build_common_solution(
             )
 
     canonical = canonical_stability_metrics(d, reservation, shortage)
-    scales = compute_objective_scales(d)
-    attrs = d["group_attrs"]
-    concentration_raw = float(
-        len({
-            (ship, attrs[group]["pod"], bay)
-            for (bay, ship, group), quantity in reservation.items()
-            if quantity > 0
-        })
+    operation_components = evaluate_operation_components(
+        d,
+        reservation,
+        din,
+        operation_weights=operation_weights,
     )
-    occupancy_balance_raw = 0.0
-    for period in d["periods"]:
-        utilizations = []
-        for block in d["blocks"]:
-            block_capacity = sum(
-                d["capacity"][bay]
-                for bay in d["bays_in_block"][block]
-            )
-            occupancy = sum(
-                allocator.base_occupancy[bay, period]
-                + allocator.planned_occupancy[bay, period]
-                for bay in d["bays_in_block"][block]
-            )
-            utilizations.append(occupancy / max(1, block_capacity))
-        average = sum(utilizations) / max(1, len(utilizations))
-        occupancy_balance_raw += sum(
-            abs(value - average) for value in utilizations
+    scales = {
+        name: operation_components[name]
+        for name in (
+            "concentration_scale",
+            "occupancy_balance_scale",
+            "distance_scale",
+            "in_out_conflict_scale",
         )
-    distance_raw = float(
-        sum(
-            d["distance"][ship, d["bay_block"][bay]] * quantity
-            for (bay, ship, _group, _period), quantity in din.items()
-        )
-    )
-    peak = max(d["forecast_outbound"].values(), default=1)
-    conflict_raw = float(
-        sum(
-            d["forecast_outbound"].get(
-                (d["bay_block"][bay], period), 0
-            )
-            / max(1, peak)
-            * quantity
-            for (bay, _ship, _group, period), quantity in din.items()
-        )
-    )
-    concentration_normalized = (
-        concentration_raw / scales["concentration_scale"]
-    )
-    balance_normalized = (
-        occupancy_balance_raw / scales["occupancy_balance_scale"]
-    )
-    distance_normalized = distance_raw / scales["distance_scale"]
-    conflict_normalized = (
-        conflict_raw / scales["in_out_conflict_scale"]
-    )
-    weights = resolve_operation_weights(operation_weights)
-    concentration_weighted = weights["concentration"] * concentration_normalized
-    occupancy_balance_weighted = weights["balance"] * balance_normalized
-    distance_weighted = weights["distance"] * distance_normalized
-    conflict_weighted = weights["in_out_conflict"] * conflict_normalized
-    normalized_operations_score = (
-        concentration_weighted
-        + occupancy_balance_weighted
-        + distance_weighted
-        + conflict_weighted
-    )
+    }
     components = {
         "predicted_shortage": float(sum(shortage.values())),
         **{
@@ -1320,30 +1271,17 @@ def _build_common_solution(
                 "stability_cost",
             )
         },
-        "concentration_raw": concentration_raw,
-        "occupancy_balance_raw": occupancy_balance_raw,
-        "distance_raw": distance_raw,
-        "in_out_conflict_raw": conflict_raw,
-        "concentration_normalized": concentration_normalized,
-        "occupancy_balance_normalized": balance_normalized,
-        "distance_normalized": distance_normalized,
-        "in_out_conflict_normalized": conflict_normalized,
-        "concentration_weight": weights["concentration"],
-        "occupancy_balance_weight": weights["balance"],
-        "distance_weight": weights["distance"],
-        "in_out_conflict_weight": weights["in_out_conflict"],
-        "concentration_weighted": concentration_weighted,
-        "occupancy_balance_weighted": occupancy_balance_weighted,
-        "distance_weighted": distance_weighted,
-        "in_out_conflict_weighted": conflict_weighted,
-        "normalized_operations_score": normalized_operations_score,
-        **{name: float(value) for name, value in scales.items()},
+        **operation_components,
     }
+    support = reservation_support(d, reservation)
+    old_support = existing_support(d, period=0)
     solution = {
         "reservation": reservation,
         "din": din,
         "inventory": inventory,
         "shortage": shortage,
+        "pod_bay_use": {key: 1 for key in sorted(support)},
+        "new_bay": {key: 1 for key in sorted(support - old_support)},
         "pair_cancellation": canonical["pair_cancellation"],
         "pair_discretionary_cancel": canonical[
             "pair_discretionary_cancel"
@@ -1416,7 +1354,11 @@ def solve_literature_baseline(
     solution_extract_time = time.perf_counter() - extract_started
     online_decision_time = time.perf_counter() - started
     validation_started = time.perf_counter()
-    validation = validate_rolling_solution(d, solution)
+    validation = validate_rolling_solution(
+        d,
+        solution,
+        operation_weights=operation_weights,
+    )
     validation_time = time.perf_counter() - validation_started
     audit_wall_time = time.perf_counter() - started
     deadline_exceeded = (
@@ -1485,11 +1427,12 @@ def solve_literature_baseline(
             "release_opportunity_propagation": [],
             "dependency_edge_count": 0,
         },
-        "stability_budget_diagnostics": {
+        "stability_diagnostics": {
             "previous_reservation": float(
                 sum(d["previous_reservation"].values())
             ),
-            "baseline_has_stability_budget": False,
+            "policy": "no_hard_stability_budget",
+            "hard_stability_budget_enabled": False,
         },
         "objective_scales": scales,
         "stages": [stage],

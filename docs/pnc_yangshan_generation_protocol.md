@@ -264,6 +264,9 @@ python scripts/prepare_pnc_yangshan_v2_formal_instances.py `
 
 It consumes `docs/specs/pnc_yangshan_v2_formal_instance_spec.json`, requires a
 clean Git commit and the audited five-method gate, refuses an existing output
-root, and writes separate central-main and robustness indexes. The frozen
-method partitions and expected result counts are recorded in
-`docs/specs/formal_run_manifest_v2.json`.
+root, and writes separate central-main and robustness indexes. Under the
+current TRE revision it additionally refuses to open formal seeds while
+`FORMAL_RESULT_AUTHORIZED=False`; `--check-only` remains available for gate
+inspection. The superseding objective/controller state and the need for a new
+untouched confirmatory set are recorded in
+`docs/specs/formal_run_manifest_v3.json`.

@@ -45,6 +45,10 @@ from config import (
     GLOBAL_CORE_HEURISTICS,
     GLOBAL_CORE_MIP_FOCUS,
     GLOBAL_CORE_START_NODE_LIMIT,
+    GLOBAL_REPAIR_MIN_START_SECONDS,
+    GLOBAL_REPAIR_RESERVE_MAX_SECONDS,
+    GLOBAL_REPAIR_RESERVE_MIN_SECONDS,
+    GLOBAL_REPAIR_RESERVE_RATIO,
     QUALITY_POLISH_BLOCKS_PER_PAIR,
     QUALITY_POLISH_ENABLED,
     QUALITY_POLISH_PAIR_RATIO,
@@ -58,10 +62,8 @@ from config import (
     POSTPROCESSING_RESERVE_MAX_SECONDS,
     POSTPROCESSING_RESERVE_MIN_SECONDS,
     POSTPROCESSING_RESERVE_RATIO,
-    STABILITY_BASE_RATIO,
     STABILITY_BLOCK_REALLOCATION_WEIGHT,
     STABILITY_CANCEL_WEIGHT,
-    STABILITY_CHANGE_RATIO,
     STABILITY_NEW_BAY_WEIGHT,
     TIME_CAPACITY_WEIGHT,
     USE_EXACT_STABILITY_BIG_M,
@@ -72,9 +74,11 @@ from rolling_model import (
     build_rolling_model,
     compatible,
     compute_objective_scales,
+    evaluate_operation_components,
     existing_blocks,
     existing_support,
     extract_rolling_solution,
+    reservation_support,
     ship_present_at,
 )
 
@@ -120,6 +124,84 @@ def solver_return_guard_seconds(time_limit: float, solver_window: float) -> floa
         ),
     )
     return min(max(0.0, window - .01), target)
+
+
+def global_repair_reserve_seconds(
+    time_limit: float,
+    remaining_window: float,
+) -> float:
+    """Reserve a bounded in-budget window after bottleneck repair.
+
+    The reserve is used only when a shortage-bearing incumbent has already
+    triggered the bottleneck stage.  It is capped at half of the remaining
+    optimization window so the restricted exact repair always keeps the larger
+    share when little time remains.
+    """
+
+    limit = max(0.0, float(time_limit))
+    window = max(0.0, float(remaining_window))
+    if limit <= 0 or window <= 0:
+        return 0.0
+    target = min(
+        GLOBAL_REPAIR_RESERVE_MAX_SECONDS,
+        max(
+            GLOBAL_REPAIR_RESERVE_MIN_SECONDS,
+            GLOBAL_REPAIR_RESERVE_RATIO * limit,
+        ),
+    )
+    return min(.50 * window, target)
+
+
+def _post_bottleneck_global_repair_decision(
+    *,
+    stage_name: str,
+    predicted_shortage: float | None,
+    remaining_wall: float,
+    already_scheduled: bool,
+) -> tuple[bool, str]:
+    """Decide whether residual bottleneck shortage reaches global recovery."""
+
+    if stage_name != "bottleneck_repair":
+        return False, "not_applicable"
+    if predicted_shortage is None:
+        return False, "skipped_without_incumbent"
+    if predicted_shortage <= 1e-6:
+        return False, "not_needed_zero_shortage"
+    if already_scheduled:
+        return False, "already_scheduled"
+    if remaining_wall <= GLOBAL_REPAIR_MIN_START_SECONDS:
+        return False, "skipped_insufficient_time"
+    return True, "enqueued_residual_shortage"
+
+
+def _restricted_build_timeout_transition(
+    *,
+    progressive_repair: bool,
+    stage_level: int,
+    stage_name: str,
+    incumbent_shortage: float | None,
+    remaining_wall: float,
+    global_already_scheduled: bool,
+) -> tuple[str, str]:
+    """Choose a safe continuation when a restricted model cannot start.
+
+    A stage-local build allowance must not terminate a progressive controller
+    while the common online window can still run the unrestricted safety MIP.
+    Existing feasible incumbents are retained regardless of this transition.
+    """
+    if not progressive_repair:
+        return "finish", "configured_without_progressive_repair"
+    if stage_level == 3:
+        return "finish", "global_model_build_timeout"
+    if stage_name == "quality_polish":
+        return "finish", "preserve_incumbent_after_quality_build_timeout"
+    if incumbent_shortage is not None and incumbent_shortage <= 1e-6:
+        return "finish", "preserve_zero_shortage_incumbent"
+    if remaining_wall <= GLOBAL_REPAIR_MIN_START_SECONDS:
+        return "finish", "skipped_insufficient_time"
+    if global_already_scheduled:
+        return "continue", "continue_scheduled_global_after_build_timeout"
+    return "enqueue", "enqueued_global_after_restricted_build_timeout"
 
 
 def configuration_features(configuration: str) -> dict:
@@ -723,21 +805,20 @@ def _impact_directions(d: dict) -> dict[Pair, str]:
     return directions
 
 
-def _dynamic_stability_budget(d: dict) -> dict:
+def _stability_reference_diagnostics(d: dict) -> dict:
+    """Describe the rolling-plan reference without imposing a hard budget."""
     old = _pair_totals(d["previous_reservation"])
     current = d["remaining_demand"]
     keys = set(old) | set(current)
     prediction_change = sum(abs(current.get(key, 0) - old.get(key, 0)) for key in keys)
     mandatory = sum(max(0, old.get(key, 0) - current.get(key, 0)) for key in keys)
-    allowance = math.ceil(
-        STABILITY_BASE_RATIO * sum(old.values()) + STABILITY_CHANGE_RATIO * prediction_change
-    )
     return {
-        "allowance": allowance,
+        "policy": "second_lexicographic_objective_without_hard_budget",
+        "hard_stability_budget_enabled": False,
         "mandatory_reduction": mandatory,
         "prediction_change": prediction_change,
         "previous_reservation": sum(old.values()),
-        "pair_allowance_basis": {
+        "pair_prediction_change_basis": {
             pair: abs(current.get(pair, 0) - old.get(pair, 0))
             for pair in sorted(keys)
             if abs(current.get(pair, 0) - old.get(pair, 0)) > 0
@@ -1825,10 +1906,83 @@ def canonical_stability_metrics(d: dict, reservation: dict, shortage: dict) -> d
     }
 
 
+_OPERATION_ACCOUNTING_FIELDS = (
+    "concentration_raw",
+    "occupancy_balance_raw",
+    "distance_raw",
+    "in_out_conflict_raw",
+    "concentration_normalized",
+    "occupancy_balance_normalized",
+    "distance_normalized",
+    "in_out_conflict_normalized",
+    "concentration_weight",
+    "occupancy_balance_weight",
+    "distance_weight",
+    "in_out_conflict_weight",
+    "concentration_weighted",
+    "occupancy_balance_weighted",
+    "distance_weighted",
+    "in_out_conflict_weighted",
+    "normalized_operations_score",
+    "concentration_scale",
+    "occupancy_balance_scale",
+    "distance_scale",
+    "in_out_conflict_scale",
+)
+
+
+def _record_operation_accounting(
+    d: dict,
+    solution: dict,
+    record,
+    *,
+    operation_weights: Mapping[str, float] | None,
+) -> None:
+    """Cross-check objective expressions and indicators from physical flows."""
+    components = solution.get("components", {})
+    expected = evaluate_operation_components(
+        d,
+        solution["reservation"],
+        solution["din"],
+        operation_weights=operation_weights,
+    )
+    missing_components = [
+        name for name in _OPERATION_ACCOUNTING_FIELDS if name not in components
+    ]
+    record("operation_component_missing", len(missing_components))
+    for name in _OPERATION_ACCOUNTING_FIELDS:
+        if name in components:
+            record(
+                f"{name}_accounting",
+                abs(float(components[name]) - expected[name]),
+            )
+
+    support = reservation_support(d, solution["reservation"])
+    record("pod_bay_use_missing", int("pod_bay_use" not in solution))
+    if "pod_bay_use" in solution:
+        actual_use = solution["pod_bay_use"]
+        for key in set(actual_use) | support:
+            record(
+                "pod_bay_use_accounting",
+                abs(float(actual_use.get(key, 0)) - float(key in support)),
+            )
+    record("new_bay_indicator_missing", int("new_bay" not in solution))
+    if "new_bay" in solution:
+        expected_new = support - existing_support(d, period=0)
+        actual_new = solution["new_bay"]
+        for key in set(actual_new) | expected_new:
+            record(
+                "new_bay_indicator_accounting",
+                abs(float(actual_new.get(key, 0)) - float(key in expected_new)),
+            )
+
+
 def _validate_rolling_solution_reference(
     d: dict,
     solution: dict,
     tol: float = 1e-6,
+    *,
+    operation_weights: Mapping[str, float] | None = None,
 ) -> dict:
     """Original scan-based validator retained as an equivalence oracle."""
 
@@ -1966,6 +2120,12 @@ def _validate_rolling_solution_reference(
                 f"{variable_name}_accounting",
                 abs(actual_values.get(pair, 0) - expected_values.get(pair, 0)),
             )
+    _record_operation_accounting(
+        d,
+        solution,
+        record,
+        operation_weights=operation_weights,
+    )
     maximum = max(violations.values(), default=0)
     return {"feasible": maximum <= tol, "max_violation": maximum, "violations": violations}
 
@@ -1974,6 +2134,8 @@ def validate_rolling_solution(
     d: dict,
     solution: dict,
     tol: float = 1e-6,
+    *,
+    operation_weights: Mapping[str, float] | None = None,
 ) -> dict:
     """Independently validate one solution with sparse cumulative indexes."""
 
@@ -2154,6 +2316,13 @@ def validate_rolling_solution(
                     - expected_values.get(pair, 0)
                 ),
             )
+
+    _record_operation_accounting(
+        d,
+        solution,
+        record,
+        operation_weights=operation_weights,
+    )
 
     maximum = max(violations.values(), default=0)
     return {
@@ -2371,7 +2540,7 @@ def solve_rolling_snapshot(
             "decision_uses_legacy_thresholds": False,
         }
 
-    budget_info = _dynamic_stability_budget(d)
+    stability_info = _stability_reference_diagnostics(d)
     preprocessing_time = sum(
         timing[name]
         for name in (
@@ -2443,36 +2612,22 @@ def solve_rolling_snapshot(
                 repair_pairs,
                 release_opportunity_blocks,
             )
-        budget = None
-        if (
-            settings["impact_region"]
-            and name not in ("quality_polish", "global_repair")
-        ):
-            # The initial aggregate-routed global core is still an ordinary
-            # rolling decision and must not obtain a zero-shortage incumbent
-            # by discarding most of the previous plan. Only the explicit
-            # post-shortage global safety repair may lift this budget.
-            expansion_factor = (
-                (1, 1.5, 2.5)[min(level, 2)]
-                if level < 3
-                else 1
-            )
-            budget = math.ceil(budget_info["allowance"] * expansion_factor)
         initial_impact_stage = (
             name == "impact_region"
             or name == "aggregate_screened_impact_region"
         )
+        global_repair_time_reserve = 0.0
         if settings["progressive_repair"] and initial_impact_stage:
             requested_stage_time = min(remaining_wall, max(.05, .35 * time_limit))
         elif settings["progressive_repair"] and name == "bottleneck_repair":
-            # The selected bottleneck model is the primary recovery model.
-            # Splitting its remaining window mechanically with a subsequent
-            # global model made both stages too short to return a reliable
-            # incumbent on large snapshots.  Give the screened repair the
-            # complete remaining optimization window; the controller already
-            # routes directly to global recovery when selection cannot produce
-            # a usable repair domain.
-            requested_stage_time = remaining_wall
+            global_repair_time_reserve = global_repair_reserve_seconds(
+                time_limit,
+                remaining_wall,
+            )
+            requested_stage_time = max(
+                .01,
+                remaining_wall - global_repair_time_reserve,
+            )
         elif settings["progressive_repair"] and name.startswith("adaptive_repair"):
             requested_stage_time = min(remaining_wall, max(.05, remaining_wall / 2))
         else:
@@ -2487,7 +2642,6 @@ def solve_rolling_snapshot(
             d,
             allowed_bays=allowed,
             shortage_allowed=True,
-            stability_budget=budget,
             objective_scales=objective_scales,
             operation_weights=operation_weights,
         )
@@ -2501,11 +2655,12 @@ def solve_rolling_snapshot(
         )
         solver_budget = stage_deadline - time.perf_counter()
         if solver_budget <= .01:
-            trace.append({
+            timeout_record = {
                 "stage": name,
                 "neighborhood_level": level,
                 "status": "model_build_time_limit",
                 "model_build_time": build_time,
+                "global_repair_time_reserve": global_repair_time_reserve,
                 "solver_runtime": 0.0,
                 "solver_time_window": max(0.0, solver_budget),
                 "allocated_solver_time": 0.0,
@@ -2523,19 +2678,44 @@ def solve_rolling_snapshot(
                 "root_relaxation": None,
                 "stage_first_incumbent_time": None,
                 "first_incumbent_time": None,
-                "stability_budget": budget,
-                "stability_budget_disabled": budget is None,
+                "hard_stability_budget_enabled": False,
                 "stability_formulation": (
                     "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
                 ),
-            })
-            decision_ready_elapsed = time.perf_counter() - wall_start
+            }
             dispose_started = time.perf_counter()
             model.dispose()
             dispose_time = time.perf_counter() - dispose_started
             timing["model_dispose_time"] += dispose_time
-            timing["final_model_dispose_time"] += dispose_time
             del model, variables, expressions
+            remaining_after_build = optimization_deadline - time.perf_counter()
+            global_already_scheduled = any(
+                stage_name == "global_repair"
+                for _stage_level, stage_name, _stage_allowed
+                in stages[position + 1:]
+            )
+            transition, transition_reason = _restricted_build_timeout_transition(
+                progressive_repair=settings["progressive_repair"],
+                stage_level=level,
+                stage_name=name,
+                incumbent_shortage=(
+                    (incumbent or {}).get("components", {}).get(
+                        "predicted_shortage"
+                    )
+                ),
+                remaining_wall=remaining_after_build,
+                global_already_scheduled=global_already_scheduled,
+            )
+            timeout_record["model_build_timeout_transition"] = transition_reason
+            trace.append(timeout_record)
+            if transition == "enqueue":
+                stages.append((3, "global_repair", None))
+                repair_expansions += 1
+            if transition in ("enqueue", "continue"):
+                position += 1
+                continue
+            timing["final_model_dispose_time"] += dispose_time
+            decision_ready_elapsed = time.perf_counter() - wall_start
             break
 
         model.Params.OutputFlag = int(verbose)
@@ -2633,8 +2813,8 @@ def solve_rolling_snapshot(
         record = {
             "stage": name,
             "neighborhood_level": level,
-            "stability_budget": budget,
-            "stability_budget_disabled": budget is None,
+            "hard_stability_budget_enabled": False,
+            "global_repair_time_reserve": global_repair_time_reserve,
             "stability_formulation": (
                 "exact_big_m" if USE_EXACT_STABILITY_BIG_M else "epigraph_only"
             ),
@@ -2698,25 +2878,27 @@ def solve_rolling_snapshot(
                 candidate["reservation"],
                 candidate["shortage"],
             )
-            auxiliary_mapping = {
+            canonical_auxiliary_mapping = {
                 "pair_cancellation": canonical["pair_cancellation"],
                 "pair_discretionary_cancel": canonical[
                     "pair_discretionary_cancel"
                 ],
                 "block_reallocation": canonical["pair_block_reallocation"],
             }
+            modeled_epigraph_mapping = {
+                "block_reallocation": canonical["pair_block_reallocation"],
+            }
             record["stability_epigraph_max_slack"] = max(
                 (
-                    abs(candidate[name].get(pair, 0) - expected.get(pair, 0))
-                    for name, expected in auxiliary_mapping.items()
-                    for pair in set(candidate[name]) | set(expected)
+                    abs(candidate.get(name, {}).get(pair, 0) - expected.get(pair, 0))
+                    for name, expected in modeled_epigraph_mapping.items()
+                    for pair in set(candidate.get(name, {})) | set(expected)
                 ),
                 default=0.0,
             )
             candidate["components"].update(canonical)
-            if not USE_EXACT_STABILITY_BIG_M:
-                for auxiliary_name, expected in auxiliary_mapping.items():
-                    candidate[auxiliary_name] = dict(expected)
+            for auxiliary_name, expected in canonical_auxiliary_mapping.items():
+                candidate[auxiliary_name] = dict(expected)
             timing["solution_extract_time"] += time.perf_counter() - extract_started
             components = candidate["components"]
             key = _incumbent_key(components)
@@ -2741,10 +2923,6 @@ def solve_rolling_snapshot(
                     "occupancy_balance_normalized",
                 )
             })
-            record["stability_budget_binding"] = (
-                budget is not None
-                and components["discretionary_cancel"] >= budget - 1e-6
-            )
             accepted, acceptance_reason = _incumbent_decision(key, best_key)
             record["candidate_quality_key"] = list(key)
             record["incumbent_quality_key_before"] = (
@@ -2932,11 +3110,28 @@ def solve_rolling_snapshot(
                         else:
                             stages.append((3, "global_repair", None))
                         repair_expansions += 1
-                    elif name == "bottleneck_repair" and not record.get(
-                        "has_solution"
-                    ):
-                        stages.append((3, "global_repair", None))
-                        repair_expansions += 1
+                    elif name == "bottleneck_repair":
+                        global_already_scheduled = any(
+                            stage_name == "global_repair"
+                            for _stage_level, stage_name, _stage_allowed
+                            in stages[position:]
+                        )
+                        enqueue_global, global_decision = (
+                            _post_bottleneck_global_repair_decision(
+                                stage_name=name,
+                                predicted_shortage=(
+                                    (incumbent or {}).get("components", {}).get(
+                                        "predicted_shortage"
+                                    )
+                                ),
+                                remaining_wall=remaining_wall,
+                                already_scheduled=global_already_scheduled,
+                            )
+                        )
+                        record["global_repair_decision"] = global_decision
+                        if enqueue_global:
+                            stages.append((3, "global_repair", None))
+                            repair_expansions += 1
                 elif name == "impact_region":
                     stages.append((1, "adaptive_repair_1", None))
                     repair_expansions += 1
@@ -2967,7 +3162,14 @@ def solve_rolling_snapshot(
         )
     )
     validation_started = time.perf_counter()
-    report = validate_rolling_solution(d, incumbent) if incumbent else None
+    report = (
+        validate_rolling_solution(
+            d,
+            incumbent,
+            operation_weights=operation_weights,
+        )
+        if incumbent else None
+    )
     timing["validation_time"] = time.perf_counter() - validation_started
     audit_wall_time = time.perf_counter() - wall_start
     deadline_exceeded = (
@@ -3065,7 +3267,7 @@ def solve_rolling_snapshot(
         "validation": report,
         "affected_ships": sorted({ship for ship, _group in affected_pairs}),
         "impact_diagnostics": impact_diagnostics,
-        "stability_budget_diagnostics": budget_info,
+        "stability_diagnostics": stability_info,
         "objective_scales": objective_scales,
         "stages": trace,
         "repair_triggered": settings["progressive_repair"] and repair_expansions > 0,

@@ -1,5 +1,12 @@
 # Formal experiment protocol
 
+> Historical protocol notice: this document freezes the earlier PORT-MIS
+> `rolling-v4.4` / algorithm `v1.4.7` / result `v11` design. For the current
+> TRE implementation and its still-closed confirmatory gate, use
+> `docs/tre_objective_revision_protocol.md` and
+> `docs/specs/formal_run_manifest_v3.json`. Commands and identifiers below
+> must not be used to label new results as current formal evidence.
+
 The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
 Those 36 rows are retained as historical development evidence. Version 1.2
 then used the protocol-authorized final preflight adjustment to add a

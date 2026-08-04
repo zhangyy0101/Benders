@@ -202,6 +202,45 @@ class ObjectiveScaleAndOccupancyTest(unittest.TestCase):
         components = extract_rolling_solution(variables, expressions)["components"]
         self.assertEqual(components["new_bay_count"], 0)
 
+    def test_pod_bay_use_cannot_activate_without_reservation(self):
+        snapshot = objective_snapshot()
+        model, variables, _expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+        for variable in variables["reservation"].values():
+            variable.UB = 0
+        for variable in variables["din"].values():
+            variable.UB = 0
+        use = variables["pod_bay_use"]["V", "P", "Y1"]
+        use.LB = 1
+        use.UB = 1
+        model.Params.OutputFlag = 0
+        model.optimize()
+        self.assertEqual(model.Status, GRB.INFEASIBLE)
+        model.dispose()
+
+    def test_new_bay_indicator_equals_new_support_activation(self):
+        snapshot = objective_snapshot()
+        model, variables, _expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+        for variable in variables["reservation"].values():
+            variable.UB = 0
+        for variable in variables["din"].values():
+            variable.UB = 0
+        use = variables["pod_bay_use"]["V", "P", "Y1"]
+        new_use = variables["new_bay"]["V", "P", "Y1"]
+        use.LB = 0
+        use.UB = 0
+        new_use.LB = 1
+        new_use.UB = 1
+        model.Params.OutputFlag = 0
+        model.optimize()
+        self.assertEqual(model.Status, GRB.INFEASIBLE)
+        model.dispose()
+
     def test_realized_balance_uses_utilization_not_absolute_quantity(self):
         case = {
             "blocks": ["K1", "K2"],

@@ -10,10 +10,53 @@ from run_experiments import (
     experiment_identity,
     pilot_diagnostics,
     planned_experiment_identity,
+    stage_summary,
 )
 
 
 class PilotExperimentOutputTest(unittest.TestCase):
+    def test_stage_summary_records_residual_shortage_recovery_decisions(self):
+        result = {
+            "cycles": [
+                {
+                    "stages": [
+                        {
+                            "stage": "bottleneck_repair",
+                            "global_repair_decision": (
+                                "enqueued_residual_shortage"
+                            ),
+                        },
+                        {"stage": "global_repair"},
+                    ]
+                },
+                {
+                    "stages": [
+                        {
+                            "stage": "bottleneck_repair",
+                            "global_repair_decision": (
+                                "skipped_insufficient_time"
+                            ),
+                        }
+                    ]
+                },
+            ],
+            "total_preprocessing_time": 0,
+            "total_solver_time": 0,
+            "total_online_decision_time": 0,
+            "total_solution_extract_time": 0,
+            "total_validation_time": 0,
+        }
+        summary = stage_summary(result)
+        self.assertEqual(summary["final_global_repair_count"], 1)
+        self.assertEqual(
+            summary["residual_shortage_global_repair_enqueued_count"],
+            1,
+        )
+        self.assertEqual(
+            summary["residual_shortage_global_repair_skipped_time_count"],
+            1,
+        )
+
     def test_resume_loads_only_matching_checkpoint(self):
         metadata = {"git_commit": "abc", "problem_protocol": "test"}
         matrix = {"seeds": [100]}

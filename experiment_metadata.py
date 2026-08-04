@@ -77,8 +77,8 @@ def collect_weight_profile(
             "cancel": config.STABILITY_CANCEL_WEIGHT,
             "new_bay": config.STABILITY_NEW_BAY_WEIGHT,
             "block_reallocation": config.STABILITY_BLOCK_REALLOCATION_WEIGHT,
-            "base_ratio": config.STABILITY_BASE_RATIO,
-            "change_ratio": config.STABILITY_CHANGE_RATIO,
+            "lexicographic_priority": 2,
+            "hard_budget_enabled": False,
         },
         "operations": {
             "normalization": config.OPERATION_OBJECTIVE_NORMALIZATION,
@@ -118,6 +118,20 @@ def collect_weight_profile(
             "max_seconds": config.BOTTLENECK_SELECTOR_MAX_SECONDS,
             "packing_granularity_guard": "one_compatible_bay",
             "fallback": "global_repair",
+            "fallback_trigger": "positive_residual_incumbent_shortage",
+            "global_repair_reserve_ratio": config.GLOBAL_REPAIR_RESERVE_RATIO,
+            "global_repair_reserve_min_seconds": (
+                config.GLOBAL_REPAIR_RESERVE_MIN_SECONDS
+            ),
+            "global_repair_reserve_max_seconds": (
+                config.GLOBAL_REPAIR_RESERVE_MAX_SECONDS
+            ),
+            "global_repair_min_start_seconds": (
+                config.GLOBAL_REPAIR_MIN_START_SECONDS
+            ),
+            "stability_policy": (
+                "second_lexicographic_objective_without_hard_budget"
+            ),
         },
         "adaptive_controller": {
             "enabled": config.ADAPTIVE_GLOBAL_BYPASS_ENABLED,

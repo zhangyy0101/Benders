@@ -21,16 +21,22 @@ No revision run may resume from, overwrite, or merge with those artifacts.
 Development occurs on `research/tre-objective-normalization-v2`. The implemented
 version identities are:
 
-- problem protocol: `rolling-v4.5-reachable-objective-scaling`;
-- candidate algorithm: `lead-aware-aggregate-lp-screened-repair-v1.5.0`;
-- result schema: `rolling-results-v12`;
+- problem protocol: `rolling-v4.6-objective-only-stability`;
+- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.0`;
+- result schema: `rolling-results-v14`;
 - normalization: `reachable_snapshot_upper_bounds_v2`;
 - new local root: `local_results/protocol_v3_tre_objective`.
 
 The shortage--stability--operations lexicographic priorities remain unchanged.
-Only the third-priority operations score is revised. Its scale dictionary must
-still be calculated once from the unrestricted snapshot and reused by every
-restricted and global stage.
+The third-priority operations score uses the revised normalization below. The
+controller imposes no hard stability allowance in any domain because no such
+business constraint exists; stability remains the second objective. Positive
+residual shortage after bottleneck repair enters global safety repair when its
+bounded in-budget reserve remains. A restricted model that cannot start within
+its stage allocation also transfers to the unrestricted safety stage while the
+common online window remains. The scale dictionary must still be calculated
+once from the unrestricted snapshot and reused by every restricted and global
+stage.
 
 For positive optimizer-visible arrival quantity \(Q^+\), reachable support set
 \(\mathcal S^+\), maximum reachable distance \(d_{max}^+\), \(K\) blocks, and
@@ -47,6 +53,12 @@ third, or fourth scales. The selected profile is passed explicitly to the MIP
 and literature-baseline evaluator, recorded in experiment identity and
 metadata, and separated by the summarizer.
 
+Accepted candidate and external-baseline solutions are audited from extracted
+physical `reservation` and `din` flows. The audit independently recomputes all
+four raw components, their scales, normalized and weighted values, the total
+operations score, and the exact support/new-support indicators; it does not
+trust the MIP expressions or heuristic-side accounting.
+
 The primary business profile is fixed before implementation as distance 0.40,
 balance 0.30, concentration 0.20, and inbound/outbound conflict 0.10. The
 prespecified sensitivity profiles are stored in
@@ -62,17 +74,26 @@ method revised after formal outcomes have been inspected requires a new
 held-out set, those seeds may be reused only for historical or exploratory
 paired re-evaluation of the objective change.
 
-Before version 1.5.0 is authorized for a confirmatory formal run, register an
+Before version 1.7.0 is authorized for a confirmatory formal run, register an
 untouched seed set or an independent operational time window in the V3
 manifest. Do not select the primary weight profile from any V3 result. All
 profile definitions, normalization equations, evaluation panels, and stopping
 rules must be frozen in a clean tagged commit before the new confirmatory set
 is opened.
 
+Formal statistical summaries use two-sided Student-t 95% confidence intervals.
+Wilcoxon signed-rank tests are reported only with at least five nonzero paired
+differences, and their p-values receive a Holm correction within each metric
+family. The default formal audit rejects mixed protocols or commits, duplicate
+identities, failed/invalid/late rows, missing bundle hashes, unexpected seeds,
+provisional public sources, score-accounting gaps, and incomplete manifests.
+
 ## Gates before a new formal tag
 
-1. Implement and unit-test the reachable scale equations and weight-profile
-   plumbing without changing the first two objective priorities.
+1. Implement and unit-test the reachable scale equations, weight-profile
+   plumbing, residual-shortage and restricted-build-timeout global recovery,
+   objective-only stability policy, and exact support indicators without
+   changing the three objective priorities.
 2. Run development and preflight cases only; record raw, normalized, scale,
    weight, and weighted-contribution fields for every operations component.
 3. Confirm that every stage receives the same unrestricted scale dictionary.

@@ -10,12 +10,22 @@ from scripts.prepare_pnc_yangshan_v2_formal_instances import (
     EXPECTED_PREFLIGHT_SHA256,
     PROFILE_ORDER,
     load_and_validate_spec,
+    main as prepare_formal_main,
     profile_arguments,
     validate_preflight,
 )
 
 
 class PncYangshanFormalFreezeTests(unittest.TestCase):
+    def test_formal_generator_refuses_to_open_seeds_without_authorization(self):
+        with mock.patch(
+            "sys.argv",
+            ["prepare_pnc_yangshan_v2_formal_instances.py"],
+        ), mock.patch.object(config, "FORMAL_RESULT_AUTHORIZED", False):
+            with self.assertRaises(SystemExit) as raised:
+                prepare_formal_main()
+        self.assertEqual(raised.exception.code, 2)
+
     def test_repository_spec_matches_frozen_configuration(self):
         spec = load_and_validate_spec(
             Path("docs/specs/pnc_yangshan_v2_formal_instance_spec.json")

@@ -513,12 +513,144 @@ def compute_objective_scales(d: dict) -> dict[str, float]:
     }
 
 
+def reservation_support(
+    d: dict,
+    reservation: Mapping[tuple[str, str, str], float],
+    *,
+    positive_forecast_only: bool = False,
+) -> set[tuple[str, str, str]]:
+    """Recompute active ``(ship, POD, bay)`` support from physical flow."""
+    modeled_pairs = set(d["remaining_demand"])
+    positive_pairs = {
+        (ship, group)
+        for (ship, group, period), quantity in d["forecast_arrivals"].items()
+        if quantity > 0
+        and (ship, group) in modeled_pairs
+        and ship_present_at(d, ship, period)
+    }
+    attrs = d["group_attrs"]
+    return {
+        (ship, attrs[group]["pod"], bay)
+        for (bay, ship, group), quantity in reservation.items()
+        if quantity > 0
+        and (not positive_forecast_only or (ship, group) in positive_pairs)
+    }
+
+
+def evaluate_operation_components(
+    d: dict,
+    reservation: Mapping[tuple[str, str, str], float],
+    din: Mapping[tuple[str, str, str, int], float],
+    *,
+    objective_scales: Mapping[str, float] | None = None,
+    operation_weights: Mapping[str, float] | None = None,
+) -> dict[str, float]:
+    """Independently recompute every operational objective component.
+
+    This evaluator uses only snapshot data and extracted physical flows; it
+    does not read model expressions or auxiliary indicator variables.
+    """
+    scales = {
+        name: float(value)
+        for name, value in (objective_scales or compute_objective_scales(d)).items()
+    }
+    required_scales = (
+        "concentration_scale",
+        "occupancy_balance_scale",
+        "distance_scale",
+        "in_out_conflict_scale",
+    )
+    if set(scales) != set(required_scales):
+        raise ValueError("objective scale keys differ from the frozen contract")
+    if any(not math.isfinite(scales[name]) or scales[name] <= 0 for name in required_scales):
+        raise ValueError("objective scales must be finite and strictly positive")
+
+    concentration_raw = float(
+        len(reservation_support(d, reservation, positive_forecast_only=True))
+    )
+    occupancy_balance_raw = 0.0
+    for period in d["periods"]:
+        utilizations = []
+        for block in d["blocks"]:
+            block_bays = d["bays_in_block"][block]
+            capacity = sum(float(d["capacity"][bay]) for bay in block_bays)
+            if capacity <= 0:
+                raise ValueError(f"block capacity must be positive: {block}")
+            locked = sum(
+                float(quantity)
+                for (bay, old_ship), quantity in d["locked_inventory"].items()
+                if bay in block_bays
+                and d["locked_release_local"].get((bay, old_ship), INF) > period
+            )
+            actual = sum(
+                float(quantity)
+                for (bay, ship, _group), quantity in d["actual_inventory"].items()
+                if bay in block_bays and ship_present_at(d, ship, period)
+            )
+            planned = sum(
+                float(quantity)
+                for (bay, ship, _group, arrival), quantity in din.items()
+                if bay in block_bays
+                and arrival <= period
+                and ship_present_at(d, ship, period)
+            )
+            utilizations.append((locked + actual + planned) / capacity)
+        average = sum(utilizations) / len(utilizations) if utilizations else 0.0
+        occupancy_balance_raw += sum(abs(value - average) for value in utilizations)
+
+    distance_raw = float(sum(
+        float(d["distance"][ship, d["bay_block"][bay]]) * float(quantity)
+        for (bay, ship, _group, _period), quantity in din.items()
+    ))
+    peak_outbound = max(
+        (float(value) for value in d["forecast_outbound"].values()),
+        default=1.0,
+    )
+    conflict_raw = float(sum(
+        float(d["forecast_outbound"].get((d["bay_block"][bay], period), 0))
+        / max(1.0, peak_outbound)
+        * float(quantity)
+        for (bay, _ship, _group, period), quantity in din.items()
+    ))
+    normalized = {
+        "concentration_normalized": concentration_raw / scales["concentration_scale"],
+        "occupancy_balance_normalized": (
+            occupancy_balance_raw / scales["occupancy_balance_scale"]
+        ),
+        "distance_normalized": distance_raw / scales["distance_scale"],
+        "in_out_conflict_normalized": conflict_raw / scales["in_out_conflict_scale"],
+    }
+    weights = resolve_operation_weights(operation_weights)
+    weighted = {
+        "concentration_weighted": weights["concentration"]
+        * normalized["concentration_normalized"],
+        "occupancy_balance_weighted": weights["balance"]
+        * normalized["occupancy_balance_normalized"],
+        "distance_weighted": weights["distance"] * normalized["distance_normalized"],
+        "in_out_conflict_weighted": weights["in_out_conflict"]
+        * normalized["in_out_conflict_normalized"],
+    }
+    return {
+        "concentration_raw": concentration_raw,
+        "occupancy_balance_raw": occupancy_balance_raw,
+        "distance_raw": distance_raw,
+        "in_out_conflict_raw": conflict_raw,
+        **normalized,
+        "concentration_weight": weights["concentration"],
+        "occupancy_balance_weight": weights["balance"],
+        "distance_weight": weights["distance"],
+        "in_out_conflict_weight": weights["in_out_conflict"],
+        **weighted,
+        "normalized_operations_score": sum(weighted.values()),
+        **scales,
+    }
+
+
 def build_rolling_model(
     d: dict,
     *,
     allowed_bays: dict | None = None,
     shortage_allowed: bool = True,
-    stability_budget: float | None = None,
     objective_scales: dict[str, float] | None = None,
     operation_weights: Mapping[str, float] | None = None,
     use_exact_stability_big_m: bool | None = None,
@@ -562,11 +694,15 @@ def build_rolling_model(
     reserve_by_pair_block: dict[
         tuple[str, str, str], list[tuple[str, str, str]]
     ] = defaultdict(list)
+    reserve_by_use: dict[
+        tuple[str, str, str], list[tuple[str, str, str]]
+    ] = defaultdict(list)
     for key in reserve_keys:
         i, j, g = key
         reserve_by_pair[j, g].append(key)
         reserve_by_bay[i].append(key)
         reserve_by_pair_block[j, g, d["bay_block"][i]].append(key)
+        reserve_by_use[j, attrs[g]["pod"], i].append(key)
 
     flow_by_pair: dict[
         tuple[str, str], list[tuple[str, str, str, int]]
@@ -608,7 +744,7 @@ def build_rolling_model(
         for variable in shortage.values():
             variable.UB = 0
 
-    use_keys = sorted({(j, attrs[g]["pod"], i) for i, j, g in reserve_keys})
+    use_keys = sorted(reserve_by_use)
     use = m.addVars(use_keys, vtype=GRB.BINARY, name="pod_bay_use")
     new_use = m.addVars(use_keys, vtype=GRB.BINARY, name="new_bay")
     height = m.addVars(bays, periods, d["heights"], vtype=GRB.BINARY, name="bay_height")
@@ -627,11 +763,6 @@ def build_rolling_model(
 
     old = d["previous_reservation"]
     cancellation_keys = sorted(set(reserve_keys) | set(old))
-    cancellation_by_pair: dict[
-        tuple[str, str], list[tuple[str, str, str]]
-    ] = defaultdict(list)
-    for key in cancellation_keys:
-        cancellation_by_pair[key[1], key[2]].append(key)
     old_total_by_pair: dict[tuple[str, str], float] = defaultdict(float)
     old_block_by_pair: dict[tuple[str, str, str], float] = defaultdict(float)
     for (i, j, g), quantity in old.items():
@@ -659,18 +790,6 @@ def build_rolling_model(
             stability_pairs,
             vtype=GRB.BINARY,
             name="block_reallocation_active",
-        )
-        if exact_stability else {}
-    )
-    pair_cancellation = m.addVars(stability_pairs, lb=0, name="pair_cancellation")
-    pair_discretionary = m.addVars(
-        stability_pairs, lb=0, name="pair_discretionary_cancel"
-    )
-    discretionary_active = (
-        m.addVars(
-            stability_pairs,
-            vtype=GRB.BINARY,
-            name="discretionary_active",
         )
         if exact_stability else {}
     )
@@ -737,7 +856,10 @@ def build_rolling_model(
             name=f"final_capacity_{i}",
         )
         for _, j, g in related:
-            m.addConstr(reserve[i, j, g] <= d["capacity"][i] * use[j, attrs[g]["pod"], i])
+            m.addConstr(
+                reserve[i, j, g]
+                <= d["capacity"][i] * use[j, attrs[g]["pod"], i]
+            )
         for n in periods:
             m.addConstr(gp.quicksum(height[i, n, h] for h in d["heights"]) <= 1)
             for old_ship, h in locked_heights_by_bay[i]:
@@ -796,20 +918,28 @@ def build_rolling_model(
             m.addConstr(cancel[key] <= cancel_m * cancel_active[key])
     support_baseline = existing_support(d, period=0)
     for j, pod, i in use_keys:
+        total_reservation = gp.quicksum(
+            reserve[key] for key in reserve_by_use[j, pod, i]
+        )
+        # ``use`` is an exact support indicator even when the third-priority
+        # concentration objective is not fully optimized at the time limit.
+        m.addConstr(
+            use[j, pod, i] <= total_reservation,
+            name=f"pod_bay_use_exact_{j}_{pod}_{i}",
+        )
         was_used = (j, pod, i) in support_baseline
         if was_used:
             new_use[j, pod, i].UB = 0
         else:
-            m.addConstr(new_use[j, pod, i] >= use[j, pod, i])
+            m.addConstr(
+                new_use[j, pod, i] == use[j, pod, i],
+                name=f"new_bay_exact_{j}_{pod}_{i}",
+            )
 
     mandatory = {}
     for j, g in stability_pairs:
         old_total = old_total_by_pair[j, g]
         mandatory[j, g] = max(0, old_total - d["remaining_demand"].get((j, g), 0))
-        pair_cancel_expression = gp.quicksum(
-            cancel[key] for key in cancellation_by_pair[j, g]
-        )
-        m.addConstr(pair_cancellation[j, g] == pair_cancel_expression)
         pair_forecast = sum(
             d["forecast_arrivals"].get((j, g, n), 0)
             for n in periods
@@ -851,23 +981,8 @@ def build_rolling_model(
             m.addConstr(
                 reallocation[j, g] <= exactness_m * reallocation_active[j, g]
             )
-        raw_discretionary = pair_cancellation[j, g] - mandatory[j, g] - pair_shortage
-        big_m = exactness_m
-        m.addConstr(pair_discretionary[j, g] >= raw_discretionary)
-        if exact_stability:
-            m.addConstr(
-                pair_discretionary[j, g]
-                <= raw_discretionary + big_m * (1 - discretionary_active[j, g])
-            )
-            m.addConstr(
-                pair_discretionary[j, g] <= big_m * discretionary_active[j, g]
-            )
     cancellation_quantity = cancel.sum()
     mandatory_total = sum(mandatory.values())
-    discretionary_total = pair_discretionary.sum()
-    if stability_budget is not None:
-        m.addConstr(discretionary_total <= float(stability_budget), name="stability_budget")
-
     for k in d["blocks"]:
         block_capacity = sum(d["capacity"][i] for i in d["bays_in_block"][k])
         for n in periods:
@@ -951,8 +1066,6 @@ def build_rolling_model(
         "new_bay": new_use,
         "block_cancel": block_cancel,
         "block_reallocation": reallocation,
-        "pair_cancellation": pair_cancellation,
-        "pair_discretionary_cancel": pair_discretionary,
         "in_share": share,
         "block_occupancy": occupancy,
         "block_utilization": utilization,
@@ -961,7 +1074,6 @@ def build_rolling_model(
         "predicted_shortage": shortage_obj,
         "cancellation_quantity": cancellation_quantity,
         "mandatory_reduction": float(mandatory_total),
-        "discretionary_cancel": discretionary_total,
         "new_bay_count": new_use.sum(),
         "block_reallocation_quantity": block_reallocation,
         "stability_cost": stability_cost,

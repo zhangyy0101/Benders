@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import (  # noqa: E402
+    ALGORITHM_VERSION,
     DEPENDENCY_PROFILES,
     FORMAL_ORCHESTRATION_PROTOCOL,
     FORMAL_PRIMARY_CONFIGURATIONS,
@@ -344,13 +345,26 @@ def main() -> int:
         parser.error("threads must be positive")
     if not FORMAL_RESULT_AUTHORIZED:
         parser.error(
-            "formal execution is not authorized for objective version 1.5.0; "
+            f"formal execution is not authorized for algorithm {ALGORITHM_VERSION}; "
             "register a new untouched confirmatory set first"
         )
 
     source_index = Path(args.bundle_index).resolve()
     final_output = Path(args.output).resolve()
     shard_directory = final_output.with_suffix(".shards")
+    metadata, requested_matrix, identity_order, expected_rows = (
+        _formal_context(
+            source_index,
+            workers=args.workers,
+            threads=args.threads,
+            mip_gap=args.mip_gap,
+            dependency_profile=args.dependency_profile,
+            operation_weight_profile=args.operation_weight_profile,
+        )
+    )
+    if metadata.get("git_dirty") is not False:
+        parser.error("formal sharded matrix requires a clean Git commit")
+
     _validate_fresh_paths(
         final_output,
         shard_directory,
@@ -367,18 +381,6 @@ def main() -> int:
         shard_directory / f"worker-{worker + 1:02d}.csv"
         for worker in range(args.workers)
     ]
-    metadata, requested_matrix, identity_order, expected_rows = (
-        _formal_context(
-            source_index,
-            workers=args.workers,
-            threads=args.threads,
-            mip_gap=args.mip_gap,
-            dependency_profile=args.dependency_profile,
-            operation_weight_profile=args.operation_weight_profile,
-        )
-    )
-    if metadata.get("git_dirty") is not False:
-        parser.error("formal sharded matrix requires a clean Git commit")
 
     processes = []
     log_streams = []

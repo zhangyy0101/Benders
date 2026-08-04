@@ -1,5 +1,6 @@
 import copy
 import unittest
+from time import perf_counter as real_perf_counter
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -28,12 +29,15 @@ from rolling_solver import (
     _direct_impact_pairs,
     _horizon_end_block_utilization,
     _incumbent_decision,
+    _post_bottleneck_global_repair_decision,
+    _restricted_build_timeout_transition,
     _restricted_domain_aggregate_capacity_margin,
     _select_aggregate_domain_ladder,
     _snapshot_pressure_diagnostics,
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
     physical_residual_capacity_by_bay_period,
+    global_repair_reserve_seconds,
     solve_rolling_snapshot,
     _validate_rolling_solution_reference,
     validate_rolling_solution,
@@ -527,6 +531,172 @@ class PilotModelFormulationTest(unittest.TestCase):
             (False, "not_lexicographically_better"),
         )
 
+    def test_model_has_no_hard_stability_budget(self):
+        model, _variables, _expressions = build_rolling_model(
+            objective_snapshot()
+        )
+        constraint_names = {constraint.ConstrName for constraint in model.getConstrs()}
+        variable_names = {variable.VarName for variable in model.getVars()}
+        model.dispose()
+        self.assertNotIn("stability_budget", constraint_names)
+        self.assertFalse(any(
+            name.startswith("pair_discretionary_cancel")
+            or name.startswith("discretionary_active")
+            for name in variable_names
+        ))
+
+    def test_restricted_build_timeout_transition_preserves_safety_path(self):
+        self.assertEqual(
+            _restricted_build_timeout_transition(
+                progressive_repair=True,
+                stage_level=0,
+                stage_name="impact_region",
+                incumbent_shortage=None,
+                remaining_wall=1,
+                global_already_scheduled=False,
+            ),
+            ("enqueue", "enqueued_global_after_restricted_build_timeout"),
+        )
+        self.assertEqual(
+            _restricted_build_timeout_transition(
+                progressive_repair=True,
+                stage_level=1,
+                stage_name="bottleneck_repair",
+                incumbent_shortage=0,
+                remaining_wall=1,
+                global_already_scheduled=False,
+            ),
+            ("finish", "preserve_zero_shortage_incumbent"),
+        )
+
+    def test_residual_bottleneck_shortage_enqueues_global_repair(self):
+        enqueue, reason = _post_bottleneck_global_repair_decision(
+            stage_name="bottleneck_repair",
+            predicted_shortage=5,
+            remaining_wall=1,
+            already_scheduled=False,
+        )
+        self.assertTrue(enqueue)
+        self.assertEqual(reason, "enqueued_residual_shortage")
+
+        enqueue, reason = _post_bottleneck_global_repair_decision(
+            stage_name="bottleneck_repair",
+            predicted_shortage=0,
+            remaining_wall=1,
+            already_scheduled=False,
+        )
+        self.assertFalse(enqueue)
+        self.assertEqual(reason, "not_needed_zero_shortage")
+
+        enqueue, reason = _post_bottleneck_global_repair_decision(
+            stage_name="bottleneck_repair",
+            predicted_shortage=5,
+            remaining_wall=0,
+            already_scheduled=False,
+        )
+        self.assertFalse(enqueue)
+        self.assertEqual(reason, "skipped_insufficient_time")
+
+    def test_controller_recovers_residual_bottleneck_shortage_globally(self):
+        snapshot = objective_snapshot()
+        snapshot["remaining_demand"] = {("V", "G"): 15}
+        snapshot["forecast_arrivals"] = {("V", "G", 0): 15}
+        restricted = {("V", "G"): ["Y1"]}
+        plan = {
+            "selector": "deterministic_test_cover",
+            "status": "cover_found",
+            "shortage_pairs": [["V", "G"]],
+            "selected_pair_blocks": {"V|G": ["K1"]},
+            "selected_pair_block_count": 1,
+            "selector_runtime": 0.0,
+        }
+        pressure = {
+            "policy": "deterministic_test_route",
+            "route": "bottleneck_repair",
+            "route_to_global": False,
+        }
+        with patch("rolling_solver._allowed", return_value=restricted), patch(
+            "rolling_solver._snapshot_pressure_diagnostics",
+            return_value=pressure,
+        ), patch(
+            "rolling_solver._bottleneck_minimal_expansion",
+            return_value=(restricted, plan),
+        ):
+            result = solve_rolling_snapshot(
+                snapshot,
+                time_limit=5,
+                configuration="full_bottleneck_no_aggregate",
+                seed=0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            [stage["stage"] for stage in result["stages"]],
+            ["impact_region", "bottleneck_repair", "global_repair"],
+        )
+        bottleneck, global_repair = result["stages"][1:]
+        self.assertEqual(bottleneck["predicted_shortage"], 5)
+        self.assertEqual(
+            bottleneck["global_repair_decision"],
+            "enqueued_residual_shortage",
+        )
+        self.assertFalse(global_repair["hard_stability_budget_enabled"])
+        self.assertEqual(
+            result["solution"]["components"]["predicted_shortage"],
+            0,
+        )
+        self.assertTrue(result["validation"]["feasible"])
+
+    def test_initial_model_build_timeout_continues_to_global_stage(self):
+        offset = [0.0]
+        build_count = [0]
+
+        def clock():
+            return real_perf_counter() + offset[0]
+
+        def build_with_first_stage_overrun(*args, **kwargs):
+            built = build_rolling_model(*args, **kwargs)
+            build_count[0] += 1
+            if build_count[0] == 1:
+                offset[0] += 1.5
+            return built
+
+        pressure = {
+            "policy": "deterministic_test_route",
+            "route": "bottleneck_repair",
+            "route_to_global": False,
+        }
+        with patch(
+            "rolling_solver.time.perf_counter",
+            side_effect=clock,
+        ), patch(
+            "rolling_solver.build_rolling_model",
+            side_effect=build_with_first_stage_overrun,
+        ), patch(
+            "rolling_solver._snapshot_pressure_diagnostics",
+            return_value=pressure,
+        ):
+            result = solve_rolling_snapshot(
+                objective_snapshot(),
+                time_limit=4,
+                configuration="full_bottleneck_no_aggregate",
+                seed=0,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["stages"][0]["status"], "model_build_time_limit")
+        self.assertEqual(
+            result["stages"][0]["model_build_timeout_transition"],
+            "enqueued_global_after_restricted_build_timeout",
+        )
+        self.assertEqual(result["stages"][1]["stage"], "global_repair")
+        self.assertFalse(result["stages"][1]["hard_stability_budget_enabled"])
+
+    def test_global_repair_reserve_is_bounded_inside_remaining_window(self):
+        self.assertAlmostEqual(global_repair_reserve_seconds(60, 30), 9)
+        self.assertAlmostEqual(global_repair_reserve_seconds(20, 1), .5)
+        self.assertEqual(global_repair_reserve_seconds(0, 30), 0)
+
     def test_non_dependency_candidate_skips_overwritten_physical_scores(self):
         with patch(
             "rolling_solver._block_scores", wraps=_block_scores
@@ -617,6 +787,60 @@ class PilotModelFormulationTest(unittest.TestCase):
                     msg=name,
                 )
         model.dispose()
+
+    def test_validator_independently_recomputes_objective_and_use_indicators(self):
+        snapshot = objective_snapshot()
+        model, variables, expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+        model.Params.OutputFlag = 0
+        model.optimize()
+        solution = extract_rolling_solution(
+            variables,
+            expressions,
+            model=model,
+            snapshot=snapshot,
+        )
+        model.dispose()
+
+        tampered_objective = copy.deepcopy(solution)
+        tampered_objective["components"]["distance_raw"] += 1
+        report = validate_rolling_solution(snapshot, tampered_objective)
+        self.assertFalse(report["feasible"])
+        self.assertEqual(report["violations"]["distance_raw_accounting"], 1)
+
+        tampered_scale = copy.deepcopy(solution)
+        tampered_scale["components"]["distance_scale"] *= 2
+        report = validate_rolling_solution(snapshot, tampered_scale)
+        self.assertFalse(report["feasible"])
+        self.assertGreater(report["violations"]["distance_scale_accounting"], 0)
+
+        tampered_weight = copy.deepcopy(solution)
+        tampered_weight["components"]["distance_weight"] = .9
+        report = validate_rolling_solution(snapshot, tampered_weight)
+        self.assertFalse(report["feasible"])
+        self.assertAlmostEqual(
+            report["violations"]["distance_weight_accounting"],
+            .5,
+        )
+
+        missing_component = copy.deepcopy(solution)
+        del missing_component["components"]["distance_scale"]
+        report = validate_rolling_solution(snapshot, missing_component)
+        self.assertFalse(report["feasible"])
+        self.assertEqual(report["violations"]["operation_component_missing"], 1)
+
+        tampered_indicator = copy.deepcopy(solution)
+        active_key = next(
+            key
+            for key, value in tampered_indicator["pod_bay_use"].items()
+            if value == 1
+        )
+        tampered_indicator["pod_bay_use"][active_key] = 0
+        report = validate_rolling_solution(snapshot, tampered_indicator)
+        self.assertFalse(report["feasible"])
+        self.assertEqual(report["violations"]["pod_bay_use_accounting"], 1)
 
     def test_release_after_arrival_is_rejected_and_cannot_create_flow(self):
         snapshot = objective_snapshot()
@@ -810,7 +1034,7 @@ class PilotModelFormulationTest(unittest.TestCase):
             # This is a mechanism-reachability test, not a runtime-limit test.
             # Leave headroom for loaded CI machines so a valid repair path is
             # not mislabeled as a logic failure.
-            time_per_cycle=8,
+            time_per_cycle=12,
             configuration="full",
             seed=100,
         )

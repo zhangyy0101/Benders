@@ -213,6 +213,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if not args.check_only and not config.FORMAL_RESULT_AUTHORIZED:
+        parser.error(
+            "formal seed generation is not authorized for algorithm "
+            f"{config.ALGORITHM_VERSION}; register the untouched confirmatory "
+            "set and explicitly enable FORMAL_RESULT_AUTHORIZED first"
+        )
+
     git = git_identity()
     if not git["clean"]:
         raise RuntimeError("formal seed generation requires a clean Git commit")
@@ -285,7 +292,7 @@ def main() -> None:
         "instance_protocol": INSTANCE_PROTOCOL,
         "data_protocol_version": DATA_PROTOCOL,
         "experiment_phase": "formal",
-        "formal_results_authorized": True,
+        "formal_results_authorized": bool(config.FORMAL_RESULT_AUTHORIZED),
         "generator_git_commit": git["commit"],
         "formal_specification_sha256": sha256(args.spec),
     }

@@ -55,6 +55,14 @@ class ObjectiveRevisionProtocolTest(unittest.TestCase):
             ]
         )
 
+    def test_stability_is_objective_only_without_a_hard_budget(self):
+        self.assertEqual(
+            self.manifest["planned_revision"]["stability_policy"],
+            "second lexicographic objective only; no hard stability budget in any domain",
+        )
+        self.assertNotIn("STABILITY_BASE_RATIO", vars(config))
+        self.assertNotIn("STABILITY_CHANGE_RATIO", vars(config))
+
 
 if __name__ == "__main__":
     unittest.main()

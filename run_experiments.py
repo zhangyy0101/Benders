@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from config import (
+    ALGORITHM_VERSION,
     DEPENDENCY_PROFILES,
     FORECAST_ERROR_MODES,
     FORMAL_RESULT_AUTHORIZED,
@@ -198,8 +199,8 @@ def stage_summary(result: dict) -> dict:
         "repair_expansions": sum(
             cycle.get("repair_expansions", 0) for cycle in result["cycles"]
         ),
-        "budget_binding_stages": sum(
-            bool(stage.get("stability_budget_binding")) for stage in stages
+        "hard_stability_budget_enabled": any(
+            bool(stage.get("hard_stability_budget_enabled")) for stage in stages
         ),
         "max_variables": max((stage.get("variables", 0) for stage in stages), default=0),
         "max_binary_variables": max(
@@ -211,6 +212,21 @@ def stage_summary(result: dict) -> dict:
         ),
         "final_global_repair_count": sum(
             stage.get("stage") == "global_repair" for stage in stages
+        ),
+        "residual_shortage_global_repair_enqueued_count": sum(
+            stage.get("global_repair_decision")
+            == "enqueued_residual_shortage"
+            for stage in stages
+        ),
+        "residual_shortage_global_repair_skipped_time_count": sum(
+            stage.get("global_repair_decision")
+            == "skipped_insufficient_time"
+            for stage in stages
+        ),
+        "restricted_build_timeout_global_repair_enqueued_count": sum(
+            stage.get("model_build_timeout_transition")
+            == "enqueued_global_after_restricted_build_timeout"
+            for stage in stages
         ),
         "mean_preprocessing_time": (
             result["total_preprocessing_time"] / len(solved_cycles)
@@ -908,7 +924,7 @@ def main() -> int:
             )
     if args.experiment_phase == "formal" and not FORMAL_RESULT_AUTHORIZED:
         parser.error(
-            "formal execution is not authorized for objective version 1.5.0; "
+            f"formal execution is not authorized for algorithm {ALGORITHM_VERSION}; "
             "register a new untouched confirmatory set first"
         )
     require_clean_git = args.require_clean_git or args.experiment_phase == "formal"

@@ -48,14 +48,15 @@ max(0, pair_cancellation[p]
        - pair_shortage[p]).
 ```
 
-The stability allowance limits the sum of these pair values. Thus shortage in
-one pair cannot offset cancellation in another. Block reallocation uses the
-same pair-local subtraction after aggregating historical block withdrawals.
-By default, the MIP uses epigraph lower bounds for positive-part stability
-variables. Their positive objective weights and the discretionary budget drive
-them to the minimum relevant values. `USE_EXACT_STABILITY_BIG_M=True` retains
-four exact binary families for diagnostics. In both modes, validation
-recomputes canonical stability values directly from reservation and shortage.
+These pair values are accounting metrics, not a hard feasibility allowance.
+Thus shortage in one pair cannot offset cancellation in another. Block
+reallocation uses the same pair-local subtraction after aggregating historical
+block withdrawals. By default, the MIP uses epigraph lower bounds for the
+positive-part stability variables that enter its second objective; their
+positive weights drive them to the minimum relevant values.
+`USE_EXACT_STABILITY_BIG_M=True` retains three exact binary families for
+diagnostics. In both modes, validation recomputes canonical stability values
+directly from reservation and shortage.
 
 ## Fixed objective scales and occupancy balance
 

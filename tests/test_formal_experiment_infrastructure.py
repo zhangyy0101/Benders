@@ -115,6 +115,7 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
                 "index_schema": "rolling-instance-index-v1",
                 "instance_protocol": "rolling-formal-instances-v1",
                 "experiment_phase": "formal",
+                "formal_results_authorized": True,
                 "entry_count": 1,
                 "entries": [{
                     **identity,

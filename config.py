@@ -2,9 +2,9 @@
 
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
-PROBLEM_PROTOCOL = "rolling-v4.5-reachable-objective-scaling"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-screened-repair-v1.5.0"
-RESULT_SCHEMA_VERSION = "rolling-results-v12"
+PROBLEM_PROTOCOL = "rolling-v4.6-objective-only-stability"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.0"
+RESULT_SCHEMA_VERSION = "rolling-results-v14"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
 FORMAL_CORE_CONFIGURATION = "full_bottleneck"
@@ -20,7 +20,7 @@ SYNTHETIC_PRESSURE_PROTOCOL = (
 DEVELOPMENT_SEEDS = (100, 101, 102)
 PREFLIGHT_SEEDS = (700, 701, 702)
 FORMAL_SEEDS = tuple(range(1000, 1010))
-# Version 1.5.0 was defined after outputs for FORMAL_SEEDS existed.  Keep formal
+# Version 1.6.0 was defined after outputs for FORMAL_SEEDS existed.  Keep formal
 # execution closed until a new untouched confirmatory set is registered.
 FORMAL_RESULT_AUTHORIZED = False
 
@@ -75,6 +75,15 @@ SOLVER_RETURN_GUARD_MAX_SECONDS = 12.0
 GLOBAL_CORE_MIP_FOCUS = 1
 GLOBAL_CORE_HEURISTICS = .20
 GLOBAL_CORE_START_NODE_LIMIT = 2000
+# A bottleneck repair starts only after an incumbent exposes shortage. Reserve
+# a bounded part of its remaining online window so positive residual shortage
+# can still reach the unrestricted global safety repair. These are controller
+# constants, not a separate runtime allowance; calibration remains a preflight
+# requirement before the candidate can be frozen.
+GLOBAL_REPAIR_RESERVE_RATIO = .15
+GLOBAL_REPAIR_RESERVE_MIN_SECONDS = .50
+GLOBAL_REPAIR_RESERVE_MAX_SECONDS = 20.0
+GLOBAL_REPAIR_MIN_START_SECONDS = .05
 FORMAL_PUBLIC_WINDOWS = {
     "public_small": {
         "start_date": "2025-07-04",
@@ -204,8 +213,6 @@ USE_EXACT_STABILITY_BIG_M=False
 STABILITY_CANCEL_WEIGHT=1.0
 STABILITY_NEW_BAY_WEIGHT=10.0
 STABILITY_BLOCK_REALLOCATION_WEIGHT=1.0
-STABILITY_BASE_RATIO=.10
-STABILITY_CHANGE_RATIO=.50
 
 OPERATION_OBJECTIVE_NORMALIZATION = "reachable_snapshot_upper_bounds_v2"
 OPERATION_WEIGHT_PROFILE = "business"

@@ -156,7 +156,10 @@ def run_rolling_case(
     realized_unplaced = total("execution_metrics", "realized_unplaced")
     fallback = total("execution_metrics", "fallback_placement_quantity")
     previous_basis = sum(
-        (row.get("stability_budget_diagnostics") or {}).get("previous_reservation", 0)
+        (
+            row.get("stability_diagnostics")
+            or {}
+        ).get("previous_reservation", 0)
         for row in cycles
     )
     discretionary = total("plan_revision_metrics", "discretionary_cancel")

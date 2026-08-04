@@ -11,9 +11,39 @@ from scripts.run_formal_sharded_matrix import (
     partition_instance_entries,
     write_shard_indexes,
 )
+from scripts.run_formal_matrix import _paths_from_indexes
+from formal_experiments import INSTANCE_PROTOCOL, sha256_file
 
 
 class FormalShardedMatrixTest(unittest.TestCase):
+    def test_formal_index_requires_explicit_authorization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = root / "I0.instance.json"
+            bundle.write_text("{}", encoding="utf-8")
+            index = root / "index.json"
+            payload = {
+                "index_schema": "rolling-instance-index-v1",
+                "instance_protocol": INSTANCE_PROTOCOL,
+                "experiment_phase": "formal",
+                "formal_results_authorized": False,
+                "entry_count": 1,
+                "entries": [{
+                    "instance_bundle_filename": bundle.name,
+                    "instance_bundle_sha256": sha256_file(bundle),
+                }],
+            }
+            index.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "explicitly authorized"):
+                _paths_from_indexes([str(index)], require_formal=True)
+            payload["formal_results_authorized"] = True
+            index.write_text(json.dumps(payload), encoding="utf-8")
+            paths, _expected, records = _paths_from_indexes(
+                [str(index)], require_formal=True
+            )
+            self.assertEqual(paths, [bundle.resolve()])
+            self.assertTrue(records[0]["formal_results_authorized"])
+
     def test_optional_numeric_identity_survives_csv_round_trip(self):
         planned = {
             "instance": "irregular-yard",
