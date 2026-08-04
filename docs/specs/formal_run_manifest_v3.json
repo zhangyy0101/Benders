@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "development_gate_passed_reporting_v16_preflight_freeze_pending",
+  "status": "preflight_candidate_v2_ready",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -120,6 +120,8 @@
     "verification": "unit tests plus one adapted-literature-baseline row smoke before preflight freeze"
   },
   "preflight_plan": {
+    "reporting_code_commit": "56e44bea5ab7bdcb413681bfa8765d3c33e7bd4f",
+    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v2",
     "seeds": [700, 701, 702],
     "instance_index_count": 3,
     "certified_bundle_count": 24,
@@ -152,7 +154,8 @@
       }
     ],
     "output_root_template": "local_results/protocol_v3_tre_objective/preflight/<candidate_commit>/main_gate",
-    "formal_authorization_after_preflight": false
+    "formal_authorization_after_preflight": false,
+    "readiness_report": "docs/reports/tre_v171_preflight_readiness.md"
   },
   "publication_analysis_policy": {
     "confidence_interval": "two-sided Student-t 95%",
