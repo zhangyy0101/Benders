@@ -46,6 +46,8 @@ from config import (
     GLOBAL_CORE_MIP_FOCUS,
     GLOBAL_CORE_START_NODE_LIMIT,
     GLOBAL_REPAIR_MIN_START_SECONDS,
+    GLOBAL_REPAIR_MIN_START_MAX_SECONDS,
+    GLOBAL_REPAIR_MIN_START_RATIO,
     GLOBAL_REPAIR_RESERVE_MAX_SECONDS,
     GLOBAL_REPAIR_RESERVE_MIN_SECONDS,
     GLOBAL_REPAIR_RESERVE_RATIO,
@@ -152,11 +154,27 @@ def global_repair_reserve_seconds(
     return min(.50 * window, target)
 
 
+def global_repair_min_start_seconds(time_limit: float) -> float:
+    """Return the build-window floor for an unrestricted repair stage."""
+
+    limit = max(0.0, float(time_limit))
+    if limit <= 0:
+        return 0.0
+    return min(
+        GLOBAL_REPAIR_MIN_START_MAX_SECONDS,
+        max(
+            GLOBAL_REPAIR_MIN_START_SECONDS,
+            GLOBAL_REPAIR_MIN_START_RATIO * limit,
+        ),
+    )
+
+
 def _post_bottleneck_global_repair_decision(
     *,
     stage_name: str,
     predicted_shortage: float | None,
     remaining_wall: float,
+    time_limit: float,
     already_scheduled: bool,
 ) -> tuple[bool, str]:
     """Decide whether residual bottleneck shortage reaches global recovery."""
@@ -169,7 +187,7 @@ def _post_bottleneck_global_repair_decision(
         return False, "not_needed_zero_shortage"
     if already_scheduled:
         return False, "already_scheduled"
-    if remaining_wall <= GLOBAL_REPAIR_MIN_START_SECONDS:
+    if remaining_wall <= global_repair_min_start_seconds(time_limit):
         return False, "skipped_insufficient_time"
     return True, "enqueued_residual_shortage"
 
@@ -181,6 +199,7 @@ def _restricted_build_timeout_transition(
     stage_name: str,
     incumbent_shortage: float | None,
     remaining_wall: float,
+    time_limit: float,
     global_already_scheduled: bool,
 ) -> tuple[str, str]:
     """Choose a safe continuation when a restricted model cannot start.
@@ -197,7 +216,7 @@ def _restricted_build_timeout_transition(
         return "finish", "preserve_incumbent_after_quality_build_timeout"
     if incumbent_shortage is not None and incumbent_shortage <= 1e-6:
         return "finish", "preserve_zero_shortage_incumbent"
-    if remaining_wall <= GLOBAL_REPAIR_MIN_START_SECONDS:
+    if remaining_wall <= global_repair_min_start_seconds(time_limit):
         return "finish", "skipped_insufficient_time"
     if global_already_scheduled:
         return "continue", "continue_scheduled_global_after_build_timeout"
@@ -2729,6 +2748,21 @@ def solve_rolling_snapshot(
         if remaining_wall <= .01:
             break
         level, name, explicit_allowed = stages[position]
+        if (
+            level == 3
+            and name == "global_repair"
+            and remaining_wall
+            <= global_repair_min_start_seconds(time_limit)
+        ):
+            if trace:
+                trace[-1]["global_repair_start_decision"] = (
+                    "skipped_insufficient_model_build_window"
+                )
+                trace[-1]["global_repair_start_remaining_wall"] = (
+                    remaining_wall
+                )
+            decision_ready_elapsed = time.perf_counter() - wall_start
+            break
         if explicit_allowed is not None:
             allowed = explicit_allowed
         elif level == 3:
@@ -2835,6 +2869,7 @@ def solve_rolling_snapshot(
                     )
                 ),
                 remaining_wall=remaining_after_build,
+                time_limit=time_limit,
                 global_already_scheduled=global_already_scheduled,
             )
             timeout_record["model_build_timeout_transition"] = transition_reason
@@ -3276,6 +3311,7 @@ def solve_rolling_snapshot(
                                     )
                                 ),
                                 remaining_wall=remaining_wall,
+                                time_limit=time_limit,
                                 already_scheduled=global_already_scheduled,
                             )
                         )

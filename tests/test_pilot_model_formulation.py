@@ -39,6 +39,7 @@ from rolling_solver import (
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
     physical_residual_capacity_by_bay_period,
+    global_repair_min_start_seconds,
     global_repair_reserve_seconds,
     solve_rolling_snapshot,
     _validate_rolling_solution_reference,
@@ -581,6 +582,7 @@ class PilotModelFormulationTest(unittest.TestCase):
                 stage_name="impact_region",
                 incumbent_shortage=None,
                 remaining_wall=1,
+                time_limit=5,
                 global_already_scheduled=False,
             ),
             ("enqueue", "enqueued_global_after_restricted_build_timeout"),
@@ -592,6 +594,7 @@ class PilotModelFormulationTest(unittest.TestCase):
                 stage_name="bottleneck_repair",
                 incumbent_shortage=0,
                 remaining_wall=1,
+                time_limit=5,
                 global_already_scheduled=False,
             ),
             ("finish", "preserve_zero_shortage_incumbent"),
@@ -602,6 +605,7 @@ class PilotModelFormulationTest(unittest.TestCase):
             stage_name="bottleneck_repair",
             predicted_shortage=5,
             remaining_wall=1,
+            time_limit=5,
             already_scheduled=False,
         )
         self.assertTrue(enqueue)
@@ -611,6 +615,7 @@ class PilotModelFormulationTest(unittest.TestCase):
             stage_name="bottleneck_repair",
             predicted_shortage=0,
             remaining_wall=1,
+            time_limit=5,
             already_scheduled=False,
         )
         self.assertFalse(enqueue)
@@ -620,6 +625,7 @@ class PilotModelFormulationTest(unittest.TestCase):
             stage_name="bottleneck_repair",
             predicted_shortage=5,
             remaining_wall=0,
+            time_limit=5,
             already_scheduled=False,
         )
         self.assertFalse(enqueue)
@@ -721,9 +727,15 @@ class PilotModelFormulationTest(unittest.TestCase):
         self.assertFalse(result["stages"][1]["hard_stability_budget_enabled"])
 
     def test_global_repair_reserve_is_bounded_inside_remaining_window(self):
-        self.assertAlmostEqual(global_repair_reserve_seconds(60, 30), 9)
+        self.assertAlmostEqual(global_repair_reserve_seconds(60, 30), 15)
         self.assertAlmostEqual(global_repair_reserve_seconds(20, 1), .5)
         self.assertEqual(global_repair_reserve_seconds(0, 30), 0)
+
+    def test_global_repair_start_floor_scales_and_is_bounded(self):
+        self.assertAlmostEqual(global_repair_min_start_seconds(5), 5 / 6)
+        self.assertAlmostEqual(global_repair_min_start_seconds(60), 10)
+        self.assertAlmostEqual(global_repair_min_start_seconds(120), 10)
+        self.assertEqual(global_repair_min_start_seconds(0), 0)
 
     def test_non_dependency_candidate_skips_overwritten_physical_scores(self):
         with patch(

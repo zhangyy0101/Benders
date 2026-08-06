@@ -3,7 +3,7 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.6-objective-only-stability"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.2"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.3"
 RESULT_SCHEMA_VERSION = "rolling-results-v16"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
@@ -79,14 +79,15 @@ GLOBAL_CORE_MIP_FOCUS = 1
 GLOBAL_CORE_HEURISTICS = .20
 GLOBAL_CORE_START_NODE_LIMIT = 2000
 # A bottleneck repair starts only after an incumbent exposes shortage. Reserve
-# a bounded part of its remaining online window so positive residual shortage
-# can still reach the unrestricted global safety repair. These are controller
-# constants, not a separate runtime allowance; calibration remains a preflight
-# requirement before the candidate can be frozen.
-GLOBAL_REPAIR_RESERVE_RATIO = .15
+# enough of the unchanged online window to build the unrestricted safety MIP,
+# and do not launch it when the remaining build window is implausibly short.
+# These are controller allocations, not a separate runtime allowance.
+GLOBAL_REPAIR_RESERVE_RATIO = .25
 GLOBAL_REPAIR_RESERVE_MIN_SECONDS = .50
 GLOBAL_REPAIR_RESERVE_MAX_SECONDS = 20.0
 GLOBAL_REPAIR_MIN_START_SECONDS = .05
+GLOBAL_REPAIR_MIN_START_RATIO = 1 / 6
+GLOBAL_REPAIR_MIN_START_MAX_SECONDS = 10.0
 FORMAL_PUBLIC_WINDOWS = {
     "public_small": {
         "start_date": "2025-07-04",

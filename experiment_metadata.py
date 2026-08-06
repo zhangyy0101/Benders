@@ -129,6 +129,12 @@ def collect_weight_profile(
             "global_repair_min_start_seconds": (
                 config.GLOBAL_REPAIR_MIN_START_SECONDS
             ),
+            "global_repair_min_start_ratio": (
+                config.GLOBAL_REPAIR_MIN_START_RATIO
+            ),
+            "global_repair_min_start_max_seconds": (
+                config.GLOBAL_REPAIR_MIN_START_MAX_SECONDS
+            ),
             "stability_policy": (
                 "second_lexicographic_objective_without_hard_budget"
             ),

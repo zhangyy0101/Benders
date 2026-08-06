@@ -279,6 +279,21 @@ class ExperimentMetadataTest(unittest.TestCase):
             "downstream_integer_mip_and_independent_validation",
         )
 
+    def test_global_repair_start_window_policy_is_recorded(self):
+        repair = collect_weight_profile()["bottleneck_repair"]
+        self.assertEqual(
+            repair["global_repair_min_start_seconds"],
+            config.GLOBAL_REPAIR_MIN_START_SECONDS,
+        )
+        self.assertEqual(
+            repair["global_repair_min_start_ratio"],
+            config.GLOBAL_REPAIR_MIN_START_RATIO,
+        )
+        self.assertEqual(
+            repair["global_repair_min_start_max_seconds"],
+            config.GLOBAL_REPAIR_MIN_START_MAX_SECONDS,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
