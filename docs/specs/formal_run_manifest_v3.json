@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "preflight_candidate_v2_failed_runtime_gate",
+  "status": "preflight_candidate_v3_ready_to_freeze",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -68,7 +68,7 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 168,
+    "passed_tests": 171,
     "passed_subtests": 9,
     "status": "passed"
   },
@@ -121,7 +121,7 @@
   },
   "preflight_plan": {
     "reporting_code_commit": "56e44bea5ab7bdcb413681bfa8765d3c33e7bd4f",
-    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v2",
+    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v3",
     "seeds": [700, 701, 702],
     "instance_index_count": 3,
     "certified_bundle_count": 24,
@@ -155,7 +155,7 @@
     ],
     "output_root_template": "local_results/protocol_v3_tre_objective/preflight/<candidate_commit>/main_gate",
     "formal_authorization_after_preflight": false,
-    "readiness_report": "docs/reports/tre_v171_preflight_readiness.md"
+    "readiness_report": "docs/reports/tre_v172_preflight_readiness.md"
   },
   "preflight_attempt_v2": {
     "status": "failed_early_online_runtime_gate",
@@ -178,6 +178,42 @@
     "sequential_confirmation_csv_sha256": "204567ae04393f9a91712ed6f465673bb141761b849908f4748e737b28cb93bd",
     "sequential_confirmation_manifest_sha256": "bf58bbd57b8392db4a6d2729048a0273792a654c21e51521b3030ea9c81793fa",
     "report": "docs/reports/tre_v171_preflight_attempt_v2.md",
+    "formal_authorization": false
+  },
+  "runtime_fix_v1_7_2": {
+    "status": "passed_clean_large_instance_regression",
+    "implementation_commit": "6c7ed7dbe740199f9de8eb046676eaf75d8f7261",
+    "problem_protocol_changed": false,
+    "mathematical_model_changed": false,
+    "objective_priority_changed": false,
+    "operation_weight_profile_changed": false,
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.2",
+    "changes": [
+      "single-pass indexed canonical operation accounting",
+      "exact-zero sparse extraction for known physical model groups",
+      "conservation-complete positive rolling MIP start without artificial first-cycle shortage",
+      "in-budget runtime guards calibrated to measured sparse postprocessing and solver return tails"
+    ],
+    "test_command": "python -m pytest -q",
+    "passed_tests": 171,
+    "passed_subtests": 9,
+    "regression_bundle": "pnc_yangshan_temporal_mar_observed_n4_seed700",
+    "regression_methods": ["core_start", "full_bottleneck"],
+    "regression_expected_rows": 2,
+    "regression_completed_rows": 2,
+    "regression_all_ok": true,
+    "deadline_misses": 0,
+    "no_incumbent_failures": 0,
+    "validation_failures": 0,
+    "max_predicted_shortage": 0.0,
+    "final_realized_unplaced": 0,
+    "max_online_decision_seconds": 55.99565399996936,
+    "max_solution_extract_seconds": 1.8451918999198824,
+    "max_validation_seconds": 0.18050599982962012,
+    "regression_csv_sha256": "faf23807fdcbe6f9997368b65560e16254ff7f9754edbbf727038c35fdec10e7",
+    "regression_manifest_sha256": "a93fcfcfc76022146db91c9d8aeef6240462303483a863061e13d189de45c118",
+    "report": "docs/reports/tre_v172_runtime_fix_gate.md",
+    "preflight_rerun_required": true,
     "formal_authorization": false
   },
   "publication_analysis_policy": {

@@ -22,7 +22,7 @@ Development occurs on `research/tre-objective-normalization-v2`. The implemented
 version identities are:
 
 - problem protocol: `rolling-v4.6-objective-only-stability`;
-- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.1`;
+- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.2`;
 - result schema: `rolling-results-v16`;
 - normalization: `reachable_snapshot_upper_bounds_v2`;
 - new local root: `local_results/protocol_v3_tre_objective`.
@@ -65,6 +65,23 @@ Version 1.7.1 therefore replaces every extracted operations component with the
 canonical flow-based evaluation before incumbent comparison and validation;
 the modeled-versus-canonical balance slack is retained as a diagnostic only.
 
+Preflight candidate v2 then exposed an implementation-scale defect rather than
+a mathematical one: core MIP solutions retained hundreds of thousands of
+zero-valued entries, and the canonical occupancy evaluator rescanned the full
+arrival-flow map inside every period--block cell. Version 1.7.2 extracts known
+physical groups sparsely and accumulates locked, actual, and planned block
+loads in one pass. Dense and sparse representations must produce exactly the
+same canonical components and independent validation report.
+
+Version 1.7.2 also completes a positive shifted rolling MIP start by clipping
+old period flow to the revised forecast, deriving reservation totals and
+shortage, and setting the associated integer indicators. It does not inject an
+artificial all-shortage start when no positive prior flow exists. The common
+60-second budget is unchanged; measured solver-return and sparse
+postprocessing tails set the in-budget guards to 2.0 and 4.2 seconds,
+respectively. These are algorithm-runtime changes, so no v1.7.1 preflight row
+may be retained.
+
 The primary business profile is fixed before implementation as distance 0.40,
 balance 0.30, concentration 0.20, and inbound/outbound conflict 0.10. The
 prespecified sensitivity profiles are stored in
@@ -80,7 +97,7 @@ method revised after formal outcomes have been inspected requires a new
 held-out set, those seeds may be reused only for historical or exploratory
 paired re-evaluation of the objective change.
 
-Before version 1.7.1 is authorized for a confirmatory formal run, register an
+Before version 1.7.2 is authorized for a confirmatory formal run, register an
 untouched seed set or an independent operational time window in the V3
 manifest. Do not select the primary weight profile from any V3 result. All
 profile definitions, normalization equations, evaluation panels, and stopping
@@ -114,6 +131,25 @@ method. Formal auditing rejects a literature-baseline row unless it reports
 pre-recovery shortfall, physical recovery, displaced reservations, and final
 unplaced quantity. These fields already exist in the sealed development CSV,
 so this revision requires re-summarization but not re-optimization.
+
+## Version 1.7.2 runtime-correction gate
+
+Candidate v2 failed before preflight completion because both core MIP methods
+exceeded the online window during dense extraction and repeated canonical
+accounting. The retained 15-row diagnostic and its sequential confirmation are
+historical failure evidence only.
+
+At clean implementation commit
+`6c7ed7dbe740199f9de8eb046676eaf75d8f7261`, all 171 tests and 9 subtests pass.
+The frozen seed-700 March bundle then completed both `core_start` and
+`full_bottleneck` under the original 60-second per-cycle budget. The two-row
+manifest is complete and `all_ok=true`; neither row has a deadline miss,
+missing incumbent, validation failure, predicted shortage, or final unplaced
+quantity. Detailed timings and hashes are in
+`docs/reports/tre_v172_runtime_fix_gate.md`.
+
+This gate authorizes a new clean preflight candidate, not a formal run. The
+entire 120-row preflight matrix must be regenerated under candidate v3.
 
 ## Gates before a new formal tag
 

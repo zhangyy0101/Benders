@@ -303,7 +303,7 @@ checkpoint from a complete requested matrix through `row_count`,
 
 The current implementation identifiers are
 `rolling-v4.6-objective-only-stability`,
-`lead-aware-aggregate-lp-residual-global-repair-v1.7.1`, and
+`lead-aware-aggregate-lp-residual-global-repair-v1.7.2`, and
 `rolling-results-v16`. Its primary operation profile is `business`
 (`distance=0.40`, `balance=0.30`, `concentration=0.20`,
 `in_out_conflict=0.10`); the other frozen profiles are sensitivity cases.
@@ -313,14 +313,23 @@ state is `docs/specs/formal_run_manifest_v3.json`.
 The v1.7.1 development gate has passed; its 72-row main matrix, separate
 mechanism evidence, profile-isolation checks, and observed trade-offs are
 reported in `docs/reports/tre_v171_development_gate.md`. Preflight and formal
-execution remain separate gates.
+execution remain separate gates. Preflight candidate v2 exposed a dense
+canonical-accounting runtime defect and is permanently failed. Version 1.7.2
+uses sparse physical-flow extraction, single-pass operation accounting, a
+conservation-complete rolling MIP start, and empirically bounded in-budget
+postprocessing guards. Its clean two-method large-instance regression is
+reported in `docs/reports/tre_v172_runtime_fix_gate.md`; the complete 120-row
+preflight must be rerun under candidate v3.
 
-Result schema v16 is a reporting-only revision. Each CSV row now identifies
+Result schema v16 itself is a reporting-only revision. Each CSV row identifies
 the stability accounting actually used by that method: core MIP rows report
 the configured epigraph/exact formulation and adapted literature baselines
 report common ex-post accounting. Default summaries also include the complete
-execution-recovery funnel. The optimization, execution, and recovery policies
-are unchanged from the v1.7.1 development gate.
+execution-recovery funnel. Version 1.7.2 does not change the mathematical
+model, objective priorities, business weights, execution, or recovery policy;
+it changes solution representation, rolling-start completion, and allocation
+of the same end-to-end online time budget. All preflight performance rows must
+therefore be regenerated.
 
 Formal execution is intentionally closed while
 `FORMAL_RESULT_AUTHORIZED=False`. Opening formal seeds, running a formal
