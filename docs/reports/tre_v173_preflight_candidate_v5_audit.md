@@ -4,6 +4,10 @@ This audit completes preparation only. No candidate-v5 solver row has been
 started. Candidate v4 is superseded with zero result rows because a legacy
 candidate-v3 resume process was discovered after the v4 tag. That process was
 terminated, and candidate v3 remains a permanently failed diagnostic attempt.
+The stable candidate-v3 checkpoint contains 60 rows and three same-mechanism
+deadline failures. All three pass v1.7.3 directional regression; the closest
+case also passes an immediate repeat at 59.388 and 56.495 seconds respectively,
+with zero deadline misses, validation failures, and final unplaced quantity.
 
 ## Frozen implementation and execution policy
 
@@ -52,4 +56,3 @@ The new preflight must run sequentially from the clean candidate-v5 tag into
 `local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5`.
 Preparation is complete only after the branch and tag are present on `origin`;
 the matrix is not to be launched until the user explicitly confirms.
-

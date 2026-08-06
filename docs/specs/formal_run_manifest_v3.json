@@ -222,18 +222,19 @@
     "frozen_commit": "e4942cf653b9be6b6191257a4fb3c05b4b0b4ebb",
     "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v3",
     "expected_rows": 120,
-    "retained_diagnostic_rows": 51,
-    "failed_rows": 2,
-    "deadline_misses": 2,
+    "retained_diagnostic_rows": 60,
+    "failed_rows": 3,
+    "deadline_misses": 3,
     "validation_failures": 0,
     "failure_method": "full_bottleneck",
     "failure_instances": [
       "pnc_yangshan_volume_low_low_n4_seed700",
-      "pnc_yangshan_yard_observed_observed_n4_seed700"
+      "pnc_yangshan_yard_observed_observed_n4_seed700",
+      "pnc_yangshan_volume_baseline_observed_n4_seed701"
     ],
     "root_cause": "the bottleneck controller reserved only nine seconds at the 60-second budget and admitted an unrestricted repair with an implausibly short non-interruptible model-build window",
-    "diagnostic_csv_sha256": "fe52bb7f8e0e352787e1bdfc621011e93995d3fd0759b99addf272ac524b2392",
-    "diagnostic_manifest_sha256": "386b9e6cdb7bc64e637054a7fb81bc0364fcf055e591261c4ca17f50d655dd02",
+    "diagnostic_csv_sha256": "9bf01b2b303df38f15c6ca174c4608f13754cc656131817843f713ac43108231",
+    "diagnostic_manifest_sha256": "47e5298b345334a5bb626c9e02f3ade24ebe9329f8e69d07e3e078faad708fef",
     "report": "docs/reports/tre_v172_preflight_attempt_v3.md",
     "formal_authorization": false
   },
@@ -262,7 +263,7 @@
     "report": "docs/reports/tre_v173_preflight_candidate_v5_audit.md"
   },
   "runtime_fix_v1_7_3": {
-    "status": "passed_two_failure_instance_directional_regression",
+    "status": "passed_three_failure_instance_directional_regression",
     "implementation_commit": "bdd4f5331c3aea7d33bdcca57e3dd727908acfbb",
     "problem_protocol_changed": false,
     "mathematical_model_changed": false,
@@ -280,20 +281,25 @@
     "passed_subtests": 9,
     "regression_instances": [
       "pnc_yangshan_volume_low_low_n4_seed700",
-      "pnc_yangshan_yard_observed_observed_n4_seed700"
+      "pnc_yangshan_yard_observed_observed_n4_seed700",
+      "pnc_yangshan_volume_baseline_observed_n4_seed701"
     ],
     "regression_method": "full_bottleneck",
-    "regression_expected_rows": 2,
-    "regression_completed_rows": 2,
+    "regression_expected_rows": 4,
+    "regression_completed_rows": 4,
     "regression_all_ok": true,
     "deadline_misses": 0,
     "validation_failures": 0,
     "final_realized_unplaced": 0,
-    "max_online_decision_seconds": 57.702393899904564,
+    "max_online_decision_seconds": 59.38785880012438,
     "volume_low_csv_sha256": "7641bdf5585ebd76ef78160f47bddb282ceed2bdac2ebb5bcd5427d989810e9",
     "volume_low_manifest_sha256": "23be11744165946a0dcd66c0a634359e9467626ce4423f64e5334af1077b4a33",
     "yard_observed_csv_sha256": "093b3dac463240678a2472ddcdc8208344d00b28f5e9abb4abb72a6457d97875",
     "yard_observed_manifest_sha256": "1c72fad9b5eb4dd8ca14835584b92c26c62b72dcf4894f231ac4d274ac694acc",
+    "volume_baseline_seed701_csv_sha256": "6e2990b8388d5aa9e706e1da3e4a7281b4dc0ed1f738606e194b7c563edc8e00",
+    "volume_baseline_seed701_manifest_sha256": "1c9c0734a557f4432f4dc3527bd33888f517e9da5ab56828d4871645225e28e4",
+    "volume_baseline_seed701_replicate2_csv_sha256": "37d470e2698689ba0b01c18e3ff1b5850e07237357edf0acd976d4172b90ffdf",
+    "volume_baseline_seed701_replicate2_manifest_sha256": "c1a3069a30495495380cc226621a55a3514ffe0177c32aca237eef4ecb757759",
     "report": "docs/reports/tre_v173_runtime_fix_gate.md",
     "preflight_rerun_required": true,
     "formal_authorization": false

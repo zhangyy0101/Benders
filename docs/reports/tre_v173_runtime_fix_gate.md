@@ -14,14 +14,17 @@ construction. At the frozen 60-second preflight budget these rules give a
 15-second reserve and a 10-second admission floor. The complete policy is
 written into every experiment's weight-profile metadata.
 
-The full suite passes with 173 tests and 9 subtests. Both candidate-v3 failure
-instances were then rerun with one thread, a 1% MIP gap, business weights, and
-the unchanged 60-second limit:
+The algorithm suite passed with 173 tests and 9 subtests. All three
+candidate-v3 failure instances were then rerun with one thread, a 1% MIP gap,
+business weights, and the unchanged 60-second limit. The third, closest run was
+repeated to check wall-clock robustness:
 
 | Instance | Old maximum cycle (s) | v1.7.3 maximum cycle (s) | Global repairs | Deadline misses | Final unplaced |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `pnc_yangshan_volume_low_low_n4_seed700` | 60.687 | 57.702 | 2 | 0 | 0 |
 | `pnc_yangshan_yard_observed_observed_n4_seed700` | 65.594 | 56.242 | 1 | 0 | 0 |
+| `pnc_yangshan_volume_baseline_observed_n4_seed701` | 63.654 | 59.388 | 1 | 0 | 0 |
+| `pnc_yangshan_volume_baseline_observed_n4_seed701` (repeat) | 63.654 | 56.495 | 2 | 0 | 0 |
 
 Both one-row manifests have `complete=true` and `all_ok=true`; neither run
 skipped a required global repair for insufficient time. These dirty-tree
@@ -41,3 +44,11 @@ Artifact hashes:
   `093b3dac463240678a2472ddcdc8208344d00b28f5e9abb4abb72a6457d97875`;
 - yard-observed manifest:
   `1c72fad9b5eb4dd8ca14835584b92c26c62b72dcf4894f231ac4d274ac694acc`.
+- volume-baseline seed-701 CSV:
+  `6e2990b8388d5aa9e706e1da3e4a7281b4dc0ed1f738606e194b7c563edc8e00`;
+- volume-baseline seed-701 manifest:
+  `1c9c0734a557f4432f4dc3527bd33888f517e9da5ab56828d4871645225e28e4`;
+- volume-baseline seed-701 repeat CSV:
+  `37d470e2698689ba0b01c18e3ff1b5850e07237357edf0acd976d4172b90ffdf`;
+- volume-baseline seed-701 repeat manifest:
+  `c1a3069a30495495380cc226621a55a3514ffe0177c32aca237eef4ecb757759`.
