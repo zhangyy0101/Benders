@@ -324,7 +324,12 @@ the common 60-second budget unchanged, reserves a credible unrestricted-model
 build window, and checks that window again immediately before construction.
 Both candidate-v3 failure instances pass the targeted regression reported in
 `docs/reports/tre_v173_runtime_fix_gate.md`; the complete 120-row preflight must
-be rerun from zero under candidate v4.
+be rerun from zero under candidate v5. Candidate v4 was superseded before any
+solver row was started because a legacy candidate-v3 resume process was found
+after the v4 tag; v5 changes only the run-control audit. Its
+`immutable-indexed-publication-v2` gate enforces the clean commit, immutable
+preflight indexes, frozen budget and solver parameters, exact five-method
+matrix, and non-overwriting output policy before the first solver call.
 
 Result schema v16 itself is a reporting-only revision. Each CSV row identifies
 the stability accounting actually used by that method: core MIP rows report

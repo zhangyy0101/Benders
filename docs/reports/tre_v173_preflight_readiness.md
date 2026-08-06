@@ -1,11 +1,16 @@
-# TRE v1.7.3 preflight candidate v4 readiness
+# TRE v1.7.3 preflight candidate v5 readiness
 
 Candidate v3 is permanently failed at the online-runtime gate. Version 1.7.3
 passes the complete test suite and both failure-instance regressions documented
 in `tre_v173_runtime_fix_gate.md`. This authorizes a new preflight attempt only;
 it does not authorize formal execution.
 
-Candidate v4 retains the prespecified 120-row matrix:
+Candidate v4 was superseded before any solver row was started because a legacy
+candidate-v3 resume process was discovered after its tag. Candidate v5 changes
+only the run-control audit and retains the prespecified 120-row matrix. The
+runner now rejects a dirty Git tree, a non-preflight index, any command-line
+time override, non-frozen solver parameters or methods, and accidental output
+overwrite before the first solver call:
 
 - seeds 700, 701, and 702;
 - 24 zero-shortage-oracle-certified bundles;
@@ -13,8 +18,8 @@ Candidate v4 retains the prespecified 120-row matrix:
 - business operation weights and frozen DRA parameters;
 - one thread, 1% MIP gap, and the unchanged 60-second per-cycle bundle budget.
 
-Run sequentially from the clean annotated candidate-v4 tag and write only to
-the new candidate-v4 root:
+Run sequentially from the clean annotated candidate-v5 tag and write only to
+the new candidate-v5 root:
 
 ```powershell
 python scripts/run_formal_matrix.py `
@@ -27,7 +32,7 @@ python scripts/run_formal_matrix.py `
   --threads 1 `
   --mip-gap 0.01 `
   --operation-weight-profile business `
-  --output "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v4/main_gate/results/business_main.csv"
+  --output "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5/main_gate/results/business_main.csv"
 ```
 
 Require exactly 120 rows, `complete=true`, `all_ok=true`, and zero deadline,
@@ -37,3 +42,6 @@ artifact. `FORMAL_RESULT_AUTHORIZED` and manifest `freeze_authorization` remain
 false after preflight unless a new untouched confirmatory set is separately
 registered and authorized.
 
+The complete pre-run audit is recorded in
+`tre_v173_preflight_candidate_v5_audit.md`. Preparation does not itself start
+the matrix; launch requires a separate user confirmation.

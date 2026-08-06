@@ -6,9 +6,11 @@ started sequentially from frozen commit
 failure mechanism was identified. Its artifacts are diagnostic only and must
 not be resumed or combined with a later candidate.
 
-The retained checkpoint contains 39 of 120 requested rows: eight each for
-`core_start`, `full_bottleneck`, `kp_dos`, and `kp_sg`, and seven for
-`dra_rpm`. Two `full_bottleneck` rows failed with
+The final retained checkpoint contains 51 of 120 requested rows: 11 for
+`core_start` and 10 each for `full_bottleneck`, `kp_dos`, `kp_sg`, and
+`dra_rpm`. A legacy resume process extended the checkpoint after the first stop;
+it was identified and terminated before any new candidate run began. Two
+`full_bottleneck` rows failed with
 `online_decision_time_limit_exceeded`; there were no validation failures.
 
 | Instance | Variables | Old maximum cycle (s) | Final unplaced |
@@ -33,8 +35,7 @@ processed the same effective rolling cycles and arrivals, so their speed does
 not indicate skipped evaluation.
 
 The retained CSV SHA-256 is
-`6d29b95b1c1b8578a6fcb4e47d3d91c6080b1ce632cd0de841938959f0d76ca8`;
+`fe52bb7f8e0e352787e1bdfc621011e93995d3fd0759b99addf272ac524b2392`;
 the manifest SHA-256 is
-`d44a29d68a865078d73e8cca9ef66ef15c19cb5de57db0a99652e6caa7b766da`.
+`386b9e6cdb7bc64e637054a7fb81bc0364fcf055e591261c4ca17f50d655dd02`.
 `complete=false`, `all_ok=false`, and formal authorization remains false.
-

@@ -26,7 +26,10 @@ the unchanged 60-second limit:
 Both one-row manifests have `complete=true` and `all_ok=true`; neither run
 skipped a required global repair for insufficient time. These dirty-tree
 development runs are directional regression evidence only. They authorize
-freezing candidate v4 and rerunning preflight from zero, not formal execution.
+freezing a new candidate and rerunning preflight from zero, not formal
+execution. Candidate v4 was superseded before execution when a legacy v3
+resume process was discovered; candidate v5 contains the corrected run-control
+audit without changing this implementation.
 
 Artifact hashes:
 

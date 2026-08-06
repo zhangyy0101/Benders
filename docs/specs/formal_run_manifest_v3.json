@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "preflight_candidate_v4_ready_to_freeze",
+  "status": "preflight_candidate_v5_frozen_ready_to_run",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -13,6 +13,7 @@
     "problem_protocol": "rolling-v4.6-objective-only-stability",
     "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3",
     "result_schema": "rolling-results-v16",
+    "formal_orchestration_protocol": "immutable-indexed-publication-v2",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",
     "residual_shortage_policy": "bottleneck residual shortage enters global repair when the reserved in-budget window remains",
@@ -68,8 +69,8 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 173,
-    "passed_subtests": 9,
+    "passed_tests": 175,
+    "passed_subtests": 16,
     "status": "passed"
   },
   "development_findings": {
@@ -120,8 +121,8 @@
     "verification": "unit tests plus one adapted-literature-baseline row smoke before preflight freeze"
   },
   "preflight_plan": {
-    "reporting_code_commit": "bdd4f5331c3aea7d33bdcca57e3dd727908acfbb",
-    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v4",
+    "reporting_code_commit": "74b27f634a38f3282c99d2328a75e2e69b5d9fe6",
+    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v5",
     "seeds": [700, 701, 702],
     "instance_index_count": 3,
     "certified_bundle_count": 24,
@@ -221,7 +222,7 @@
     "frozen_commit": "e4942cf653b9be6b6191257a4fb3c05b4b0b4ebb",
     "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v3",
     "expected_rows": 120,
-    "retained_diagnostic_rows": 39,
+    "retained_diagnostic_rows": 51,
     "failed_rows": 2,
     "deadline_misses": 2,
     "validation_failures": 0,
@@ -231,10 +232,34 @@
       "pnc_yangshan_yard_observed_observed_n4_seed700"
     ],
     "root_cause": "the bottleneck controller reserved only nine seconds at the 60-second budget and admitted an unrestricted repair with an implausibly short non-interruptible model-build window",
-    "diagnostic_csv_sha256": "6d29b95b1c1b8578a6fcb4e47d3d91c6080b1ce632cd0de841938959f0d76ca8",
-    "diagnostic_manifest_sha256": "d44a29d68a865078d73e8cca9ef66ef15c19cb5de57db0a99652e6caa7b766da",
+    "diagnostic_csv_sha256": "fe52bb7f8e0e352787e1bdfc621011e93995d3fd0759b99addf272ac524b2392",
+    "diagnostic_manifest_sha256": "386b9e6cdb7bc64e637054a7fb81bc0364fcf055e591261c4ca17f50d655dd02",
     "report": "docs/reports/tre_v172_preflight_attempt_v3.md",
     "formal_authorization": false
+  },
+  "preflight_candidate_v4": {
+    "status": "superseded_before_execution",
+    "frozen_commit": "08692175705cae206bc33116982a483f4c5ebb9d",
+    "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v4",
+    "result_rows": 0,
+    "reason": "a legacy candidate-v3 resume process was discovered after the v4 tag; no v4 solver run was started, and v5 refreezes the corrected run-control audit without changing algorithm code",
+    "formal_authorization": false
+  },
+  "preflight_execution_guard": {
+    "status": "passed",
+    "implementation_commit": "74b27f634a38f3282c99d2328a75e2e69b5d9fe6",
+    "formal_orchestration_protocol": "immutable-indexed-publication-v2",
+    "mathematical_model_changed": false,
+    "algorithm_changed": false,
+    "enforced_preflight_conditions": [
+      "clean Git commit",
+      "preflight-phase immutable bundle indexes",
+      "frozen per-bundle time budgets without command override",
+      "exactly one solver thread and 1 percent MIP gap",
+      "frozen main five-method matrix, DRA profile, dependency profile, and business operation weights",
+      "fresh output path unless an identical checkpoint is explicitly resumed"
+    ],
+    "report": "docs/reports/tre_v173_preflight_candidate_v5_audit.md"
   },
   "runtime_fix_v1_7_3": {
     "status": "passed_two_failure_instance_directional_regression",
