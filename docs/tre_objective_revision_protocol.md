@@ -22,7 +22,7 @@ Development occurs on `research/tre-objective-normalization-v2`. The implemented
 version identities are:
 
 - problem protocol: `rolling-v4.6-objective-only-stability`;
-- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.2`;
+- candidate algorithm: `lead-aware-aggregate-lp-residual-global-repair-v1.7.3`;
 - result schema: `rolling-results-v16`;
 - normalization: `reachable_snapshot_upper_bounds_v2`;
 - new local root: `local_results/protocol_v3_tre_objective`.
@@ -36,7 +36,10 @@ bounded in-budget reserve remains. A restricted model that cannot start within
 its stage allocation also transfers to the unrestricted safety stage while the
 common online window remains. The scale dictionary must still be calculated
 once from the unrestricted snapshot and reused by every restricted and global
-stage.
+stage. At a 60-second cycle budget, the controller reserves 15 seconds for the
+safety stage and requires at least 10 seconds to remain before admitting or
+constructing its unrestricted model. These are allocations inside the
+unchanged common budget, not extra runtime.
 
 For positive optimizer-visible arrival quantity \(Q^+\), reachable support set
 \(\mathcal S^+\), maximum reachable distance \(d_{max}^+\), \(K\) blocks, and

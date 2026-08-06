@@ -303,7 +303,7 @@ checkpoint from a complete requested matrix through `row_count`,
 
 The current implementation identifiers are
 `rolling-v4.6-objective-only-stability`,
-`lead-aware-aggregate-lp-residual-global-repair-v1.7.2`, and
+`lead-aware-aggregate-lp-residual-global-repair-v1.7.3`, and
 `rolling-results-v16`. Its primary operation profile is `business`
 (`distance=0.40`, `balance=0.30`, `concentration=0.20`,
 `in_out_conflict=0.10`); the other frozen profiles are sensitivity cases.
@@ -318,16 +318,21 @@ canonical-accounting runtime defect and is permanently failed. Version 1.7.2
 uses sparse physical-flow extraction, single-pass operation accounting, a
 conservation-complete rolling MIP start, and empirically bounded in-budget
 postprocessing guards. Its clean two-method large-instance regression is
-reported in `docs/reports/tre_v172_runtime_fix_gate.md`; the complete 120-row
-preflight must be rerun under candidate v3.
+reported in `docs/reports/tre_v172_runtime_fix_gate.md`. Candidate v3 then
+exposed an overly permissive global-repair admission rule. Version 1.7.3 keeps
+the common 60-second budget unchanged, reserves a credible unrestricted-model
+build window, and checks that window again immediately before construction.
+Both candidate-v3 failure instances pass the targeted regression reported in
+`docs/reports/tre_v173_runtime_fix_gate.md`; the complete 120-row preflight must
+be rerun from zero under candidate v4.
 
 Result schema v16 itself is a reporting-only revision. Each CSV row identifies
 the stability accounting actually used by that method: core MIP rows report
 the configured epigraph/exact formulation and adapted literature baselines
 report common ex-post accounting. Default summaries also include the complete
-execution-recovery funnel. Version 1.7.2 does not change the mathematical
+execution-recovery funnel. Versions 1.7.2--1.7.3 do not change the mathematical
 model, objective priorities, business weights, execution, or recovery policy;
-it changes solution representation, rolling-start completion, and allocation
+they change solution representation, rolling-start completion, and allocation
 of the same end-to-end online time budget. All preflight performance rows must
 therefore be regenerated.
 

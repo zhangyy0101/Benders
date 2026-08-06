@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "preflight_candidate_v3_ready_to_freeze",
+  "status": "preflight_candidate_v4_ready_to_freeze",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -11,7 +11,7 @@
   "planned_revision": {
     "development_branch": "research/tre-objective-normalization-v2",
     "problem_protocol": "rolling-v4.6-objective-only-stability",
-    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.2",
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3",
     "result_schema": "rolling-results-v16",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",
@@ -68,7 +68,7 @@
   },
   "implementation_test_gate": {
     "command": "python -m pytest -q",
-    "passed_tests": 171,
+    "passed_tests": 173,
     "passed_subtests": 9,
     "status": "passed"
   },
@@ -120,8 +120,8 @@
     "verification": "unit tests plus one adapted-literature-baseline row smoke before preflight freeze"
   },
   "preflight_plan": {
-    "reporting_code_commit": "56e44bea5ab7bdcb413681bfa8765d3c33e7bd4f",
-    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v3",
+    "reporting_code_commit": "bdd4f5331c3aea7d33bdcca57e3dd727908acfbb",
+    "planned_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v4",
     "seeds": [700, 701, 702],
     "instance_index_count": 3,
     "certified_bundle_count": 24,
@@ -155,7 +155,7 @@
     ],
     "output_root_template": "local_results/protocol_v3_tre_objective/preflight/<candidate_commit>/main_gate",
     "formal_authorization_after_preflight": false,
-    "readiness_report": "docs/reports/tre_v172_preflight_readiness.md"
+    "readiness_report": "docs/reports/tre_v173_preflight_readiness.md"
   },
   "preflight_attempt_v2": {
     "status": "failed_early_online_runtime_gate",
@@ -213,6 +213,63 @@
     "regression_csv_sha256": "faf23807fdcbe6f9997368b65560e16254ff7f9754edbbf727038c35fdec10e7",
     "regression_manifest_sha256": "a93fcfcfc76022146db91c9d8aeef6240462303483a863061e13d189de45c118",
     "report": "docs/reports/tre_v172_runtime_fix_gate.md",
+    "preflight_rerun_required": true,
+    "formal_authorization": false
+  },
+  "preflight_attempt_v3": {
+    "status": "failed_early_online_runtime_gate",
+    "frozen_commit": "e4942cf653b9be6b6191257a4fb3c05b4b0b4ebb",
+    "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v3",
+    "expected_rows": 120,
+    "retained_diagnostic_rows": 39,
+    "failed_rows": 2,
+    "deadline_misses": 2,
+    "validation_failures": 0,
+    "failure_method": "full_bottleneck",
+    "failure_instances": [
+      "pnc_yangshan_volume_low_low_n4_seed700",
+      "pnc_yangshan_yard_observed_observed_n4_seed700"
+    ],
+    "root_cause": "the bottleneck controller reserved only nine seconds at the 60-second budget and admitted an unrestricted repair with an implausibly short non-interruptible model-build window",
+    "diagnostic_csv_sha256": "6d29b95b1c1b8578a6fcb4e47d3d91c6080b1ce632cd0de841938959f0d76ca8",
+    "diagnostic_manifest_sha256": "d44a29d68a865078d73e8cca9ef66ef15c19cb5de57db0a99652e6caa7b766da",
+    "report": "docs/reports/tre_v172_preflight_attempt_v3.md",
+    "formal_authorization": false
+  },
+  "runtime_fix_v1_7_3": {
+    "status": "passed_two_failure_instance_directional_regression",
+    "implementation_commit": "bdd4f5331c3aea7d33bdcca57e3dd727908acfbb",
+    "problem_protocol_changed": false,
+    "mathematical_model_changed": false,
+    "objective_priority_changed": false,
+    "operation_weight_profile_changed": false,
+    "common_online_budget_changed": false,
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3",
+    "changes": [
+      "reserve 25 percent of the unchanged online window for unrestricted safety repair, bounded by the existing minimum and maximum",
+      "require a time-limit-scaled minimum unrestricted-model build window before enqueue and immediately before construction",
+      "record the complete reserve and admission policy in experiment metadata"
+    ],
+    "test_command": "python -m pytest -q",
+    "passed_tests": 173,
+    "passed_subtests": 9,
+    "regression_instances": [
+      "pnc_yangshan_volume_low_low_n4_seed700",
+      "pnc_yangshan_yard_observed_observed_n4_seed700"
+    ],
+    "regression_method": "full_bottleneck",
+    "regression_expected_rows": 2,
+    "regression_completed_rows": 2,
+    "regression_all_ok": true,
+    "deadline_misses": 0,
+    "validation_failures": 0,
+    "final_realized_unplaced": 0,
+    "max_online_decision_seconds": 57.702393899904564,
+    "volume_low_csv_sha256": "7641bdf5585ebd76ef78160f47bddb282ceed2bdac2ebb5bcd5427d989810e9",
+    "volume_low_manifest_sha256": "23be11744165946a0dcd66c0a634359e9467626ce4423f64e5334af1077b4a33",
+    "yard_observed_csv_sha256": "093b3dac463240678a2472ddcdc8208344d00b28f5e9abb4abb72a6457d97875",
+    "yard_observed_manifest_sha256": "1c72fad9b5eb4dd8ca14835584b92c26c62b72dcf4894f231ac4d274ac694acc",
+    "report": "docs/reports/tre_v173_runtime_fix_gate.md",
     "preflight_rerun_required": true,
     "formal_authorization": false
   },
