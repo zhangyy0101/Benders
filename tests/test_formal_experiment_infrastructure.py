@@ -18,7 +18,11 @@ from formal_experiments import (
 )
 from run_experiments import planned_experiment_identity
 from scripts.package_portmis_source import package_snapshot
-from scripts.run_formal_matrix import _paths_from_indexes
+from scripts.run_formal_matrix import (
+    _paths_from_indexes,
+    _validate_fresh_publication_output,
+    _validate_frozen_preflight_request,
+)
 
 
 class FormalExperimentInfrastructureTests(unittest.TestCase):
@@ -134,6 +138,72 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
             bundle.write_bytes(bundle.read_bytes() + b" ")
             with self.assertRaisesRegex(ValueError, "bundle/index SHA-256"):
                 _paths_from_indexes([str(index)], require_formal=True)
+
+    def test_preflight_index_rejects_another_experiment_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            index = root / "index.json"
+            index.write_text(json.dumps({
+                "index_schema": "rolling-instance-index-v1",
+                "instance_protocol": "rolling-formal-instances-v1",
+                "experiment_phase": "development",
+                "formal_results_authorized": False,
+                "entry_count": 0,
+                "entries": [],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "preflight instance index"):
+                _paths_from_indexes(
+                    [str(index)],
+                    require_formal=False,
+                    required_phase="preflight",
+                )
+
+    def test_frozen_preflight_request_and_output_are_guarded(self):
+        valid = {
+            "experiment_set": "main",
+            "configurations": tuple(config.FORMAL_PRIMARY_CONFIGURATIONS),
+            "parameter_profiles": ("frozen",),
+            "uses_indexes": True,
+            "time_override": None,
+            "threads": 1,
+            "mip_gap": .01,
+            "dependency_profile": "current",
+            "operation_weight_profile": config.OPERATION_WEIGHT_PROFILE,
+            "git_dirty": False,
+        }
+        _validate_frozen_preflight_request(**valid)
+        for key, value in (
+            ("git_dirty", True),
+            ("uses_indexes", False),
+            ("time_override", 60),
+            ("threads", 2),
+            ("mip_gap", .02),
+            ("dependency_profile", "conservative"),
+            ("operation_weight_profile", "weak"),
+        ):
+            invalid = {**valid, key: value}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                _validate_frozen_preflight_request(**invalid)
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "results.csv"
+            _validate_fresh_publication_output(
+                output_csv=str(output),
+                manifest_output=None,
+                resume=False,
+            )
+            output.write_text("header\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                _validate_fresh_publication_output(
+                    output_csv=str(output),
+                    manifest_output=None,
+                    resume=False,
+                )
+            _validate_fresh_publication_output(
+                output_csv=str(output),
+                manifest_output=None,
+                resume=True,
+            )
 
     def test_portmis_source_contract_verifies_hashes_and_blocks_provisional(self):
         with tempfile.TemporaryDirectory() as directory:

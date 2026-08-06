@@ -91,6 +91,7 @@ def _paths_from_indexes(
     values: list[str],
     *,
     require_formal: bool,
+    required_phase: str | None = None,
 ) -> tuple[list[Path], dict[Path, dict], list[dict]]:
     paths: list[Path] = []
     expected: dict[Path, dict] = {}
@@ -106,11 +107,16 @@ def _paths_from_indexes(
             payload.get("entries", [])
         ):
             raise ValueError(f"instance index entry count mismatch: {index_path}")
-        if require_formal and payload.get("experiment_phase") != "formal":
+        phase = "formal" if require_formal else required_phase
+        if phase is not None and payload.get("experiment_phase") != phase:
             raise ValueError(
-                f"formal matrix requires a formal instance index: {index_path}"
+                f"{phase} matrix requires a {phase} instance index: "
+                f"{index_path}"
             )
-        if require_formal and payload.get("formal_results_authorized") is not True:
+        if (
+            require_formal
+            and payload.get("formal_results_authorized") is not True
+        ):
             raise ValueError(
                 "formal matrix requires an explicitly authorized instance index: "
                 f"{index_path}"
@@ -140,6 +146,75 @@ def _paths_from_indexes(
     if not paths:
         raise ValueError("instance indexes contain no bundles")
     return paths, expected, index_records
+
+
+def _validate_frozen_preflight_request(
+    *,
+    experiment_set: str,
+    configurations: tuple[str, ...],
+    parameter_profiles: tuple[str, ...],
+    uses_indexes: bool,
+    time_override: float | None,
+    threads: int,
+    mip_gap: float,
+    dependency_profile: str,
+    operation_weight_profile: str,
+    git_dirty: bool | None,
+) -> None:
+    """Reject a preflight request that differs from the frozen protocol."""
+
+    if git_dirty is not False:
+        raise ValueError("preflight matrix requires a clean Git commit")
+    if not uses_indexes:
+        raise ValueError("preflight matrix requires --bundle-indexes")
+    if time_override is not None:
+        raise ValueError(
+            "preflight matrix must use frozen per-bundle time budgets"
+        )
+    if threads != 1:
+        raise ValueError("preflight matrix requires exactly one solver thread")
+    if abs(float(mip_gap) - .01) > 1e-12:
+        raise ValueError("preflight matrix requires the frozen 1% MIP gap")
+    if experiment_set != "main":
+        return
+    if configurations != tuple(FORMAL_PRIMARY_CONFIGURATIONS):
+        raise ValueError("preflight main matrix must use the frozen five methods")
+    if parameter_profiles != ("frozen",):
+        raise ValueError(
+            "preflight main matrix must use the frozen DRA-RPM profile"
+        )
+    if dependency_profile != "current":
+        raise ValueError(
+            "preflight main matrix must use the current dependency profile"
+        )
+    if operation_weight_profile != OPERATION_WEIGHT_PROFILE:
+        raise ValueError(
+            "preflight main matrix must use the frozen business "
+            "operation-weight profile"
+        )
+
+
+def _validate_fresh_publication_output(
+    *,
+    output_csv: str,
+    manifest_output: str | None,
+    resume: bool,
+) -> None:
+    """Prevent an initial publication run from overwriting any checkpoint."""
+
+    if resume:
+        return
+    output_path = Path(output_csv)
+    manifest_path = (
+        Path(manifest_output)
+        if manifest_output is not None
+        else output_path.with_suffix(".manifest.json")
+    )
+    if output_path.exists() or manifest_path.exists():
+        raise ValueError(
+            "publication output already exists; choose a new output root or "
+            "use --resume with the identical frozen request"
+        )
 
 
 def _method_profiles(
@@ -217,6 +292,11 @@ def main() -> int:
         bundle_paths, expected_bundles, index_records = _paths_from_indexes(
             args.bundle_indexes,
             require_formal=args.experiment_phase == "formal",
+            required_phase=(
+                args.experiment_phase
+                if args.experiment_phase in {"preflight", "formal"}
+                else None
+            ),
         )
     else:
         bundle_paths = _expand_bundle_paths(args.bundles)
@@ -260,6 +340,22 @@ def main() -> int:
             else "frozen_per_instance_bundle"
         ),
     })
+    if args.experiment_phase == "preflight":
+        try:
+            _validate_frozen_preflight_request(
+                experiment_set=args.experiment_set,
+                configurations=configurations,
+                parameter_profiles=parameter_profiles,
+                uses_indexes=bool(args.bundle_indexes),
+                time_override=args.time,
+                threads=args.threads,
+                mip_gap=args.mip_gap,
+                dependency_profile=args.dependency_profile,
+                operation_weight_profile=args.operation_weight_profile,
+                git_dirty=metadata.get("git_dirty"),
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
     if args.experiment_phase == "formal":
         if not FORMAL_RESULT_AUTHORIZED:
             parser.error(
@@ -340,6 +436,16 @@ def main() -> int:
                     "formal main matrix must use the frozen business "
                     "operation-weight profile"
                 )
+
+    if args.experiment_phase in {"preflight", "formal"}:
+        try:
+            _validate_fresh_publication_output(
+                output_csv=args.output,
+                manifest_output=args.manifest_output,
+                resume=args.resume,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
 
     requested_matrix = {
         "experiment_set": args.experiment_set,
