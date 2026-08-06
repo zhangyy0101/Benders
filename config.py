@@ -3,7 +3,7 @@
 # These identifiers are written to every formal-format artifact.  Change them
 # whenever the mathematical protocol, core algorithm, or output schema changes.
 PROBLEM_PROTOCOL = "rolling-v4.6-objective-only-stability"
-ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.1"
+ALGORITHM_VERSION = "lead-aware-aggregate-lp-residual-global-repair-v1.7.2"
 RESULT_SCHEMA_VERSION = "rolling-results-v16"
 ONLINE_RUNTIME_PROTOCOL = "strict-online-decision-wall-v1"
 FORMAL_ORCHESTRATION_PROTOCOL = "instance-sharded-parallel-v1"
@@ -69,7 +69,10 @@ FORMAL_TIME_BUDGETS_SECONDS = {
 # Request termination before the online optimization deadline so that this
 # solver-return tail and incumbent extraction remain inside the declared
 # end-to-end decision budget.
-SOLVER_RETURN_GUARD_RATIO = .10
+# The frozen 616k--738k variable diagnostics observed at most 1.25 seconds
+# between requested termination and a returned model. Keep a two-second guard
+# at the 60-second publication budget so multi-objective presolve can finish.
+SOLVER_RETURN_GUARD_RATIO = 1 / 30
 SOLVER_RETURN_GUARD_MIN_SECONDS = .25
 SOLVER_RETURN_GUARD_MAX_SECONDS = 12.0
 GLOBAL_CORE_MIP_FOCUS = 1
@@ -204,7 +207,10 @@ SHIP_OPERATION_DURATION_RANGES={
     "large":(3,4),
 }
 WALL_TIME_TOLERANCE_SECONDS=.20
-POSTPROCESSING_RESERVE_RATIO=.16
+# Sparse incumbent extraction and single-pass canonical accounting keep the
+# large-instance post-solver tail near three seconds in the frozen runtime
+# diagnostic. Retain a 4.2-second tail at the 60-second publication budget.
+POSTPROCESSING_RESERVE_RATIO=.07
 POSTPROCESSING_RESERVE_MIN_SECONDS=.50
 POSTPROCESSING_RESERVE_MAX_SECONDS=20.0
 VALIDATE_EACH_EXECUTION_PERIOD=True

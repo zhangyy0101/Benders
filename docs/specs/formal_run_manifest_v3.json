@@ -11,7 +11,7 @@
   "planned_revision": {
     "development_branch": "research/tre-objective-normalization-v2",
     "problem_protocol": "rolling-v4.6-objective-only-stability",
-    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.1",
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.2",
     "result_schema": "rolling-results-v16",
     "normalization": "reachable_snapshot_upper_bounds_v2",
     "primary_operation_weight_profile": "business",

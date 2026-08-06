@@ -13,19 +13,19 @@ class WallClockAndGenerationTest(unittest.TestCase):
     def test_postprocessing_reserve_is_scaled_and_bounded(self):
         self.assertEqual(postprocessing_reserve_seconds(0), 0)
         self.assertAlmostEqual(postprocessing_reserve_seconds(.05), .025)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(5), .8)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(10), 1.6)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 4.8)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(60), 9.6)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 16.0)
-        self.assertAlmostEqual(postprocessing_reserve_seconds(120), 19.2)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(5), .5)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(10), .7)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(30), 2.1)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(60), 4.2)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(100), 7.0)
+        self.assertAlmostEqual(postprocessing_reserve_seconds(120), 8.4)
 
     def test_solver_return_guard_is_scaled_and_bounded(self):
         self.assertEqual(solver_return_guard_seconds(0, 10), .25)
-        self.assertAlmostEqual(solver_return_guard_seconds(20, 10), 2)
-        self.assertAlmostEqual(solver_return_guard_seconds(60, 50), 6)
-        self.assertAlmostEqual(solver_return_guard_seconds(120, 100), 12)
-        self.assertAlmostEqual(solver_return_guard_seconds(180, 100), 12)
+        self.assertAlmostEqual(solver_return_guard_seconds(20, 10), 2 / 3)
+        self.assertAlmostEqual(solver_return_guard_seconds(60, 50), 2)
+        self.assertAlmostEqual(solver_return_guard_seconds(120, 100), 4)
+        self.assertAlmostEqual(solver_return_guard_seconds(180, 100), 6)
         self.assertAlmostEqual(solver_return_guard_seconds(60, 2), 1.99)
 
     def test_all_forecast_modes_are_reproducible(self):

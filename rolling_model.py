@@ -568,50 +568,95 @@ def evaluate_operation_components(
     concentration_raw = float(
         len(reservation_support(d, reservation, positive_forecast_only=True))
     )
-    occupancy_balance_raw = 0.0
-    for period in d["periods"]:
-        utilizations = []
-        for block in d["blocks"]:
-            block_bays = d["bays_in_block"][block]
-            capacity = sum(float(d["capacity"][bay]) for bay in block_bays)
-            if capacity <= 0:
-                raise ValueError(f"block capacity must be positive: {block}")
-            locked = sum(
-                float(quantity)
-                for (bay, old_ship), quantity in d["locked_inventory"].items()
-                if bay in block_bays
-                and d["locked_release_local"].get((bay, old_ship), INF) > period
-            )
-            actual = sum(
-                float(quantity)
-                for (bay, ship, _group), quantity in d["actual_inventory"].items()
-                if bay in block_bays and ship_present_at(d, ship, period)
-            )
-            planned = sum(
-                float(quantity)
-                for (bay, ship, _group, arrival), quantity in din.items()
-                if bay in block_bays
-                and arrival <= period
-                and ship_present_at(d, ship, period)
-            )
-            utilizations.append((locked + actual + planned) / capacity)
-        average = sum(utilizations) / len(utilizations) if utilizations else 0.0
-        occupancy_balance_raw += sum(abs(value - average) for value in utilizations)
+    periods = tuple(d["periods"])
+    blocks = tuple(d["blocks"])
+    block_capacity = {
+        block: sum(
+            float(d["capacity"][bay])
+            for bay in d["bays_in_block"][block]
+        )
+        for block in blocks
+    }
+    invalid_blocks = [
+        block for block, capacity in block_capacity.items() if capacity <= 0
+    ]
+    if invalid_blocks:
+        raise ValueError(
+            f"block capacity must be positive: {invalid_blocks[0]}"
+        )
 
-    distance_raw = float(sum(
-        float(d["distance"][ship, d["bay_block"][bay]]) * float(quantity)
-        for (bay, ship, _group, _period), quantity in din.items()
-    ))
+    presence: dict[tuple[str, int], bool] = {}
+
+    def present(ship: str, period: int) -> bool:
+        key = (ship, period)
+        if key not in presence:
+            presence[key] = ship_present_at(d, ship, period)
+        return presence[key]
+
+    locked_load: dict[tuple[str, int], float] = defaultdict(float)
+    for (bay, old_ship), raw_quantity in d["locked_inventory"].items():
+        quantity = float(raw_quantity)
+        if quantity == 0.0:
+            continue
+        block = d["bay_block"][bay]
+        release = d["locked_release_local"].get((bay, old_ship), INF)
+        for period in periods:
+            if release > period:
+                locked_load[block, period] += quantity
+
+    actual_load: dict[tuple[str, int], float] = defaultdict(float)
+    for (bay, ship, _group), raw_quantity in d["actual_inventory"].items():
+        quantity = float(raw_quantity)
+        if quantity == 0.0:
+            continue
+        block = d["bay_block"][bay]
+        for period in periods:
+            if present(ship, period):
+                actual_load[block, period] += quantity
+
     peak_outbound = max(
         (float(value) for value in d["forecast_outbound"].values()),
         default=1.0,
     )
-    conflict_raw = float(sum(
-        float(d["forecast_outbound"].get((d["bay_block"][bay], period), 0))
-        / max(1.0, peak_outbound)
-        * float(quantity)
-        for (bay, _ship, _group, period), quantity in din.items()
-    ))
+    peak_outbound = max(1.0, peak_outbound)
+    planned_load: dict[tuple[str, int], float] = defaultdict(float)
+    distance_raw = 0.0
+    conflict_raw = 0.0
+    # Core MIP extraction is deliberately sparse, but the independent
+    # evaluator also accepts dense mappings. Scan that mapping exactly once;
+    # only positive physical flows are propagated over the short horizon.
+    for (bay, ship, _group, arrival), raw_quantity in din.items():
+        quantity = float(raw_quantity)
+        if quantity == 0.0:
+            continue
+        block = d["bay_block"][bay]
+        distance_raw += float(d["distance"][ship, block]) * quantity
+        conflict_raw += (
+            float(d["forecast_outbound"].get((block, arrival), 0))
+            / peak_outbound
+            * quantity
+        )
+        for period in periods:
+            if arrival <= period and present(ship, period):
+                planned_load[block, period] += quantity
+
+    occupancy_balance_raw = 0.0
+    for period in periods:
+        utilizations = [
+            (
+                locked_load[block, period]
+                + actual_load[block, period]
+                + planned_load[block, period]
+            )
+            / block_capacity[block]
+            for block in blocks
+        ]
+        average = sum(utilizations) / len(utilizations) if utilizations else 0.0
+        occupancy_balance_raw += sum(
+            abs(value - average) for value in utilizations
+        )
+    distance_raw = float(distance_raw)
+    conflict_raw = float(conflict_raw)
     normalized = {
         "concentration_normalized": concentration_raw / scales["concentration_scale"],
         "occupancy_balance_normalized": (
@@ -1099,18 +1144,37 @@ def build_rolling_model(
     return m, variables, expressions
 
 
+_SPARSE_EXTRACT_GROUPS = frozenset({
+    "reservation",
+    "din",
+    "shortage",
+    "pod_bay_use",
+    "bay_height",
+    "cancel",
+    "new_bay",
+    "block_cancel",
+    "block_reallocation",
+    "in_share",
+    "block_occupancy",
+    "block_utilization",
+})
+
+
 def extract_rolling_solution(
     variables: dict,
     expressions: dict,
     *,
     model: gp.Model | None = None,
     snapshot: dict | None = None,
+    sparse: bool = True,
 ) -> dict:
-    """Extract a complete solution, using batched attributes when possible.
+    """Extract a physical solution, using batched attributes when possible.
 
     The optional ``model`` path avoids one Python-to-Gurobi call per variable.
-    The legacy path remains available for equivalence tests and callers that do
-    not retain the model object.
+    Zero-valued entries in known model groups are omitted by default because
+    all downstream constraints and accounting use zero as the missing-key
+    value. ``sparse=False`` retains the dense reference representation for
+    equivalence tests.
     """
 
     def expression_value(value) -> float:
@@ -1126,15 +1190,23 @@ def extract_rolling_solution(
             return int(round(value))
         return value
 
+    def retain(group_name: str, value: float | int) -> bool:
+        return not (
+            sparse
+            and group_name in _SPARSE_EXTRACT_GROUPS
+            and value == 0
+        )
+
     components = {name: expression_value(value) for name, value in expressions.items()}
     if model is None:
-        extracted = {
-            name: {
-                key: variable_value(variable)
-                for key, variable in group.items()
-            }
-            for name, group in variables.items()
-        }
+        extracted = {}
+        for name, group in variables.items():
+            values = {}
+            for key, variable in group.items():
+                value = variable_value(variable)
+                if retain(name, value):
+                    values[key] = value
+            extracted[name] = values
     else:
         extracted = {}
         for name, group in variables.items():
@@ -1145,15 +1217,17 @@ def extract_rolling_solution(
             variable_list = [variable for _key, variable in items]
             values = model.getAttr(GRB.Attr.X, variable_list)
             variable_types = model.getAttr(GRB.Attr.VType, variable_list)
-            extracted[name] = {
-                key: (
+            extracted[name] = {}
+            for (key, _variable), value, variable_type in zip(
+                items, values, variable_types
+            ):
+                normalized = (
                     int(round(float(value)))
                     if variable_type in (GRB.BINARY, GRB.INTEGER)
                     else float(value)
                 )
-                for (key, _variable), value, variable_type
-                in zip(items, values, variable_types)
-            }
+                if retain(name, normalized):
+                    extracted[name][key] = normalized
     if snapshot is not None and "inventory" not in extracted:
         din = extracted.get("din", {})
         periods = tuple(snapshot["periods"])

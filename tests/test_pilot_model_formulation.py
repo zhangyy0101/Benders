@@ -9,6 +9,7 @@ from gurobipy import GRB
 from rolling_model import (
     build_rolling_model,
     compute_objective_scales,
+    evaluate_operation_components,
     extract_rolling_solution,
     solve_full_horizon_packing_oracle,
     validate_snapshot_temporal_consistency,
@@ -34,6 +35,7 @@ from rolling_solver import (
     _restricted_domain_aggregate_capacity_margin,
     _select_aggregate_domain_ladder,
     _snapshot_pressure_diagnostics,
+    _submit_start,
     baseline_residual_capacity_by_bay_period,
     canonical_stability_metrics,
     physical_residual_capacity_by_bay_period,
@@ -769,6 +771,12 @@ class PilotModelFormulationTest(unittest.TestCase):
         model.optimize()
         self.assertEqual(model.Status, GRB.OPTIMAL)
 
+        dense_solution = extract_rolling_solution(
+            variables,
+            expressions,
+            snapshot=snapshot,
+            sparse=False,
+        )
         reference_solution = extract_rolling_solution(
             variables,
             expressions,
@@ -781,6 +789,26 @@ class PilotModelFormulationTest(unittest.TestCase):
             snapshot=snapshot,
         )
         self.assertEqual(batched_solution, reference_solution)
+        self.assertLess(
+            sum(len(reference_solution[name]) for name in variables),
+            sum(len(dense_solution[name]) for name in variables),
+        )
+        for name in variables:
+            self.assertTrue(all(value != 0 for value in reference_solution[name].values()))
+        dense_components = evaluate_operation_components(
+            snapshot,
+            dense_solution["reservation"],
+            dense_solution["din"],
+        )
+        sparse_components = evaluate_operation_components(
+            snapshot,
+            reference_solution["reservation"],
+            reference_solution["din"],
+        )
+        self.assertEqual(dense_components, sparse_components)
+        dense_report = validate_rolling_solution(snapshot, dense_solution)
+        sparse_report = validate_rolling_solution(snapshot, reference_solution)
+        self.assertEqual(dense_report, sparse_report)
 
         for solution in (
             batched_solution,
@@ -812,6 +840,47 @@ class PilotModelFormulationTest(unittest.TestCase):
                     value,
                     msg=name,
                 )
+        model.dispose()
+
+    def test_mip_start_completes_conservation_and_clips_revised_forecast(self):
+        snapshot = objective_snapshot()
+        snapshot["previous_din"] = {("Y1", "V", "G", 0): 7}
+        snapshot["previous_reservation"] = {("Y1", "V", "G"): 7}
+        model, variables, _expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+
+        stats = _submit_start(variables, snapshot)
+        model.update()
+
+        self.assertEqual(variables["din"]["Y1", "V", "G", 0].Start, 5)
+        self.assertEqual(variables["reservation"]["Y1", "V", "G"].Start, 5)
+        self.assertEqual(variables["shortage"]["V", "G", 0].Start, 0)
+        self.assertEqual(variables["shortage"]["V", "G", 1].Start, 0)
+        self.assertEqual(variables["pod_bay_use"]["V", "P", "Y1"].Start, 1)
+        self.assertEqual(variables["new_bay"]["V", "P", "Y1"].Start, 0)
+        self.assertEqual(stats["clipped_previous_flow"], 2)
+        self.assertEqual(stats["forecast_shortage_start"], 0)
+        model.Params.OutputFlag = 0
+        model.Params.TimeLimit = 1
+        model.optimize()
+        self.assertGreater(model.SolCount, 0)
+        model.dispose()
+
+    def test_mip_start_does_not_seed_artificial_first_cycle_shortage(self):
+        snapshot = objective_snapshot()
+        model, variables, _expressions = build_rolling_model(
+            snapshot,
+            objective_scales=compute_objective_scales(snapshot),
+        )
+
+        stats = _submit_start(variables, snapshot)
+        model.update()
+
+        self.assertFalse(stats["submitted"])
+        self.assertEqual(stats["source"], "no_positive_previous_flow")
+        self.assertGreater(variables["shortage"]["V", "G", 0].Start, 1e100)
         model.dispose()
 
     def test_validator_independently_recomputes_objective_and_use_indicators(self):

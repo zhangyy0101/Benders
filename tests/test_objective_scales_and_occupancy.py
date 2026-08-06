@@ -14,6 +14,7 @@ from rolling_data import _realized_space_metrics
 from rolling_model import (
     build_rolling_model,
     compute_objective_scales,
+    evaluate_operation_components,
     extract_rolling_solution,
     resolve_operation_weights,
 )
@@ -74,6 +75,52 @@ def solve_fixed(snapshot, allowed, *, operation_weights=None):
 
 
 class ObjectiveScaleAndOccupancyTest(unittest.TestCase):
+    def test_independent_evaluator_is_dense_sparse_equivalent_and_single_pass(self):
+        class CountingDict(dict):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.items_calls = 0
+
+            def items(self):
+                self.items_calls += 1
+                return super().items()
+
+        snapshot = objective_snapshot()
+        snapshot["forecast_outbound"] = {("K1", 0): 20, ("K2", 1): 10}
+        snapshot["locked_inventory"] = CountingDict()
+        snapshot["actual_inventory"] = CountingDict()
+        reservation = {("Y1", "V", "G"): 3, ("Y2", "V", "G"): 2}
+        sparse_din = {
+            ("Y1", "V", "G", 0): 3,
+            ("Y2", "V", "G", 1): 2,
+        }
+        dense_din = CountingDict(sparse_din)
+        for index in range(500):
+            dense_din["Y1", "V", f"zero_{index}", index % 2] = 0
+
+        scales = compute_objective_scales(snapshot)
+        dense = evaluate_operation_components(
+            snapshot,
+            reservation,
+            dense_din,
+            objective_scales=scales,
+        )
+        sparse = evaluate_operation_components(
+            snapshot,
+            reservation,
+            sparse_din,
+            objective_scales=scales,
+        )
+
+        self.assertEqual(dense, sparse)
+        self.assertEqual(dense_din.items_calls, 1)
+        self.assertEqual(snapshot["locked_inventory"].items_calls, 2)
+        self.assertEqual(snapshot["actual_inventory"].items_calls, 2)
+        self.assertAlmostEqual(dense["concentration_raw"], 2)
+        self.assertAlmostEqual(dense["occupancy_balance_raw"], .4)
+        self.assertAlmostEqual(dense["distance_raw"], 7)
+        self.assertAlmostEqual(dense["in_out_conflict_raw"], 4)
+
     def test_fixed_scales_make_stage_objectives_comparable(self):
         snapshot = objective_snapshot()
         local = solve_fixed(snapshot, {("V", "G"): ["Y1"]})

@@ -1802,22 +1802,151 @@ def _quality_polish_allowed(
     }
 
 
-def _submit_start(variables: dict, d: dict, incumbent: dict | None = None, enabled: bool = True) -> dict:
+def _submit_start(
+    variables: dict,
+    d: dict,
+    incumbent: dict | None = None,
+    enabled: bool = True,
+) -> dict:
+    """Submit a conservation-complete integer MIP start.
+
+    A shifted previous plan may exceed a revised period forecast.  Retain its
+    compatible flow deterministically up to the new forecast, derive matching
+    reservation totals, and send the residual forecast to shortage.  This is
+    always a feasible arrival-conservation start; Gurobi only has to complete
+    continuous accounting auxiliaries.
+    """
     if not enabled:
         return {"submitted": False, "source": "disabled", "nonzero_values": 0, "covered_variables": 0}
     source = (incumbent or {}).get("reservation", d["previous_reservation"])
     flows = (incumbent or {}).get("din", d.get("previous_din", {}))
-    nonzero = covered = 0
+    raw_flow_by_arrival: dict[
+        tuple[str, str, int], list[tuple[tuple[str, str, str, int], int]]
+    ] = defaultdict(list)
+    covered = 0
+    for key in variables["din"]:
+        value = max(0, int(round(float(flows.get(key, 0)))))
+        raw_flow_by_arrival[key[1], key[2], key[3]].append((key, value))
+        covered += int(key in flows)
+    source_flow_quantity = sum(
+        value
+        for entries in raw_flow_by_arrival.values()
+        for _key, value in entries
+    )
+    if source_flow_quantity <= 0:
+        return {
+            "submitted": False,
+            "source": "no_positive_previous_flow",
+            "nonzero_values": 0,
+            "covered_variables": covered,
+            "structural_start_values": 0,
+            "total_start_variables": (
+                len(variables["reservation"]) + len(variables["din"])
+            ),
+            "coverage": 0.0,
+            "forecast_shortage_start": 0,
+            "clipped_previous_flow": 0,
+        }
+
+    clipped_flow: dict[tuple[str, str, str, int], int] = {}
+    clipped_quantity = 0
+    for arrival_key, entries in raw_flow_by_arrival.items():
+        remaining = max(
+            0,
+            int(round(float(d["forecast_arrivals"].get(arrival_key, 0)))),
+        )
+        for key, requested in sorted(entries):
+            retained = min(requested, remaining)
+            clipped_flow[key] = retained
+            remaining -= retained
+            clipped_quantity += requested - retained
+
+    reservation_start: dict[tuple[str, str, str], int] = defaultdict(int)
+    arrival_flow: dict[tuple[str, str, int], int] = defaultdict(int)
+    share_start: dict[tuple[str, str, str, int], int] = defaultdict(int)
+    for (bay, ship, group, period), value in clipped_flow.items():
+        variables["din"][bay, ship, group, period].Start = value
+        reservation_start[bay, ship, group] += value
+        arrival_flow[ship, group, period] += value
+        share_start[ship, d["bay_block"][bay], group, period] += value
+
+    nonzero = 0
     for key, variable in variables["reservation"].items():
-        value = float(source.get(key, 0));variable.Start = value
-        covered += int(key in source);nonzero += int(abs(value) > 1e-9)
-    for key, variable in variables["din"].items():
-        value = float(flows.get(key, 0));variable.Start = value
-        covered += int(key in flows);nonzero += int(abs(value) > 1e-9)
+        value = reservation_start[key]
+        variable.Start = value
+        covered += int(key in source)
+        nonzero += int(value > 0)
+    nonzero += sum(value > 0 for value in clipped_flow.values())
+
+    total_shortage = 0
+    for key, variable in variables.get("shortage", {}).items():
+        value = max(
+            0,
+            int(round(float(d["forecast_arrivals"].get(key, 0))))
+            - arrival_flow[key],
+        )
+        variable.Start = value
+        total_shortage += value
+
+    attrs = d["group_attrs"]
+    active_support = {
+        (ship, attrs[group]["pod"], bay)
+        for (bay, ship, group), value in reservation_start.items()
+        if value > 0
+    }
+    prior_support = existing_support(d, period=0)
+    for key, variable in variables.get("pod_bay_use", {}).items():
+        variable.Start = int(key in active_support)
+    for key, variable in variables.get("new_bay", {}).items():
+        variable.Start = int(key in active_support and key not in prior_support)
+
+    occupied_height: set[tuple[str, int, str]] = set()
+    for (bay, old_ship), height in d["locked_height"].items():
+        release = d["locked_release_local"].get((bay, old_ship), INF)
+        occupied_height.update(
+            (bay, period, height)
+            for period in d["periods"]
+            if release > period
+        )
+    for (bay, ship, group), value in d["actual_inventory"].items():
+        if value > 0:
+            occupied_height.update(
+                (bay, period, attrs[group]["height"])
+                for period in d["periods"]
+                if ship_present_at(d, ship, period)
+            )
+    for (bay, ship, group, arrival), value in clipped_flow.items():
+        if value > 0:
+            occupied_height.update(
+                (bay, period, attrs[group]["height"])
+                for period in d["periods"]
+                if arrival <= period and ship_present_at(d, ship, period)
+            )
+    for key, variable in variables.get("bay_height", {}).items():
+        variable.Start = int(key in occupied_height)
+
+    for key, variable in variables.get("cancel", {}).items():
+        variable.Start = max(
+            0,
+            int(round(float(d["previous_reservation"].get(key, 0))))
+            - reservation_start[key],
+        )
+    for key, variable in variables.get("in_share", {}).items():
+        variable.Start = share_start[key]
+
     structural = 0
     if incumbent:
         for name, group in variables.items():
-            if name in ("reservation", "din"):
+            if name in {
+                "reservation",
+                "din",
+                "shortage",
+                "pod_bay_use",
+                "bay_height",
+                "cancel",
+                "new_bay",
+                "in_share",
+            }:
                 continue
             values = incumbent.get(name, {})
             for key, variable in group.items():
@@ -1832,6 +1961,8 @@ def _submit_start(variables: dict, d: dict, incumbent: dict | None = None, enabl
         "structural_start_values": structural,
         "total_start_variables": total,
         "coverage": covered / max(1, total),
+        "forecast_shortage_start": total_shortage,
+        "clipped_previous_flow": clipped_quantity,
     }
 
 
