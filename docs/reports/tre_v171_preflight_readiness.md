@@ -1,5 +1,10 @@
 # TRE v1.7.1 preflight readiness
 
+> Status update (2026-08-06): candidate v2 failed the online-runtime gate in
+> its first five-method block. The run was stopped early and is documented in
+> `docs/reports/tre_v171_preflight_attempt_v2.md`. This readiness plan is kept
+> as the frozen pre-run specification, not as evidence that the gate passed.
+
 - Preparation date: 2026-08-05
 - Behavior-bearing algorithm commit: `ba3a7266c27c3ab7ff2fde35cf6397d9d8b89c9b`
 - Reporting/preflight code commit: `56e44bea5ab7bdcb413681bfa8765d3c33e7bd4f`

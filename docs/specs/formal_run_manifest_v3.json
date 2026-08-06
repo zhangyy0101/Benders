@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "preflight_candidate_v2_ready",
+  "status": "preflight_candidate_v2_failed_runtime_gate",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -156,6 +156,29 @@
     "output_root_template": "local_results/protocol_v3_tre_objective/preflight/<candidate_commit>/main_gate",
     "formal_authorization_after_preflight": false,
     "readiness_report": "docs/reports/tre_v171_preflight_readiness.md"
+  },
+  "preflight_attempt_v2": {
+    "status": "failed_early_online_runtime_gate",
+    "frozen_commit": "247623ae3a8293b0a769d95546717ac30b4e8728",
+    "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v2",
+    "expected_rows": 120,
+    "retained_diagnostic_rows": 15,
+    "completed_five_method_blocks": 3,
+    "failed_rows": 6,
+    "deadline_misses": 6,
+    "validation_failures": 0,
+    "score_identity_failures": 0,
+    "stability_formulation_mismatches": 0,
+    "failure_methods": ["core_start", "full_bottleneck"],
+    "completed_methods": ["kp_dos", "kp_sg", "dra_rpm"],
+    "sequential_confirmation_failed": true,
+    "root_cause": "dense MIP flow extraction followed by repeated period-block canonical operation accounting exceeds the common online window",
+    "merged_diagnostic_csv_sha256": "ce61927c0062d903f14c4f22ad6418e15f2e582636b5a9f55bb0d92830f25b48",
+    "merged_diagnostic_manifest_sha256": "d51c59217c5330ecbb5a979b4dd2a873d252c012cac83d2a52224dba8f87f504",
+    "sequential_confirmation_csv_sha256": "204567ae04393f9a91712ed6f465673bb141761b849908f4748e737b28cb93bd",
+    "sequential_confirmation_manifest_sha256": "bf58bbd57b8392db4a6d2729048a0273792a654c21e51521b3030ea9c81793fa",
+    "report": "docs/reports/tre_v171_preflight_attempt_v2.md",
+    "formal_authorization": false
   },
   "publication_analysis_policy": {
     "confidence_interval": "two-sided Student-t 95%",
