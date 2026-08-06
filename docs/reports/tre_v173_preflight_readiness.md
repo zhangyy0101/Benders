@@ -18,6 +18,13 @@ overwrite before the first solver call:
 - business operation weights and frozen DRA parameters;
 - one thread, 1% MIP gap, and the unchanged 60-second per-cycle bundle budget.
 
+Two delayed background launches after the v5 tag produced overlapping,
+incomplete 3-row and 4-row checkpoints outside the declared exclusive
+foreground protocol. Both are retained in the preflight quarantine and record
+the same two core-method deadline misses. They are diagnostic evidence, not a
+passed preflight, and must not be resumed or merged. The controlled retry uses
+a fresh detached checkout and a new output root.
+
 Run sequentially from the clean annotated candidate-v5 tag and write only to
 the new candidate-v5 root:
 
@@ -32,14 +39,16 @@ python scripts/run_formal_matrix.py `
   --threads 1 `
   --mip-gap 0.01 `
   --operation-weight-profile business `
-  --output "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5/main_gate/results/business_main.csv"
+  --output "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5_controlled_retry1/main_gate/results/business_main.csv"
 ```
 
 Require exactly 120 rows, `complete=true`, `all_ok=true`, and zero deadline,
 missing-incumbent, validation, identity, formulation, and normalized-score
-accounting failures before interpretation. Do not resume or merge any v2 or v3
-artifact. `FORMAL_RESULT_AUTHORIZED` and manifest `freeze_authorization` remain
-false after preflight unless a new untouched confirmatory set is separately
+accounting failures before interpretation. Do not use `--resume`, and do not
+merge any v2, v3, or quarantined v5 artifact. Run through one managed foreground
+process only; do not use Task Scheduler or a launcher script.
+`FORMAL_RESULT_AUTHORIZED` and manifest `freeze_authorization` remain false
+after preflight unless a new untouched confirmatory set is separately
 registered and authorized.
 
 The complete pre-run audit is recorded in
