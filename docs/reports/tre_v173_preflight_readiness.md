@@ -1,5 +1,11 @@
 # TRE v1.7.3 preflight candidate v5 readiness
 
+> Historical pre-run record. The controlled retry has now completed with
+> `complete=true`, `all_ok=true`, and 120/120 valid rows. Its outcome and
+> reporting boundary are recorded in
+> `tre_v173_preflight_candidate_v5_audit.md`; formal authorization remains
+> false.
+
 Candidate v3 is permanently failed at the online-runtime gate. Version 1.7.3
 passes the complete test suite and both failure-instance regressions documented
 in `tre_v173_runtime_fix_gate.md`. This authorizes a new preflight attempt only;
@@ -51,6 +57,7 @@ process only; do not use Task Scheduler or a launcher script.
 after preflight unless a new untouched confirmatory set is separately
 registered and authorized.
 
-The complete pre-run audit is recorded in
-`tre_v173_preflight_candidate_v5_audit.md`. Preparation does not itself start
-the matrix; launch requires a separate user confirmation.
+The complete pre-run audit and subsequent controlled result are recorded in
+`tre_v173_preflight_candidate_v5_audit.md`. This command block is retained for
+reproducibility and is not an instruction to rerun or resume the completed
+preflight.

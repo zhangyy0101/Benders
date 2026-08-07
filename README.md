@@ -125,6 +125,15 @@ reads an instance-size label or hidden realized demand. Across all exact stages,
 an incumbent is replaced only by a strict lexicographic improvement in
 predicted shortage, stability cost, and normalized operations score.
 
+This lexicographic guarantee is local to candidates evaluated from the same
+rolling snapshot inside one method execution. It is not a cross-configuration
+or full-horizon dominance guarantee. In particular, `core_start` and
+`full_bottleneck` generate independent rolling trajectories: different early
+allocations change later states, and the common finite time limit can return
+different feasible incumbents. Their accumulated stability and realized KPIs
+must therefore be reported as paired empirical outcomes, not interpreted as a
+direct test of whether the per-snapshot priority order was obeyed.
+
 The optional `full` ablation additionally builds a physical-resource dependency
 graph. It does not proactively release graph neighbors: only a shortage-bearing
 incumbent can add dependency neighbors to Progressive Repair. This keeps normal
@@ -323,13 +332,15 @@ exposed an overly permissive global-repair admission rule. Version 1.7.3 keeps
 the common 60-second budget unchanged, reserves a credible unrestricted-model
 build window, and checks that window again immediately before construction.
 Both candidate-v3 failure instances pass the targeted regression reported in
-`docs/reports/tre_v173_runtime_fix_gate.md`; the complete 120-row preflight must
-be rerun from zero under candidate v5. Candidate v4 was superseded before any
-solver row was started because a legacy candidate-v3 resume process was found
-after the v4 tag; v5 changes only the run-control audit. Its
-`immutable-indexed-publication-v2` gate enforces the clean commit, immutable
-preflight indexes, frozen budget and solver parameters, exact five-method
-matrix, and non-overwriting output policy before the first solver call.
+`docs/reports/tre_v173_runtime_fix_gate.md`. Candidate v4 was superseded before
+any solver row was started because a legacy candidate-v3 resume process was
+found after the v4 tag; v5 changes only the run-control audit. Its controlled
+120-row preflight subsequently completed with `complete=true`, `all_ok=true`,
+and no deadline, incumbent, validation, or final-unplaced failure. The audit,
+results, and reporting boundary are recorded in
+`docs/reports/tre_v173_preflight_candidate_v5_audit.md`. This passes the
+preflight interface gate but does not by itself authorize a formal run or
+support a universal-dominance claim.
 
 Result schema v16 itself is a reporting-only revision. Each CSV row identifies
 the stability accounting actually used by that method: core MIP rows report
@@ -338,38 +349,42 @@ report common ex-post accounting. Default summaries also include the complete
 execution-recovery funnel. Versions 1.7.2--1.7.3 do not change the mathematical
 model, objective priorities, business weights, execution, or recovery policy;
 they change solution representation, rolling-start completion, and allocation
-of the same end-to-end online time budget. All preflight performance rows must
-therefore be regenerated.
+of the same end-to-end online time budget. All preflight performance rows were
+therefore regenerated in the controlled candidate-v5 preflight.
 
-Formal execution is intentionally closed while
-`FORMAL_RESULT_AUTHORIZED=False`. Opening formal seeds, running a formal
-matrix, or labeling results as confirmatory requires first registering a new
-untouched confirmatory set and then explicitly changing that flag in a clean,
-frozen commit. Both the generator and matrix runner enforce this gate, and a
-formal index must itself contain `formal_results_authorized=true`.
-
-Once that prerequisite has been documented and authorized, the sole PNC--
-Yangshan formal bundle generator is:
+The untouched confirmatory seeds `2000--2009`, the 1,050-row formal matrix,
+failure-accounting rules and sequential execution order are registered in the
+V3 specifications. Seeds `1000--1009` are permanently historical/exploratory.
+`FORMAL_RESULT_AUTHORIZED=True` authorizes only this frozen generation design;
+it does not bypass the clean exact-tag or explicit seed-opening guards.
+The sole current all-panel readiness/generation entry point is:
 
 ```powershell
-python scripts/prepare_pnc_yangshan_v2_formal_instances.py `
-  --output-root local_results/protocol_v3_tre_objective/formal_instances
+python scripts/prepare_tre_v3_formal_instances.py --check-only
 ```
 
-The resulting central index is consumed without a time-budget override:
+The default action and `--check-only` do not instantiate a formal seed. After
+the clean formal-input tag is published, actual generation still requires the
+two explicit acknowledgements below; overwrite and partial resume are refused:
 
 ```powershell
-python scripts/run_formal_sharded_matrix.py `
-  --bundle-index local_results/protocol_v3_tre_objective/formal_instances/pnc_yangshan_v2_central_main_index.json `
-  --workers 2 --threads 1 `
-  --output local_results/protocol_v3_tre_objective/runs/public_main.csv
+python scripts/prepare_tre_v3_formal_instances.py `
+  --generate --confirm-open-formal-seeds
 ```
+
+Formal runs then follow `docs/specs/tre_v3_formal_execution_plan.json` in
+order, using `scripts/run_formal_matrix.py` sequentially with one solver thread
+and the time budget embedded in each instance. The current formal sharded
+runner is deliberately disabled on the shared workstation.
 
 `analysis/summarize_experiments.py` defaults to a strict publication audit for
 formal CSVs: it rejects mixed protocols or commits, duplicate identities,
-failed/late/invalid rows, non-held-out seeds, missing bundle hashes,
-provisional sources, and incomplete manifests. `--exploratory` is an explicit
-escape hatch and labels the resulting report as non-publication analysis.
+non-held-out seeds, missing bundle hashes, provisional sources, structurally
+incomplete manifests and score-accounting gaps. Algorithm failures remain in
+failure accounting instead of being silently discarded; invalid outcomes are
+excluded from quality metrics, and paired inference is performed separately
+within each prespecified scenario cell. `--exploratory` is an explicit escape
+hatch and labels the resulting report as non-publication analysis.
 
 ## Historical PORT-MIS formal workflow
 

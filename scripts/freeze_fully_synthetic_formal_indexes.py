@@ -49,8 +49,10 @@ def load_spec(path: Path) -> dict:
     spec = json.loads(path.read_text(encoding="utf-8"))
     if spec.get("schema") != "fully-synthetic-formal-matrix-v1":
         raise RuntimeError("unexpected fully synthetic matrix schema")
-    if tuple(spec.get("formal_seeds", ())) != tuple(config.FORMAL_SEEDS):
-        raise RuntimeError("formal seed list mismatch")
+    if tuple(spec.get("formal_seeds", ())) != tuple(
+        config.HISTORICAL_FORMAL_SEEDS
+    ):
+        raise RuntimeError("historical formal seed list mismatch")
     if spec["counts"]["expected_total_result_rows"] != 740:
         raise RuntimeError("frozen result count mismatch")
     return spec
@@ -83,9 +85,11 @@ def select_medium_ordinary(index_path: Path) -> list[dict]:
         entry for entry in payload["entries"]
         if entry.get("profile") == "medium_ordinary"
     ]
-    if len(selected) != len(config.FORMAL_SEEDS):
+    if len(selected) != len(config.HISTORICAL_FORMAL_SEEDS):
         raise RuntimeError("medium-ordinary scale subset must contain ten seeds")
-    if {entry["seed"] for entry in selected} != set(config.FORMAL_SEEDS):
+    if {entry["seed"] for entry in selected} != set(
+        config.HISTORICAL_FORMAL_SEEDS
+    ):
         raise RuntimeError("medium-ordinary scale subset seed mismatch")
     return selected
 

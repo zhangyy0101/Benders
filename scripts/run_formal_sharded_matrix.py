@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 from config import (  # noqa: E402
     ALGORITHM_VERSION,
     DEPENDENCY_PROFILES,
+    FORMAL_EXECUTION_MODE,
     FORMAL_ORCHESTRATION_PROTOCOL,
     FORMAL_PRIMARY_CONFIGURATIONS,
     FORMAL_RESULT_AUTHORIZED,
@@ -339,6 +340,11 @@ def main() -> int:
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
+    if FORMAL_EXECUTION_MODE == "sequential_single_process":
+        parser.error(
+            "the frozen confirmatory protocol requires sequential execution; "
+            "use scripts/run_formal_matrix.py"
+        )
     if args.workers < 2:
         parser.error("sharded execution requires at least two workers")
     if args.threads < 1:

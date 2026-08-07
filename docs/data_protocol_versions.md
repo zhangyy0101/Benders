@@ -127,10 +127,13 @@ pressure instances may be reviewed separately for reuse.
   data support the main external-validity, temporal, export-volume, and
   yard-calibration panels. Fully synthetic data support computational scale,
   controlled pressure, forecast-error, ablation, and repair-mechanism panels.
-- Formal semi-synthetic instance specification: frozen as eight profiles per
-  seed and 80 bundles across seeds 1000--1009. The central May bundle produces
-  50 five-method rows; seven robustness profiles produce 140 paired
-  candidate/`core_start` rows. Formal bundle hashes remain pending generation.
+- Historical V2 formal semi-synthetic specification: eight profiles per seed
+  and 80 bundles across seeds 1000--1009. These seeds have been opened and are
+  historical/exploratory under the revised objective.
+- Current V3 confirmatory overlay: it reuses the same audited data protocol and
+  eight source/profile definitions, but registers untouched seeds 2000--2009
+  and prohibits reuse of V2 bundles or outcomes. Its authoritative record is
+  `docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json`.
 
 V2 changes the data protocol only. The mathematical model, supported box
 attributes, constraints, candidate algorithm, external baselines, evaluator,

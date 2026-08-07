@@ -5,6 +5,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -127,6 +128,98 @@ HIGHER_IS_BETTER = {
     "quality_polish_improvement_rate",
 }
 
+FAILURE_ACCOUNTING_METRICS = {
+    "ok",
+    "validation_failure_count",
+    "online_deadline_miss_count",
+    "wall_clock_time_limit_exceeded",
+    "no_incumbent_count",
+}
+
+PRIMARY_METRICS = {
+    "total_online_decision_time",
+    "stability_cost",
+    "mean_cycle_normalized_operations_score",
+    "realized_distance",
+    "realized_in_out_conflict",
+}
+
+SECONDARY_METRICS = {
+    "revision_rate",
+    "mean_realized_bays_per_ship_pod",
+    "max_realized_peak_block_utilization",
+    "mean_realized_utilization_deviation",
+    "fallback_rate",
+    "physical_recovery_placement",
+    "physical_recovery_displaced_reservation",
+}
+
+COMPARISON_CELL_FIELDS = (
+    "instance_family",
+    "public_panel_role",
+    "source_window_id",
+    "calibration_scenario_id",
+    "num_blocks",
+    "bays_per_block",
+    "num_ships",
+    "cycles",
+    "tail_execution_cycles",
+    "requested_initial_utilization",
+    "ship_volume_factor",
+    "oracle_case_class",
+    "forecast_error",
+    "forecast_error_mode",
+    "outbound_rate",
+    "release_delay_periods",
+    "time_limit",
+    "threads",
+    "mip_gap",
+    "dependency_profile",
+    "operation_weight_profile",
+)
+
+
+def _valid_quality_row(row: dict) -> bool:
+    return (
+        _number(row, "ok") == 1
+        and (_number(row, "validation_failure_count") or 0) == 0
+        and (_number(row, "online_deadline_miss_count") or 0) == 0
+        and (_number(row, "wall_clock_time_limit_exceeded") or 0) == 0
+        and (_number(row, "no_incumbent_count") or 0) == 0
+    )
+
+
+def metric_family(metric: str) -> str:
+    if metric in PRIMARY_METRICS:
+        return "primary"
+    if metric in SECONDARY_METRICS:
+        return "secondary"
+    if metric in FAILURE_ACCOUNTING_METRICS or metric == "realized_unplaced":
+        return "feasibility"
+    return "diagnostic"
+
+
+def comparison_cell(row: dict) -> dict[str, object]:
+    """Return a seed-independent scenario cell for confirmatory inference."""
+
+    instance = str(row.get("instance") or row.get("instance_id") or "")
+    scenario = re.sub(r"(?:_|-)seed(?:_|-)?\d+$", "", instance)
+    cell: dict[str, object] = {"scenario": scenario}
+    for field in COMPARISON_CELL_FIELDS:
+        value = row.get(field)
+        if value not in (None, ""):
+            cell[field] = value
+    return cell
+
+
+def comparison_cell_id(row: dict) -> str:
+    return json.dumps(
+        comparison_cell(row),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
 
 def _number(row: dict, field: str) -> float | None:
     try:
@@ -212,10 +305,14 @@ def paired_comparison(
     metric: str,
     left: str,
     right: str,
+    *,
+    cell: dict[str, object] | None = None,
 ) -> dict:
     """Compare configurations on identical scenario and seed keys."""
     indexed = {}
     for row in rows:
+        if metric not in FAILURE_ACCOUNTING_METRICS and not _valid_quality_row(row):
+            continue
         value = _number(row, metric)
         if value is None:
             continue
@@ -247,6 +344,12 @@ def paired_comparison(
         "left": left,
         "right": right,
         "metric": metric,
+        "metric_family": metric_family(metric),
+        "comparison_cell": cell,
+        "comparison_cell_id": (
+            json.dumps(cell, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if cell is not None else "all_rows"
+        ),
         "difference_definition": "left - right",
         "differences": differences,
         "summary": describe(differences),
@@ -275,12 +378,43 @@ def paired_comparison(
     return result
 
 
+def paired_comparisons_by_cell(
+    rows: list[dict],
+    metric: str,
+    left: str,
+    right: str,
+) -> list[dict]:
+    """Compare methods separately in each seed-independent scenario cell."""
+
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    cells: dict[str, dict[str, object]] = {}
+    for row in rows:
+        identifier = comparison_cell_id(row)
+        grouped[identifier].append(row)
+        cells[identifier] = comparison_cell(row)
+    comparisons = []
+    for identifier in sorted(grouped):
+        comparison = paired_comparison(
+            grouped[identifier],
+            metric,
+            left,
+            right,
+            cell=cells[identifier],
+        )
+        if comparison["summary"]["count"]:
+            comparisons.append(comparison)
+    return comparisons
+
+
 def apply_holm_correction(comparisons: list[dict]) -> None:
-    """Apply Holm correction separately within each reported metric family."""
-    families: dict[str, list[dict]] = defaultdict(list)
+    """Apply Holm correction within each scenario cell and metric family."""
+    families: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for comparison in comparisons:
         if comparison.get("wilcoxon") is not None:
-            families[str(comparison["metric"])].append(comparison)
+            families[(
+                str(comparison.get("comparison_cell_id", "all_rows")),
+                str(comparison.get("metric_family", "diagnostic")),
+            )].append(comparison)
     for family in families.values():
         ordered = sorted(family, key=lambda item: item["wilcoxon"]["p_value"])
         running = 0.0
@@ -290,6 +424,9 @@ def apply_holm_correction(comparisons: list[dict]) -> None:
             running = max(running, adjusted)
             comparison["wilcoxon"]["p_value_holm"] = running
             comparison["wilcoxon"]["holm_family_size"] = size
+            comparison["wilcoxon"]["holm_scope"] = (
+                "scenario_cell_and_metric_family"
+            )
             comparison["wilcoxon"]["significant_at_0_05_holm"] = running < .05
 
 
@@ -405,6 +542,14 @@ def artifact_audit(rows: list[dict]) -> dict:
             index not in score_checked_indexes
             for index, row in enumerate(rows)
             if row.get("experiment_phase") == "formal"
+            and _valid_quality_row(row)
+        ),
+        "valid_quality_row_count": sum(_valid_quality_row(row) for row in rows),
+        "invalid_quality_row_count": sum(
+            not _valid_quality_row(row) for row in rows
+        ),
+        "no_incumbent_count": sum(
+            _number(row, "no_incumbent_count") or 0 for row in rows
         ),
         "problem_protocols": unique("problem_protocol"),
         "algorithm_versions": unique("algorithm_version"),
@@ -447,19 +592,6 @@ def publication_consistency_errors(
             errors.append(f"formal rows missing {field}: {missing}")
 
     checks = (
-        ("failed formal rows", sum(_number(row, "ok") != 1 for row in formal_rows)),
-        (
-            "formal validation failures",
-            sum(_number(row, "validation_failure_count") != 0 for row in formal_rows),
-        ),
-        (
-            "formal online deadline misses",
-            sum(_number(row, "online_deadline_miss_count") != 0 for row in formal_rows),
-        ),
-        (
-            "formal wall-clock failures",
-            sum(_number(row, "wall_clock_time_limit_exceeded") != 0 for row in formal_rows),
-        ),
         ("formal dirty rows", audit["dirty_row_count"]),
         ("formal missing Git identities", audit["missing_git_identity_count"]),
         ("duplicate experiment identities", audit["duplicate_experiment_identity_count"]),
@@ -486,8 +618,15 @@ def publication_consistency_errors(
     if manifest is not None:
         if manifest.get("complete") is not True:
             errors.append("formal result manifest is not complete")
-        if manifest.get("all_ok") is not True:
-            errors.append("formal result manifest does not report all_ok=true")
+        outcome_failures = audit["invalid_quality_row_count"]
+        if manifest.get("all_ok") is True and outcome_failures:
+            errors.append(
+                "formal result manifest reports all_ok=true despite outcome failures"
+            )
+        if manifest.get("all_ok") is False and not outcome_failures:
+            errors.append(
+                "formal result manifest reports all_ok=false without outcome failures"
+            )
         try:
             if int(manifest.get("row_count", -1)) != len(rows):
                 errors.append("manifest row_count differs from the CSV")
@@ -543,9 +682,19 @@ def summarize(
         entry["configuration"] = key[-2]
         entry["baseline_parameter_profile"] = key[-1]
         entry["method_label"] = method_label(group[0])
+        valid_quality = [row for row in group if _valid_quality_row(row)]
+        entry["requested_row_count"] = len(group)
+        entry["valid_quality_row_count"] = len(valid_quality)
+        entry["invalid_quality_row_count"] = len(group) - len(valid_quality)
         entry["metrics"] = {
             metric: describe([
-                value for row in group if (value := _number(row, metric)) is not None
+                value
+                for row in (
+                    group
+                    if metric in FAILURE_ACCOUNTING_METRICS
+                    else valid_quality
+                )
+                if (value := _number(row, metric)) is not None
             ])
             for metric in metrics
         }
@@ -568,15 +717,20 @@ def summarize(
         ("dra_rpm[discount_high]", "dra_rpm[frozen]"),
     )
     comparisons = [
-        paired_comparison(rows, metric, left, right)
+        comparison
         for metric in metrics
         for left, right in comparison_pairs
+        for comparison in paired_comparisons_by_cell(
+            rows, metric, left, right
+        )
     ]
     apply_holm_correction(comparisons)
     return {
         "artifact_audit": artifact_audit(rows),
         "publication_consistency_errors": consistency_errors,
         "strict_formal_audit": bool(strict_formal),
+        "inference_unit": "paired_seed_within_prespecified_scenario_cell",
+        "cross_cell_pooling_for_inference": False,
         "group_summaries": summaries,
         "paired_comparisons": comparisons,
     }

@@ -120,6 +120,7 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
                 "instance_protocol": "rolling-formal-instances-v1",
                 "experiment_phase": "formal",
                 "formal_results_authorized": True,
+                "formal_freeze_tag": config.FORMAL_FREEZE_TAG,
                 "entry_count": 1,
                 "entries": [{
                     **identity,
@@ -430,7 +431,12 @@ class FormalExperimentInfrastructureTests(unittest.TestCase):
         self.assertEqual(len(verified["source_snapshot_sha256"]), 64)
 
     def test_formal_seed_and_budget_matrix_is_frozen(self):
-        self.assertEqual(config.FORMAL_SEEDS, tuple(range(1000, 1010)))
+        self.assertEqual(config.HISTORICAL_FORMAL_SEEDS, tuple(range(1000, 1010)))
+        self.assertEqual(config.FORMAL_SEEDS, tuple(range(2000, 2010)))
+        self.assertTrue(
+            set(config.FORMAL_SEEDS).isdisjoint(config.HISTORICAL_FORMAL_SEEDS)
+        )
+        self.assertEqual(config.FORMAL_EXECUTION_MODE, "sequential_single_process")
         self.assertEqual(
             config.FORMAL_PRIMARY_CONFIGURATIONS,
             (

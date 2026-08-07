@@ -1,0 +1,127 @@
+{
+  "schema": "tre-v3-formal-execution-plan-v1",
+  "status": "frozen_authorized_not_started",
+  "formal_freeze_tag": "rolling-v4.6-objective-only-stability-formal-input-rc1",
+  "formal_seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+  "execution": {
+    "mode": "sequential_single_process",
+    "exclusive_host_required": true,
+    "threads": 1,
+    "mip_gap": 0.01,
+    "dependency_profile": "current",
+    "time_budget_policy": "frozen_per_instance_bundle",
+    "resume_policy": "only an identical interrupted checkpoint may use explicit --resume; never merge quarantined or different-protocol rows",
+    "output_root": "local_results/protocol_v3_tre_objective/formal_runs/confirmatory_seed2000_2009_rc1"
+  },
+  "instance_root": "local_results/protocol_v3_tre_objective/formal_instances/confirmatory_seed2000_2009_rc1",
+  "batches": [
+    {
+      "order": 1,
+      "name": "pnc_main",
+      "index": "pnc_yangshan/pnc_yangshan_v3_central_main_index.json",
+      "experiment_set": "main",
+      "operation_weight_profile": "business",
+      "expected_rows": 50
+    },
+    {
+      "order": 2,
+      "name": "pnc_robustness",
+      "index": "pnc_yangshan/pnc_yangshan_v3_robustness_index.json",
+      "experiment_set": "paired_sensitivity",
+      "operation_weight_profile": "business",
+      "expected_rows": 140
+    },
+    {
+      "order": 3,
+      "name": "weight_equal",
+      "index": "pnc_yangshan/pnc_yangshan_v3_central_main_index.json",
+      "experiment_set": "operation_weight_sensitivity",
+      "operation_weight_profile": "equal_weight_ablation",
+      "expected_rows": 20
+    },
+    {
+      "order": 4,
+      "name": "weight_weak",
+      "index": "pnc_yangshan/pnc_yangshan_v3_central_main_index.json",
+      "experiment_set": "operation_weight_sensitivity",
+      "operation_weight_profile": "weak",
+      "expected_rows": 20
+    },
+    {
+      "order": 5,
+      "name": "weight_strong_distance",
+      "index": "pnc_yangshan/pnc_yangshan_v3_central_main_index.json",
+      "experiment_set": "operation_weight_sensitivity",
+      "operation_weight_profile": "strong_distance",
+      "expected_rows": 20
+    },
+    {
+      "order": 6,
+      "name": "dra_parameter_sensitivity",
+      "index": "pnc_yangshan/pnc_yangshan_v3_central_main_index.json",
+      "experiment_set": "dra_sensitivity",
+      "baseline_parameter_profiles": ["mu_low", "mu_high", "nu_low", "nu_high", "discount_low", "discount_high"],
+      "operation_weight_profile": "business",
+      "expected_rows": 60
+    },
+    {
+      "order": 7,
+      "name": "synthetic_scale_pressure",
+      "index": "fully_synthetic/scale_pressure/synthetic_instance_index.json",
+      "experiment_set": "main",
+      "operation_weight_profile": "business",
+      "expected_rows": 400
+    },
+    {
+      "order": 8,
+      "name": "synthetic_initial_utilization",
+      "indexes": [
+        "fully_synthetic/initial_utilization_u025/synthetic_instance_index.json",
+        "fully_synthetic/initial_utilization_u055/synthetic_instance_index.json",
+        "fully_synthetic/initial_utilization_u065/synthetic_instance_index.json"
+      ],
+      "experiment_set": "paired_sensitivity",
+      "operation_weight_profile": "business",
+      "expected_rows": 60
+    },
+    {
+      "order": 9,
+      "name": "synthetic_forecast_error",
+      "index": "fully_synthetic/forecast_error/synthetic_forecast_error_index.json",
+      "experiment_set": "paired_sensitivity",
+      "operation_weight_profile": "business",
+      "expected_rows": 160
+    },
+    {
+      "order": 10,
+      "name": "synthetic_internal_ablation",
+      "index": "fully_synthetic/derived_indexes/synthetic_internal_ablation_index.json",
+      "experiment_set": "internal_ablation",
+      "operation_weight_profile": "business",
+      "expected_rows": 40
+    },
+    {
+      "order": 11,
+      "name": "synthetic_aggregate_ablation",
+      "index": "fully_synthetic/derived_indexes/synthetic_aggregate_ablation_index.json",
+      "experiment_set": "aggregate_ablation",
+      "operation_weight_profile": "business",
+      "expected_rows": 20
+    },
+    {
+      "order": 12,
+      "name": "synthetic_repair_mechanism",
+      "index": "fully_synthetic/repair_mechanism/pressure_instance_index.json",
+      "experiment_set": "repair_mechanism",
+      "operation_weight_profile": "business",
+      "expected_rows": 60,
+      "inference_role": "mechanism_reachability_only"
+    }
+  ],
+  "expected_total_rows": 1050,
+  "reference_reuse": {
+    "business_weight_rows": "reuse the two core-method rows from pnc_main",
+    "dra_frozen_rows": "reuse the DRA-RPM frozen-profile rows from pnc_main",
+    "duplicate_reference_reruns": false
+  }
+}

@@ -46,14 +46,34 @@ class ObjectiveRevisionProtocolTest(unittest.TestCase):
             business["concentration"], business["in_out_conflict"]
         )
 
-    def test_revision_is_not_yet_formally_authorized(self):
-        self.assertFalse(self.manifest["freeze_authorization"])
-        self.assertFalse(config.FORMAL_RESULT_AUTHORIZED)
-        self.assertTrue(
+    def test_registered_confirmatory_set_is_formally_authorized(self):
+        self.assertTrue(self.manifest["freeze_authorization"])
+        self.assertTrue(config.FORMAL_RESULT_AUTHORIZED)
+        self.assertFalse(
             self.manifest["evaluation_boundary"][
                 "new_untouched_confirmatory_set_required"
             ]
         )
+        confirmatory = self.manifest["evaluation_boundary"]["confirmatory_set"]
+        self.assertEqual(tuple(confirmatory["seeds"]), config.FORMAL_SEEDS)
+        self.assertTrue(confirmatory["registered_before_generation"])
+        self.assertEqual(confirmatory["generated_bundle_count_at_registration"], 0)
+        self.assertTrue(
+            set(config.FORMAL_SEEDS).isdisjoint(config.HISTORICAL_FORMAL_SEEDS)
+        )
+
+    def test_confirmatory_matrix_and_statistics_are_prespecified(self):
+        plan = self.manifest["confirmatory_formal_plan"]
+        self.assertEqual(plan["expected_total_result_rows"], 1050)
+        self.assertEqual(plan["execution_mode"], "sequential_single_process_on_exclusive_host")
+        policy = self.manifest["publication_analysis_policy"]
+        self.assertFalse(policy["cross_cell_pooling_for_inference"])
+        self.assertEqual(
+            policy["independent_replication_unit"],
+            "seed within one prespecified scenario cell",
+        )
+        self.assertTrue(self.manifest["formal_failure_policy"]["retain_every_requested_row"])
+        self.assertFalse(self.manifest["formal_failure_policy"]["selective_rerun"])
 
     def test_stability_is_objective_only_without_a_hard_budget(self):
         self.assertEqual(

@@ -1,8 +1,7 @@
 """Generate the frozen PNC--Yangshan V2 formal instance matrix.
 
-This is the only authorized entry point for opening formal seeds 1000--1009.
-It validates the frozen specification, clean Git state, source artifacts, and
-five-method preflight audit before invoking the single-instance assembler.
+This entry point is retained for historical reproducibility of seeds
+1000--1009. New confirmatory generation must use the V3 entry point.
 """
 
 from __future__ import annotations
@@ -75,14 +74,16 @@ def load_and_validate_spec(path: Path) -> dict:
         raise RuntimeError("unexpected formal specification schema")
     if spec.get("data_protocol_version") != DATA_PROTOCOL:
         raise RuntimeError("formal specification data protocol mismatch")
-    if tuple(spec.get("formal_seeds", ())) != tuple(config.FORMAL_SEEDS):
-        raise RuntimeError("formal seed list differs from frozen configuration")
+    if tuple(spec.get("formal_seeds", ())) != tuple(
+        config.HISTORICAL_FORMAL_SEEDS
+    ):
+        raise RuntimeError("historical formal seed list changed")
     profiles = spec.get("profiles", [])
     if tuple(row.get("profile") for row in profiles) != PROFILE_ORDER:
         raise RuntimeError("formal profile order or membership changed")
     expected = spec.get("expected_counts", {})
     if expected.get("unique_bundle_count") != len(PROFILE_ORDER) * len(
-        config.FORMAL_SEEDS
+        config.HISTORICAL_FORMAL_SEEDS
     ):
         raise RuntimeError("formal expected bundle count is inconsistent")
     common = spec.get("common", {})
@@ -213,11 +214,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.check_only and not config.FORMAL_RESULT_AUTHORIZED:
+    if not args.check_only:
         parser.error(
-            "formal seed generation is not authorized for algorithm "
-            f"{config.ALGORITHM_VERSION}; register the untouched confirmatory "
-            "set and explicitly enable FORMAL_RESULT_AUTHORIZED first"
+            "historical V2 seed generation is permanently closed; use "
+            "prepare_pnc_yangshan_v3_confirmatory_instances.py"
         )
 
     git = git_identity()
@@ -255,7 +255,7 @@ def main() -> None:
         "preflight_audit": str(args.preflight_audit),
         "preflight_audit_sha256": sha256(args.preflight_audit),
         "output_root": str(args.output_root),
-        "formal_seed_count": len(config.FORMAL_SEEDS),
+        "formal_seed_count": len(config.HISTORICAL_FORMAL_SEEDS),
         "profile_count": len(PROFILE_ORDER),
         "expected_bundle_count": 80,
     }
@@ -266,7 +266,7 @@ def main() -> None:
     entries = []
     assembler = ROOT / "scripts" / "assemble_pnc_yangshan_v2_pilot.py"
     for profile in spec["profiles"]:
-        for seed in config.FORMAL_SEEDS:
+        for seed in config.HISTORICAL_FORMAL_SEEDS:
             output = args.output_root / profile["profile"] / f"seed_{seed}"
             command = [
                 sys.executable,

@@ -1,11 +1,15 @@
 # PNC--Yangshan V2 formal instance specification
 
+> Historical base-data design. Seeds `1000--1009` and their outcomes have been
+> opened and are no longer confirmatory for the current objective. V3 reuses
+> only the eight frozen source/profile definitions below and generates new
+> bundles with registered seeds `2000--2009`; see
+> `docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json`.
+
 ## Frozen semi-synthetic matrix
 
-The semi-synthetic formal matrix uses eight unique profiles for each of the
-held-out seeds 1000--1009. It therefore contains 80 immutable instance
-bundles. Formal seeds are declared here but remain unopened until the baseline
-interface and clean-code gates pass.
+The historical semi-synthetic matrix used eight unique profiles for each of
+seeds 1000--1009 and therefore contained 80 immutable instance bundles.
 
 | Profile | PNC window | Calls | Volume | Yard | Methods |
 |---|---|---:|---:|---|---|

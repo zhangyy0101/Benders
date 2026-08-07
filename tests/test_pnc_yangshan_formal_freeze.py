@@ -14,6 +14,9 @@ from scripts.prepare_pnc_yangshan_v2_formal_instances import (
     profile_arguments,
     validate_preflight,
 )
+from scripts.prepare_pnc_yangshan_v3_confirmatory_instances import (
+    load_confirmatory_spec,
+)
 
 
 class PncYangshanFormalFreezeTests(unittest.TestCase):
@@ -30,7 +33,9 @@ class PncYangshanFormalFreezeTests(unittest.TestCase):
         spec = load_and_validate_spec(
             Path("docs/specs/pnc_yangshan_v2_formal_instance_spec.json")
         )
-        self.assertEqual(tuple(spec["formal_seeds"]), config.FORMAL_SEEDS)
+        self.assertEqual(
+            tuple(spec["formal_seeds"]), config.HISTORICAL_FORMAL_SEEDS
+        )
         self.assertEqual(
             tuple(row["profile"] for row in spec["profiles"]), PROFILE_ORDER
         )
@@ -75,6 +80,20 @@ class PncYangshanFormalFreezeTests(unittest.TestCase):
         self.assertIn("3.0", arguments)
         self.assertIn("0.1", arguments)
         self.assertIn("60", arguments)
+
+    def test_v3_confirmatory_spec_registers_new_unopened_seeds(self):
+        spec, base = load_confirmatory_spec(
+            Path("docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json")
+        )
+        self.assertEqual(tuple(spec["formal_seeds"]), config.FORMAL_SEEDS)
+        self.assertTrue(spec["seed_selection"]["registered_before_generation"])
+        self.assertEqual(
+            tuple(base["formal_seeds"]), config.HISTORICAL_FORMAL_SEEDS
+        )
+        self.assertEqual(spec["expected_counts"]["unique_bundle_count"], 80)
+        self.assertEqual(
+            spec["expected_counts"]["total_semisynthetic_result_rows"], 310
+        )
 
 
 if __name__ == "__main__":

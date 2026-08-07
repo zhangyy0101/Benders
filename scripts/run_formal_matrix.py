@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +16,10 @@ if str(ROOT) not in sys.path:
 from config import (  # noqa: E402
     ALGORITHM_VERSION,
     DEPENDENCY_PROFILES,
+    FORMAL_EXECUTION_MODE,
+    FORMAL_DRA_SENSITIVITY_PROFILES,
+    FORMAL_FREEZE_TAG,
+    FORMAL_OPERATION_WEIGHT_SENSITIVITY_PROFILES,
     FORMAL_PRIMARY_CONFIGURATIONS,
     FORMAL_RESULT_AUTHORIZED,
     FORMAL_SEEDS,
@@ -60,7 +65,18 @@ EXPERIMENT_SET_CONFIGURATIONS = {
     "repair_mechanism": ("full_direct", "full_bottleneck", "full"),
     "dra_sensitivity": ("dra_rpm",),
     "operation_weight_sensitivity": ("core_start", "full_bottleneck"),
+    "paired_sensitivity": ("core_start", "full_bottleneck"),
 }
+
+
+def _exact_git_tag() -> str | None:
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--exact-match"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def _expand_bundle_paths(values: list[str]) -> list[Path]:
@@ -121,6 +137,11 @@ def _paths_from_indexes(
                 "formal matrix requires an explicitly authorized instance index: "
                 f"{index_path}"
             )
+        if require_formal and payload.get("formal_freeze_tag") != FORMAL_FREEZE_TAG:
+            raise ValueError(
+                "formal instance index freeze tag mismatch: "
+                f"{index_path}"
+            )
         index_records.append({
             "path": index_path.as_posix(),
             "sha256": sha256_file(index_path),
@@ -128,6 +149,7 @@ def _paths_from_indexes(
             "formal_results_authorized": payload.get(
                 "formal_results_authorized"
             ),
+            "formal_freeze_tag": payload.get("formal_freeze_tag"),
         })
         for entry in payload["entries"]:
             path = (
@@ -363,16 +385,79 @@ def main() -> int:
                 f"{ALGORITHM_VERSION}; register a new untouched confirmatory "
                 "set first"
             )
-        unexpected = sorted(
-            {item[2] for item in bundles} - set(FORMAL_SEEDS)
+        if FORMAL_EXECUTION_MODE != "sequential_single_process":
+            parser.error("unsupported frozen formal execution mode")
+        if args.threads != 1:
+            parser.error("formal matrix requires exactly one solver thread")
+        if abs(float(args.mip_gap) - .01) > 1e-12:
+            parser.error("formal matrix requires the frozen 1% MIP gap")
+        if args.dependency_profile != "current":
+            parser.error("formal matrix requires the current dependency profile")
+        if args.experiment_set == "custom":
+            parser.error("custom method matrices are not formal evidence")
+        expected_configurations = tuple(
+            EXPERIMENT_SET_CONFIGURATIONS[args.experiment_set]
         )
-        if unexpected:
+        if configurations != expected_configurations:
             parser.error(
-                f"formal bundle seeds must come from {list(FORMAL_SEEDS)}; "
-                f"unexpected={unexpected}"
+                "formal method set differs from the frozen experiment set"
+            )
+        if (
+            args.experiment_set == "operation_weight_sensitivity"
+            and args.operation_weight_profile
+            not in FORMAL_OPERATION_WEIGHT_SENSITIVITY_PROFILES
+        ):
+            parser.error(
+                "formal operation-weight sensitivity must use one of the "
+                "three frozen alternative profiles"
+            )
+        if (
+            args.experiment_set != "operation_weight_sensitivity"
+            and args.operation_weight_profile != OPERATION_WEIGHT_PROFILE
+        ):
+            parser.error(
+                "formal non-weight-sensitivity batches require the frozen "
+                "business operation-weight profile"
+            )
+        if (
+            args.experiment_set == "dra_sensitivity"
+            and parameter_profiles != FORMAL_DRA_SENSITIVITY_PROFILES
+        ):
+            parser.error(
+                "formal DRA sensitivity must use the six frozen alternative "
+                "profiles; the frozen reference is reused from the main panel"
+            )
+        if (
+            args.experiment_set != "dra_sensitivity"
+            and parameter_profiles != ("frozen",)
+        ):
+            parser.error(
+                "formal non-DRA-sensitivity batches require the frozen "
+                "DRA-RPM parameter profile"
+            )
+        selected_seeds = {item[2] for item in bundles}
+        if selected_seeds != set(FORMAL_SEEDS):
+            parser.error(
+                "every formal batch requires the complete frozen seed set; "
+                f"expected={list(FORMAL_SEEDS)}, "
+                f"found={sorted(selected_seeds)}"
             )
         if metadata.get("git_dirty") is not False:
             parser.error("formal matrix requires a clean Git commit")
+        exact_tag = _exact_git_tag()
+        if exact_tag != FORMAL_FREEZE_TAG:
+            parser.error(
+                "formal matrix requires exact freeze tag "
+                f"{FORMAL_FREEZE_TAG}; found={exact_tag!r}"
+            )
+        generator_commits = {
+            item[1].get("generator_git_commit") for item in bundles
+        }
+        if generator_commits != {metadata.get("git_commit")}:
+            parser.error(
+                "formal bundles must all be generated by the exact current "
+                "freeze commit"
+            )
         if not args.bundle_indexes:
             parser.error("formal matrix requires --bundle-indexes")
         if args.time is not None:

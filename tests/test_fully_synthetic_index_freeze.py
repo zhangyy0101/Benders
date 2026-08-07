@@ -18,7 +18,9 @@ class FullySyntheticIndexFreezeTests(unittest.TestCase):
         spec = load_spec(
             Path("docs/specs/fully_synthetic_formal_matrix_v1.json")
         )
-        self.assertEqual(tuple(spec["formal_seeds"]), config.FORMAL_SEEDS)
+        self.assertEqual(
+            tuple(spec["formal_seeds"]), config.HISTORICAL_FORMAL_SEEDS
+        )
         self.assertEqual(spec["counts"]["expected_total_result_rows"], 740)
         self.assertEqual(len(panel_map(spec)), 6)
 
@@ -31,11 +33,11 @@ class FullySyntheticIndexFreezeTests(unittest.TestCase):
                     "seed": seed,
                     "instance_bundle_filename": f"bundle_{seed}.json",
                 }
-                for seed in config.FORMAL_SEEDS
+                for seed in config.HISTORICAL_FORMAL_SEEDS
             ]
             rows.append({
                 "profile": "small_ordinary",
-                "seed": config.FORMAL_SEEDS[0],
+                "seed": config.HISTORICAL_FORMAL_SEEDS[0],
                 "instance_bundle_filename": "unselected.json",
             })
             index.write_text(json.dumps({
@@ -47,7 +49,10 @@ class FullySyntheticIndexFreezeTests(unittest.TestCase):
             }), encoding="utf-8")
             entries = select_medium_ordinary(index)
         self.assertEqual(len(entries), 10)
-        self.assertEqual({row["seed"] for row in entries}, set(config.FORMAL_SEEDS))
+        self.assertEqual(
+            {row["seed"] for row in entries},
+            set(config.HISTORICAL_FORMAL_SEEDS),
+        )
 
     def test_relative_path_uses_forward_slashes(self):
         value = relative_path(Path("root/derived"), Path("root/source/a.json"))

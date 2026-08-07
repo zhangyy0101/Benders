@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,7 +15,9 @@ if str(ROOT) not in sys.path:
 
 from config import (  # noqa: E402
     FORECAST_ERROR_MODES,
+    FORMAL_FREEZE_TAG,
     FORMAL_PUBLIC_CALIBRATION_SCENARIOS,
+    FORMAL_RESULT_AUTHORIZED,
     FORMAL_SEEDS,
     FORMAL_SYNTHETIC_SCALE_INITIAL_UTILIZATION,
     FORMAL_SYNTHETIC_PRESSURE_TARGET_TOLERANCE,
@@ -43,6 +46,18 @@ from rolling_data import (  # noqa: E402
     build_repair_pressure_case,
     build_synthetic_rolling_case,
 )
+
+
+def _exact_git_tag() -> str | None:
+    """Return the exact checked-out tag, or None for an untagged commit."""
+
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--exact-match"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def _instance_path(output_dir: Path, instance_id: str) -> Path:
@@ -292,6 +307,14 @@ def _write_index(
         "index_schema": "rolling-instance-index-v1",
         "instance_protocol": INSTANCE_PROTOCOL,
         "experiment_phase": args.experiment_phase,
+        "formal_results_authorized": (
+            bool(FORMAL_RESULT_AUTHORIZED)
+            if args.experiment_phase == "formal" else False
+        ),
+        "formal_freeze_tag": (
+            FORMAL_FREEZE_TAG
+            if args.experiment_phase == "formal" else None
+        ),
         "command": list(sys.argv),
         "entry_count": len(indexed_entries),
         "entries": indexed_entries,
@@ -323,6 +346,11 @@ def main() -> int:
     )
     parser.add_argument("--index-output", type=Path)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--confirm-open-formal-seeds",
+        action="store_true",
+        help="explicitly acknowledge first generation of the frozen formal set",
+    )
     subparsers = parser.add_subparsers(dest="family", required=True)
 
     synthetic = subparsers.add_parser("synthetic")
@@ -410,6 +438,12 @@ def main() -> int:
     if args.family == "synthetic" and args.ship_volume_factor <= 0:
         parser.error("--ship-volume-factor must be positive")
     if args.experiment_phase == "formal":
+        if not FORMAL_RESULT_AUTHORIZED:
+            parser.error("formal instance generation is not authorized")
+        if not args.confirm_open_formal_seeds:
+            parser.error(
+                "formal generation requires --confirm-open-formal-seeds"
+            )
         unexpected = sorted(set(args.seeds) - set(FORMAL_SEEDS))
         if unexpected:
             parser.error(
@@ -419,6 +453,12 @@ def main() -> int:
         git = collect_git_metadata()
         if git.get("git_dirty") is not False:
             parser.error("formal bundle generation requires a clean Git commit")
+        exact_tag = _exact_git_tag()
+        if exact_tag != FORMAL_FREEZE_TAG:
+            parser.error(
+                "formal bundle generation requires exact freeze tag "
+                f"{FORMAL_FREEZE_TAG}; found={exact_tag!r}"
+            )
         if args.overwrite:
             parser.error("formal bundles cannot be overwritten")
         if args.family == "portmis" and args.allow_provisional_source:

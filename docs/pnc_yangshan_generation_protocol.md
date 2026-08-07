@@ -255,18 +255,18 @@ The data-family allocation and exact formal instance specification are frozen.
 three-seed interface gate together with the candidate: all 120 rows completed
 with zero final unplaced boxes and no validation or deadline failures.
 
-The only authorized formal semi-synthetic generation entry point is:
+The historical V2 entry point below is permanently closed for generation and
+remains available only for non-generating provenance checks. The current
+confirmatory design is prepared as one complete semi-synthetic and synthetic
+matrix through:
 
 ```powershell
-python scripts/prepare_pnc_yangshan_v2_formal_instances.py `
-  --output-root local_results/protocol_v2_pnc_yangshan/formal_instances_v2
+python scripts/prepare_tre_v3_formal_instances.py --check-only
 ```
 
-It consumes `docs/specs/pnc_yangshan_v2_formal_instance_spec.json`, requires a
-clean Git commit and the audited five-method gate, refuses an existing output
-root, and writes separate central-main and robustness indexes. Under the
-current TRE revision it additionally refuses to open formal seeds while
-`FORMAL_RESULT_AUTHORIZED=False`; `--check-only` remains available for gate
-inspection. The superseding objective/controller state and the need for a new
-untouched confirmatory set are recorded in
-`docs/specs/formal_run_manifest_v3.json`.
+It consumes the V3 PNC and fully synthetic specifications, validates the frozen
+source files and controlled 120-row preflight, requires a clean exact freeze
+tag, refuses an existing output root, and defaults to no generation. Although
+the frozen design is authorized, opening seeds `2000--2009` still requires
+both `--generate` and `--confirm-open-formal-seeds`. The complete boundary is
+recorded in `docs/specs/formal_run_manifest_v3.json`.

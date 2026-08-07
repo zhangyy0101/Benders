@@ -50,8 +50,10 @@ def load_forecast_panel(spec_path: Path) -> tuple[dict, dict]:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     if spec.get("schema") != "fully-synthetic-formal-matrix-v1":
         raise RuntimeError("unexpected fully synthetic matrix schema")
-    if tuple(spec.get("formal_seeds", ())) != tuple(config.FORMAL_SEEDS):
-        raise RuntimeError("formal seed list changed")
+    if tuple(spec.get("formal_seeds", ())) != tuple(
+        config.HISTORICAL_FORMAL_SEEDS
+    ):
+        raise RuntimeError("historical formal seed list changed")
     panel = next(
         row for row in spec["panels"] if row["panel"] == "forecast_error"
     )
@@ -65,7 +67,9 @@ def load_forecast_panel(spec_path: Path) -> tuple[dict, dict]:
     if len(identities) != 8 or panel["unique_profile_count"] != 8:
         raise RuntimeError("forecast profile count mismatch")
     if panel["missing_bundle_count"] != (
-        len(panel["profiles_to_generate"]) * len(config.FORMAL_SEEDS)
+        len(panel["profiles_to_generate"]) * len(
+            config.HISTORICAL_FORMAL_SEEDS
+        )
     ):
         raise RuntimeError("missing forecast bundle count mismatch")
     return spec, panel
@@ -100,7 +104,7 @@ def verified_entries(
         case, metadata = read_instance_bundle(bundle)
         if case.get("oracle_certificate", {}).get("classification") != "feasible":
             raise RuntimeError(f"forecast bundle is not integer-certified: {bundle}")
-        if metadata.get("seed") not in config.FORMAL_SEEDS:
+        if metadata.get("seed") not in config.HISTORICAL_FORMAL_SEEDS:
             raise RuntimeError(f"unexpected forecast seed: {bundle}")
         entries.append({
             **original,
@@ -151,7 +155,7 @@ def main() -> None:
         ("error_010_mixed", args.baseline_index)
     ]
     generator = ROOT / "scripts" / "prepare_formal_instances.py"
-    seeds = [str(seed) for seed in config.FORMAL_SEEDS]
+    seeds = [str(seed) for seed in config.HISTORICAL_FORMAL_SEEDS]
     for profile_name in panel["profiles_to_generate"]:
         row = profiles[profile_name]
         output = args.output_root / profile_name
@@ -184,7 +188,7 @@ def main() -> None:
             combined_dir=args.output_root,
             forecast_profile=profile_name,
         )
-        if len(selected) != len(config.FORMAL_SEEDS):
+        if len(selected) != len(config.HISTORICAL_FORMAL_SEEDS):
             raise RuntimeError(f"forecast profile is incomplete: {profile_name}")
         entries.extend(selected)
         source_records.append({

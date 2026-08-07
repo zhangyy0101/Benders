@@ -2,10 +2,13 @@
 
 > Historical protocol notice: this document freezes the earlier PORT-MIS
 > `rolling-v4.4` / algorithm `v1.4.7` / result `v11` design. For the current
-> TRE implementation and its still-closed confirmatory gate, use
+> TRE implementation, registered seeds `2000--2009`, and confirmatory gate, use
 > `docs/tre_objective_revision_protocol.md` and
-> `docs/specs/formal_run_manifest_v3.json`. Commands and identifiers below
-> must not be used to label new results as current formal evidence.
+> `docs/specs/formal_run_manifest_v3.json`,
+> `docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json`, and
+> `docs/specs/fully_synthetic_formal_matrix_v2.json`. All commands, seeds and
+> identifiers below are historical and must not be used to label new results
+> as current formal evidence.
 
 The version 1.1 preflight passed on 2026-07-23 with reserved seeds 700--702.
 Those 36 rows are retained as historical development evidence. Version 1.2
@@ -58,6 +61,14 @@ normalized operations score. Independent execution validation remains
 mandatory. Fixed-ratio Progressive Repair (`full_direct`) is a controller
 ablation; reactive dependency propagation (`full`) is historical development
 evidence. Quality polish remains disabled.
+
+The incumbent key compares alternative stages generated inside the same
+candidate run from the same rolling snapshot. It does not compare the
+candidate with a separately executed configuration, and it does not guarantee
+that independently generated rolling trajectories will preserve the same
+ordering in their accumulated stability or realized KPIs. Such cross-method
+differences are empirical outcomes under the common time budget, not evidence
+by themselves that the lexicographic model order was violated.
 
 Any change to constraints, objective priorities, stage triggers, domain
 expansion, or validation semantics requires a new problem or algorithm version.

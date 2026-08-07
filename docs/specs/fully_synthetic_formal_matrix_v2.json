@@ -1,0 +1,139 @@
+{
+  "schema": "fully-synthetic-formal-matrix-v2",
+  "status": "frozen_authorized_not_generated",
+  "base_design": {
+    "path": "docs/specs/fully_synthetic_formal_matrix_v1.json",
+    "sha256": "721b92c99c2522964d345767d9f9fe1710b7909037d23898c542565faa927d80",
+    "reuse": "factor levels and panel roles only",
+    "prohibited_reuse": "seed-1000--1009 bundles and outcomes"
+  },
+  "formal_seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+  "common": {
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "execution_mode": "sequential_single_process",
+    "candidate": "full_bottleneck",
+    "internal_comparator": "core_start",
+    "external_baselines": ["kp_dos", "kp_sg", "dra_rpm"],
+    "forecast_baseline_error": 0.1,
+    "forecast_baseline_mode": "mixed",
+    "performance_bundle_requires_zero_shortage_integer_certificate": true,
+    "physical_recovery_policy": "common_to_all_methods",
+    "operation_weight_profile": "business",
+    "result_schema": "rolling-results-v16",
+    "problem_protocol": "rolling-v4.6-objective-only-stability",
+    "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3"
+  },
+  "output_root": "local_results/protocol_v3_tre_objective/formal_instances/confirmatory_seed2000_2009_rc1/fully_synthetic",
+  "panels": [
+    {
+      "panel": "scale_pressure",
+      "paper_role": "computational_scale_and_controlled_pressure",
+      "data_status": "not_generated",
+      "sizes": ["small", "medium", "large", "xlarge"],
+      "pressure_profiles": ["ordinary", "high_pressure"],
+      "initial_utilization": 0.55,
+      "forecast_error": 0.1,
+      "forecast_error_mode": "mixed",
+      "methods": ["core_start", "full_bottleneck", "kp_dos", "kp_sg", "dra_rpm"],
+      "bundle_count": 80,
+      "expected_result_rows": 400,
+      "time_budget_policy": {"small": 20, "medium": 20, "large": 60, "xlarge": 120}
+    },
+    {
+      "panel": "initial_utilization",
+      "paper_role": "initial_yard_load_sensitivity",
+      "data_status": "not_generated",
+      "size": "medium",
+      "initial_utilization_levels": [0.25, 0.55, 0.65],
+      "ship_volume_factor": 1.0,
+      "forecast_error": 0.1,
+      "forecast_error_mode": "mixed",
+      "methods": ["core_start", "full_bottleneck"],
+      "bundle_count": 30,
+      "expected_result_rows": 60,
+      "time_budget_seconds": 20
+    },
+    {
+      "panel": "forecast_error",
+      "paper_role": "forecast_error_magnitude_and_mechanism_sensitivity",
+      "data_status": "not_generated",
+      "base_case": {
+        "size": "medium",
+        "initial_utilization": 0.55,
+        "ship_volume_factor": 1.0,
+        "time_budget_seconds": 20
+      },
+      "profiles": [
+        {"profile": "error_000_mixed", "forecast_error": 0.0, "forecast_error_mode": "mixed"},
+        {"profile": "error_010_mixed", "forecast_error": 0.1, "forecast_error_mode": "mixed"},
+        {"profile": "error_020_mixed", "forecast_error": 0.2, "forecast_error_mode": "mixed"},
+        {"profile": "error_030_mixed", "forecast_error": 0.3, "forecast_error_mode": "mixed"},
+        {"profile": "error_010_multiplicative", "forecast_error": 0.1, "forecast_error_mode": "multiplicative"},
+        {"profile": "error_010_timing_shift", "forecast_error": 0.1, "forecast_error_mode": "timing_shift"},
+        {"profile": "error_010_booking_add_cancel", "forecast_error": 0.1, "forecast_error_mode": "booking_add_cancel"},
+        {"profile": "error_010_ship_correlated", "forecast_error": 0.1, "forecast_error_mode": "ship_correlated"}
+      ],
+      "methods": ["core_start", "full_bottleneck"],
+      "bundle_count": 80,
+      "expected_result_rows": 160
+    },
+    {
+      "panel": "internal_ablation",
+      "paper_role": "candidate_component_ablation",
+      "data_status": "reuse_new_scale_pressure_subset",
+      "subset_profile": "medium_ordinary",
+      "methods": ["core", "core_start", "core_start_impact", "full_bottleneck"],
+      "bundle_count": 10,
+      "expected_result_rows": 40,
+      "time_budget_seconds": 20
+    },
+    {
+      "panel": "aggregate_ablation",
+      "paper_role": "aggregate_lp_routing_ablation",
+      "data_status": "reuse_new_scale_pressure_subset",
+      "subset_profile": "medium_ordinary",
+      "methods": ["full_bottleneck", "full_bottleneck_no_aggregate"],
+      "bundle_count": 10,
+      "expected_result_rows": 20,
+      "time_budget_seconds": 20
+    },
+    {
+      "panel": "repair_mechanism",
+      "paper_role": "repair_path_reachability_only",
+      "data_status": "not_generated",
+      "pressure_levels": ["nearby", "global"],
+      "methods": ["full_direct", "full_bottleneck", "full"],
+      "bundle_count": 20,
+      "expected_result_rows": 60,
+      "time_budget_seconds": 20,
+      "integer_certificate_required": false,
+      "pool_with_performance_panels": false
+    }
+  ],
+  "counts": {
+    "unique_performance_bundles": 180,
+    "mechanism_bundles": 20,
+    "expected_performance_result_rows": 680,
+    "expected_mechanism_result_rows": 60,
+    "expected_total_result_rows": 740
+  },
+  "reporting_rules": [
+    "never pool semi-synthetic and fully synthetic observations",
+    "never pool repair-mechanism rows with certified performance rows",
+    "compare methods within one prespecified scenario cell using the ten paired seeds",
+    "do not treat multiple cells sharing one seed as independent replicates",
+    "report forecast magnitude and mechanism as separate subpanels",
+    "report physical recovery separately from final unplaced quantity",
+    "retain and report algorithmic failures without selective reruns",
+    "do not tune algorithms or objective weights from confirmatory outcomes"
+  ],
+  "generation_gate": {
+    "authorized_entry_point": "scripts/prepare_tre_v3_formal_instances.py",
+    "explicit_seed_open_confirmation_required": true,
+    "overwrite": false,
+    "resume": false,
+    "formal_result_authorization_required": true,
+    "clean_exact_freeze_tag_required": true
+  }
+}

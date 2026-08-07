@@ -1,0 +1,92 @@
+{
+  "schema": "pnc-yangshan-confirmatory-instance-spec-v1",
+  "status": "frozen_authorized_not_generated",
+  "data_protocol_version": "pnc-yangshan-formal-instance-v2",
+  "problem_protocol": "rolling-v4.6-objective-only-stability",
+  "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3",
+  "result_schema": "rolling-results-v16",
+  "formal_seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+  "seed_selection": {
+    "rule": "next unused contiguous ten-seed block after the opened 1000-series formal set",
+    "registered_before_generation": true,
+    "workspace_collision_audit": "no seed field, instance ID, or filename matched seed2000--seed2009 before registration",
+    "old_formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
+    "old_seed_role": "historical_exploratory_only"
+  },
+  "base_data_design": {
+    "path": "docs/specs/pnc_yangshan_v2_formal_instance_spec.json",
+    "sha256": "36651be4bd9e55de1998b3ed164d5ba798ede8187e6c613e21562b4690a780d5",
+    "reuse": "profile definitions, fixed PNC calls, source windows, volume factors, yard profiles, and supported box domain only",
+    "prohibited_reuse": "seed-1000--1009 bundles and all outcomes generated from them"
+  },
+  "profile_order": [
+    "temporal_mar",
+    "temporal_apr",
+    "temporal_jun",
+    "volume_baseline",
+    "volume_low",
+    "volume_high",
+    "yard_observed",
+    "yard_high_pressure"
+  ],
+  "common": {
+    "time_budget_seconds_per_cycle": 60,
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "forecast_error": 0.1,
+    "forecast_error_mode": "multiplicative",
+    "supported_sizes": [20, 40],
+    "supported_heights": ["STD", "HIGH"],
+    "yard_scope": "yangshan_of_only",
+    "packing_oracle_protocol": "full-horizon-integer-packing-v2",
+    "performance_bundle_requires_zero_shortage_integer_certificate": true
+  },
+  "methods": {
+    "central_main": ["core_start", "full_bottleneck", "kp_dos", "kp_sg", "dra_rpm"],
+    "robustness": ["core_start", "full_bottleneck"],
+    "operation_weight_sensitivity": ["core_start", "full_bottleneck"],
+    "dra_parameter_sensitivity": ["dra_rpm"]
+  },
+  "operation_weight_sensitivity_profiles": [
+    "equal_weight_ablation",
+    "weak",
+    "strong_distance"
+  ],
+  "operation_weight_reference_profile": "business",
+  "dra_parameter_sensitivity_profiles": [
+    "mu_low",
+    "mu_high",
+    "nu_low",
+    "nu_high",
+    "discount_low",
+    "discount_high"
+  ],
+  "dra_parameter_reference_profile": "frozen",
+  "expected_counts": {
+    "profiles_per_seed": 8,
+    "formal_seed_count": 10,
+    "unique_bundle_count": 80,
+    "central_main_result_rows": 50,
+    "robustness_result_rows": 140,
+    "operation_weight_sensitivity_additional_rows": 60,
+    "dra_parameter_sensitivity_additional_rows": 60,
+    "total_semisynthetic_result_rows": 310
+  },
+  "preflight_gate": {
+    "csv": "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5_controlled_retry1/main_gate/results/business_main.csv",
+    "csv_sha256": "79722d3d7dc14f3e1f065c96ca146858999764a87a1edff3eb7627199771fd2e",
+    "manifest": "local_results/protocol_v3_tre_objective/preflight/preflight_candidate_v5_controlled_retry1/main_gate/results/business_main.manifest.json",
+    "manifest_sha256": "ca1ed36ff741e0b4cb7589349afaeb16e09739532355f901a561e2810699232a",
+    "required_rows": 120,
+    "required_all_ok": true
+  },
+  "generation_gate": {
+    "authorized_entry_point": "scripts/prepare_pnc_yangshan_v3_confirmatory_instances.py",
+    "output_root": "local_results/protocol_v3_tre_objective/formal_instances/confirmatory_seed2000_2009_rc1/pnc_yangshan",
+    "explicit_seed_open_confirmation_required": true,
+    "overwrite": false,
+    "resume": false,
+    "formal_result_authorization_required": true,
+    "clean_exact_freeze_tag_required": true
+  }
+}

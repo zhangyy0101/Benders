@@ -19,10 +19,31 @@ SYNTHETIC_PRESSURE_PROTOCOL = (
 # are a held-out set and must not be used for tuning before the final freeze.
 DEVELOPMENT_SEEDS = (100, 101, 102)
 PREFLIGHT_SEEDS = (700, 701, 702)
-FORMAL_SEEDS = tuple(range(1000, 1010))
-# Version 1.6.0 was defined after outputs for FORMAL_SEEDS existed.  Keep formal
-# execution closed until a new untouched confirmatory set is registered.
-FORMAL_RESULT_AUTHORIZED = False
+HISTORICAL_FORMAL_SEEDS = tuple(range(1000, 1010))
+# Seeds 1000--1009 were opened under the historical objective and may now be
+# used only for exploratory re-evaluation.  The confirmatory V3 set below was
+# registered before any corresponding bundle or result was generated.
+FORMAL_SEEDS = tuple(range(2000, 2010))
+# The V3 specifications and analysis policy are frozen.  Generation/execution
+# remain guarded by a clean exact tag plus an explicit seed-opening flag.
+FORMAL_RESULT_AUTHORIZED = True
+FORMAL_EXECUTION_MODE = "sequential_single_process"
+FORMAL_FREEZE_TAG = (
+    "rolling-v4.6-objective-only-stability-formal-input-rc1"
+)
+FORMAL_OPERATION_WEIGHT_SENSITIVITY_PROFILES = (
+    "equal_weight_ablation",
+    "weak",
+    "strong_distance",
+)
+FORMAL_DRA_SENSITIVITY_PROFILES = (
+    "mu_low",
+    "mu_high",
+    "nu_low",
+    "nu_high",
+    "discount_low",
+    "discount_high",
+)
 
 # Synthetic formal panels separate computational size, initial yard
 # utilization, and capacity pressure.  The pressure targets are peak

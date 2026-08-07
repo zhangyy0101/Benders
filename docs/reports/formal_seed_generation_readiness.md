@@ -1,5 +1,11 @@
 # Formal-seed generation readiness
 
+> Historical report. This readiness decision applies only to the superseded
+> `rolling-v4.4` / algorithm `v1.4.7` design and seeds `1000--1009`, whose
+> outcomes were subsequently opened. It does not authorize or describe the
+> current TRE confirmatory experiment. See
+> `tre_v173_formal_instance_generation_readiness.md` instead.
+
 ## Decision
 
 The algorithm and data interfaces are ready to be frozen before formal seed

@@ -14,7 +14,7 @@ class FullySyntheticFormalMatrixTests(unittest.TestCase):
     def test_seed_and_protocol_boundary_is_frozen(self):
         self.assertEqual(
             tuple(self.spec["formal_seeds"]),
-            tuple(config.FORMAL_SEEDS),
+            tuple(config.HISTORICAL_FORMAL_SEEDS),
         )
         common = self.spec["common"]
         self.assertEqual(
@@ -78,12 +78,44 @@ class FullySyntheticFormalMatrixTests(unittest.TestCase):
         self.assertEqual(panel["existing_bundle_count"], 10)
         self.assertEqual(panel["missing_bundle_count"], 70)
         self.assertEqual(
-            len(panel["profiles_to_generate"]) * len(config.FORMAL_SEEDS),
+            len(panel["profiles_to_generate"]) * len(
+                config.HISTORICAL_FORMAL_SEEDS
+            ),
             panel["missing_bundle_count"],
         )
 
     def test_method_counts_match_expected_rows(self):
         for panel in self.spec["panels"]:
+            self.assertEqual(
+                panel["bundle_count"] * len(panel["methods"]),
+                panel["expected_result_rows"],
+            )
+
+
+class ConfirmatoryFullySyntheticFormalMatrixTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.spec = json.loads(
+            Path("docs/specs/fully_synthetic_formal_matrix_v2.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def test_current_seed_and_protocol_boundary_is_frozen(self):
+        self.assertEqual(tuple(self.spec["formal_seeds"]), config.FORMAL_SEEDS)
+        common = self.spec["common"]
+        self.assertEqual(common["algorithm_version"], config.ALGORITHM_VERSION)
+        self.assertEqual(common["problem_protocol"], config.PROBLEM_PROTOCOL)
+        self.assertEqual(common["result_schema"], config.RESULT_SCHEMA_VERSION)
+        self.assertEqual(common["execution_mode"], config.FORMAL_EXECUTION_MODE)
+
+    def test_confirmatory_counts_reconcile(self):
+        panels = {row["panel"]: row for row in self.spec["panels"]}
+        self.assertEqual(len(panels), 6)
+        total = sum(row["expected_result_rows"] for row in panels.values())
+        self.assertEqual(total, 740)
+        self.assertEqual(total, self.spec["counts"]["expected_total_result_rows"])
+        for panel in panels.values():
             self.assertEqual(
                 panel["bundle_count"] * len(panel["methods"]),
                 panel["expected_result_rows"],

@@ -1,4 +1,4 @@
-# TRE v1.7.3 preflight candidate v5 pre-run audit
+# TRE v1.7.3 preflight candidate v5 controlled audit
 
 The initial audit completed preparation before any candidate-v5 solver row was
 started. Candidate v4 was superseded with zero result rows because a legacy
@@ -69,10 +69,87 @@ log directory contains no CSV, manifest, or solver row and will not be reused.
 - 175 tests and 16 subtests pass;
 - formal input generation and execution remain closed.
 
-The controlled preflight must run sequentially from a fresh detached checkout
-of the clean candidate-v5 tag into the new
-`preflight_candidate_v5_controlled_retry1` result root. It must use a single
+The controlled preflight was required to run sequentially from a fresh
+detached checkout of the clean candidate-v5 tag into the new
+`preflight_candidate_v5_controlled_retry1` result root. It used a single
 managed foreground process, no Task Scheduler entry, no launcher script, and
 no `--resume`. The local and `origin` annotated tag objects both resolve to
-`e7651b3801836ad15c2d05b2eecb92d4304c2c6a`. The matrix is not to be launched
-until the user explicitly confirms.
+`e7651b3801836ad15c2d05b2eecb92d4304c2c6a`.
+
+## Controlled retry outcome
+
+The controlled retry completed on 2026-08-07 (Asia/Shanghai). Its manifest
+records `complete=true`, `all_ok=true`, and exactly 120 of 120 requested rows:
+24 rows each for `core_start`, `full_bottleneck`, `kp_dos`, `kp_sg`, and
+`dra_rpm`. There were no deadline misses, missing incumbents, validation
+failures, formulation or identity failures, or final unplaced boxes. All 48
+core-method rows contain complete normalized-objective accounting in the
+declared range. The maximum observed single-cycle online decision time was
+56.075 seconds under the common 60-second limit.
+
+The result artifacts are:
+
+- `local_results/protocol_v3_tre_objective/preflight/`
+  `preflight_candidate_v5_controlled_retry1/main_gate/results/business_main.csv`;
+- the adjacent `business_main.manifest.json`;
+- CSV SHA-256
+  `79722d3d7dc14f3e1f065c96ca146858999764a87a1edff3eb7627199771fd2e`.
+
+## Comparison and reporting boundary
+
+All listed metrics are lower-is-better. Values are means over the same 24
+instances, except physical recovery, which is the total number of boxes.
+
+| Metric | `full_bottleneck` | `core_start` | Candidate difference |
+|---|---:|---:|---:|
+| Total online decision time per instance (s) | 137.96 | 175.53 | -21.4% |
+| Realized distance (million) | 8.732 | 10.019 | -12.9% |
+| Realized conflict | 199.54 | 270.59 | -26.3% |
+| Mean-cycle normalized operations score | 0.1885 | 0.2143 | -12.0% |
+| Stability cost | 3,252.00 | 2,982.04 | +9.1% |
+| Bays per ship-POD | 11.48 | 10.56 | +8.7% |
+| Peak block utilization | 77.34% | 68.85% | +8.48 percentage points |
+| Utilization deviation | 3.257% | 2.081% | +1.176 percentage points |
+| Revision rate | 0.1651% | 0.0160% | +0.149 percentage points |
+| Physical-recovery placement (boxes) | 41 | 4 | +37 boxes |
+
+Relative to `core_start`, the candidate therefore shows a preflight advantage
+in online decision time, distance, conflict, and the normalized operations
+score, while `core_start` is better on accumulated stability, revision,
+fragmentation, yard-balance indicators, and physical recovery. This is a
+multidimensional trade-off, not universal candidate dominance.
+
+The external baselines are much faster: their mean total decision times are
+1.89 seconds for `kp_dos`, 22.78 seconds for `kp_sg`, and 15.15 seconds for
+`dra_rpm`, versus 137.96 seconds for the candidate. The two KP methods also
+have much lower distance, and DRA-RPM is slightly lower on distance. The
+candidate instead has substantially lower conflict, stability cost, revision
+rate, bay fragmentation, peak utilization, and utilization deviation than the
+three external baselines. Its mean normalized operations score is worse than
+the two KP methods but better than DRA-RPM, and all three external baselines
+use less physical recovery (9, 9, and 5 boxes, respectively, versus 41).
+These methods consequently represent different
+speed--distance--solution-structure trade-offs.
+
+The model's lexicographic order remains predicted shortage, stability, and
+normalized operations score, but its guarantee is local to alternative stages
+evaluated from the same rolling snapshot within one method execution.
+`core_start` and `full_bottleneck` are independent rolling simulations:
+different early decisions change later states and objectives, while the common
+finite time limit and 1% MIP gap can return different feasible incumbents. The
+candidate's higher accumulated stability cost therefore does not by itself
+show that a lower-priority objective displaced stability inside a common
+snapshot.
+
+The candidate used physical recovery for 41 of 106,499 realized boxes
+(0.0385%) across 10 of 24 instances and ended with zero unplaced boxes. Here
+41 is a box quantity, not 41 recovery events or 41 TEU. Physical recovery is a
+post-optimization execution fallback and must be reported separately from
+predicted shortage and final unplaced quantity.
+
+This controlled preflight passes the feasibility, interface, accounting, and
+runtime gate. It is preliminary evidence only: it does not authorize formal
+execution, establish confirmatory statistical significance, or support a
+claim that the candidate dominates every comparator on every metric. Formal
+authorization remains false pending registration and freezing of an untouched
+confirmatory set.

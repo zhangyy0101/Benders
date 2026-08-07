@@ -1,13 +1,19 @@
 import json
 import unittest
 
-from config import ALGORITHM_VERSION, PROBLEM_PROTOCOL, RESULT_SCHEMA_VERSION
+from config import (
+    ALGORITHM_VERSION,
+    FORMAL_SEEDS,
+    PROBLEM_PROTOCOL,
+    RESULT_SCHEMA_VERSION,
+)
 from analysis.summarize_experiments import (
     DEFAULT_METRICS,
     artifact_audit,
     describe,
     method_label,
     paired_comparison,
+    publication_consistency_errors,
     summarize,
 )
 
@@ -17,11 +23,12 @@ def _row(
     value: float,
     *,
     profile: str = "not_applicable",
-    seed: int = 1000,
+    seed: int = FORMAL_SEEDS[0],
+    scenario: str = "case",
 ):
     is_literature_baseline = configuration in {"kp_dos", "kp_sg", "dra_rpm"}
     return {
-        "instance": "case_seed1000",
+        "instance": f"{scenario}_seed{seed}",
         "instance_bundle_sha256": "abc",
         "instance_family": "reproducible_synthetic",
         "initial_utilization": "0.5",
@@ -127,7 +134,7 @@ class FormalAnalysisTests(unittest.TestCase):
 
     def test_wilcoxon_reports_holm_adjusted_probability_when_eligible(self):
         rows = []
-        for seed in range(1000, 1006):
+        for seed in FORMAL_SEEDS[:6]:
             rows.extend([
                 _row("full_bottleneck", 0, seed=seed),
                 _row("core", 1, seed=seed),
@@ -139,6 +146,61 @@ class FormalAnalysisTests(unittest.TestCase):
         )
         self.assertTrue(comparison["wilcoxon"]["eligible"])
         self.assertIn("p_value_holm", comparison["wilcoxon"])
+        self.assertEqual(
+            comparison["wilcoxon"]["holm_scope"],
+            "scenario_cell_and_metric_family",
+        )
+
+    def test_confirmatory_inference_does_not_pool_scenario_cells(self):
+        rows = []
+        for scenario in ("small_ordinary", "large_pressure"):
+            for seed in FORMAL_SEEDS[:6]:
+                rows.extend([
+                    _row("full_bottleneck", 0, seed=seed, scenario=scenario),
+                    _row("core", 1, seed=seed, scenario=scenario),
+                ])
+        result = summarize(rows, ("realized_unplaced",))
+        comparisons = [
+            item for item in result["paired_comparisons"]
+            if item["left"] == "full_bottleneck" and item["right"] == "core"
+        ]
+        self.assertEqual(len(comparisons), 2)
+        self.assertEqual(
+            {item["summary"]["count"] for item in comparisons},
+            {6},
+        )
+        self.assertFalse(result["cross_cell_pooling_for_inference"])
+
+    def test_algorithmic_failure_is_retained_but_quality_is_excluded(self):
+        failed = {
+            **_row("full_bottleneck", 5),
+            "ok": "False",
+            "online_deadline_miss_count": "1",
+        }
+        valid = _row("core", 0)
+        rows = [failed, valid]
+        manifest = {
+            "complete": True,
+            "all_ok": False,
+            "row_count": 2,
+            "expected_row_count": 2,
+        }
+        self.assertEqual(
+            publication_consistency_errors(
+                rows, manifest=manifest, require_manifest=True
+            ),
+            [],
+        )
+        result = summarize(rows, ("realized_unplaced", "ok"))
+        failed_group = next(
+            item for item in result["group_summaries"]
+            if item["configuration"] == "full_bottleneck"
+        )
+        self.assertEqual(failed_group["invalid_quality_row_count"], 1)
+        self.assertEqual(
+            failed_group["metrics"]["realized_unplaced"]["count"], 0
+        )
+        self.assertEqual(failed_group["metrics"]["ok"]["count"], 1)
 
     def test_formal_artifact_audit_checks_bundle_seed_and_public_source(self):
         rows = [_row("full_bottleneck", 0)]

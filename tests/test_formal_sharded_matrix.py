@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from config import FORMAL_ORCHESTRATION_PROTOCOL
+from config import FORMAL_FREEZE_TAG, FORMAL_ORCHESTRATION_PROTOCOL
 from run_experiments import experiment_identity
 from scripts.run_formal_sharded_matrix import (
     merge_shard_checkpoints,
@@ -37,6 +37,7 @@ class FormalShardedMatrixTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "explicitly authorized"):
                 _paths_from_indexes([str(index)], require_formal=True)
             payload["formal_results_authorized"] = True
+            payload["formal_freeze_tag"] = FORMAL_FREEZE_TAG
             index.write_text(json.dumps(payload), encoding="utf-8")
             paths, _expected, records = _paths_from_indexes(
                 [str(index)], require_formal=True

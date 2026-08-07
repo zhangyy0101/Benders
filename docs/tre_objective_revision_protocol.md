@@ -41,6 +41,31 @@ safety stage and requires at least 10 seconds to remain before admitting or
 constructing its unrestricted model. These are allocations inside the
 unchanged common budget, not extra runtime.
 
+### Interpretation boundary for the priority order
+
+The three priorities apply to one optimization snapshot. The controller's
+strict incumbent guard also compares only the restricted and repair-stage
+candidates generated inside that same execution. It does not use the result of
+a separately run `core_start` configuration as a stability bound or reference
+solution.
+
+Consequently, the priority order does not imply cross-method dominance of
+full-horizon totals. `core_start` and `full_bottleneck` make different early
+decisions, which produce different inventories, inherited plans, forecasts,
+and feasible regions in later cycles. Both are also solved under a finite
+per-cycle time limit and a 1% MIP gap. Their accumulated stability cost can
+therefore rank differently even though each accepted within-run stage obeys
+the declared shortage--stability--operations ordering.
+
+Reports must distinguish modeled per-snapshot objectives from realized
+rolling KPIs. In particular, physical recovery is a deterministic
+post-optimization execution fallback and is not a fourth lexicographic
+objective. `physical_recovery_placement` is a quantity of boxes placed through
+that fallback, not a count of recovery events and not a TEU measure unless an
+explicit size conversion is performed. Preflight comparisons must be framed
+as feasibility, interface, runtime, and trade-off evidence; claims of
+statistical superiority are reserved for the frozen confirmatory experiment.
+
 For positive optimizer-visible arrival quantity \(Q^+\), reachable support set
 \(\mathcal S^+\), maximum reachable distance \(d_{max}^+\), \(K\) blocks, and
 \(N\) periods, the implemented scales are:
@@ -100,19 +125,22 @@ method revised after formal outcomes have been inspected requires a new
 held-out set, those seeds may be reused only for historical or exploratory
 paired re-evaluation of the objective change.
 
-Before version 1.7.2 is authorized for a confirmatory formal run, register an
-untouched seed set or an independent operational time window in the V3
-manifest. Do not select the primary weight profile from any V3 result. All
-profile definitions, normalization equations, evaluation panels, and stopping
-rules must be frozen in a clean tagged commit before the new confirmatory set
-is opened.
+The untouched confirmatory set is registered as seeds `2000--2009` before any
+corresponding bundle is generated. The V3 manifest, PNC--Yangshan specification,
+fully synthetic matrix and sequential execution plan freeze the normalization,
+primary and sensitivity weights, panel membership, stopping rules and failure
+policy. Do not select or revise the primary weight profile from any V3 outcome.
 
 Formal statistical summaries use two-sided Student-t 95% confidence intervals.
 Wilcoxon signed-rank tests are reported only with at least five nonzero paired
-differences, and their p-values receive a Holm correction within each metric
-family. The default formal audit rejects mixed protocols or commits, duplicate
-identities, failed/invalid/late rows, missing bundle hashes, unexpected seeds,
-provisional public sources, score-accounting gaps, and incomplete manifests.
+differences. Inference is paired by seed inside one prespecified scenario cell;
+cells sharing a seed are not pooled as independent observations. P-values
+receive a Holm correction within each cell and metric family. The audit rejects
+mixed protocols or commits, duplicate identities, missing bundle hashes,
+unexpected seeds, provisional public sources, score-accounting gaps, and
+structurally incomplete manifests. Algorithm deadline, no-incumbent and
+validation failures are retained as outcomes; invalid rows are excluded from
+quality metrics and are never selectively rerun.
 
 ## Version 1.7.1 development gate
 
@@ -154,7 +182,23 @@ quantity. Detailed timings and hashes are in
 This gate authorizes a new clean preflight candidate, not a formal run. The
 entire 120-row preflight matrix must be regenerated under candidate v3.
 
-## Gates before a new formal tag
+## Version 1.7.3 controlled preflight gate
+
+Candidate v3 exposed a global-repair admission defect and candidate v4 was
+superseded before execution by a run-control contamination audit. The clean
+candidate-v5 retry then regenerated the complete 120-row matrix from zero at
+commit `e7651b3801836ad15c2d05b2eecb92d4304c2c6a`. Its manifest is complete and
+`all_ok=true`; all five methods have 24 valid rows, with zero deadline,
+missing-incumbent, validation, and final-unplaced failures. The result and its
+non-dominance reporting boundary are recorded in
+`docs/reports/tre_v173_preflight_candidate_v5_audit.md`.
+
+This passes the V3 preflight gate. The untouched seeds `2000--2009`, exact
+1,050-row matrix and execution policy were subsequently registered without
+generating an instance. Formal instance generation remains separately guarded
+by the clean exact formal-input tag and an explicit seed-opening confirmation.
+
+## Formal-input freeze checklist
 
 1. Implement and unit-test the reachable scale equations, weight-profile
    plumbing, residual-shortage and restricted-build-timeout global recovery,
@@ -165,6 +209,10 @@ entire 120-row preflight matrix must be regenerated under candidate v3.
 3. Confirm that every stage receives the same unrestricted scale dictionary.
 4. Confirm that the business and sensitivity profiles do not mix output roots
    or resume identities.
-5. Select and register a new untouched confirmatory set.
-6. Commit a clean worktree, pass the complete test suite, freeze the V3
-   manifest, and create a new annotated formal tag.
+5. Select and register a new untouched confirmatory set. Completed with seeds
+   `2000--2009`; seeds `1000--1009` are historical only.
+6. Freeze the cell-level inference, failure-accounting and sequential batch
+   policies together with the exact 1,050-row execution plan.
+7. Commit a clean worktree, pass the complete test suite, run the non-generating
+   readiness gate, publish the annotated formal-input tag, and repeat the gate
+   at that exact tag before any instance generation.

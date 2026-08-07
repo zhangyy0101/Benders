@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "preflight_candidate_v5_frozen_ready_to_run",
+  "status": "confirmatory_design_frozen_generation_authorized_not_started",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -50,9 +50,17 @@
     "old_formal_outputs_exist": true,
     "old_formal_seeds": [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009],
     "old_formal_seed_role_after_revision": "historical_exploratory_re_evaluation",
-    "new_untouched_confirmatory_set_required": true,
-    "confirmatory_set": null,
-    "freeze_condition": "select and register a new untouched seed set or independent operational window before formal execution"
+    "new_untouched_confirmatory_set_required": false,
+    "confirmatory_set": {
+      "seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+      "registered_before_generation": true,
+      "generated_bundle_count_at_registration": 0,
+      "observed_result_count_at_registration": 0,
+      "selection_rule": "next unused contiguous ten-seed block after the opened 1000-series set",
+      "semisynthetic_specification": "docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json",
+      "fully_synthetic_specification": "docs/specs/fully_synthetic_formal_matrix_v2.json"
+    },
+    "freeze_condition": "completed; generation still requires a clean exact freeze tag and explicit --generate --confirm-open-formal-seeds acknowledgement"
   },
   "local_archive": {
     "inventory": "local_results/archive/objective_equal_weight_freeze_v1/inventory.json",
@@ -262,6 +270,25 @@
     ],
     "report": "docs/reports/tre_v173_preflight_candidate_v5_audit.md"
   },
+  "preflight_candidate_v5_outcome": {
+    "status": "passed_controlled_retry",
+    "frozen_git_tag": "rolling-v4.6-objective-only-stability-preflight-candidate-v5",
+    "git_commit": "e7651b3801836ad15c2d05b2eecb92d4304c2c6a",
+    "expected_rows": 120,
+    "completed_rows": 120,
+    "rows_per_method": 24,
+    "complete": true,
+    "all_ok": true,
+    "deadline_misses": 0,
+    "no_incumbent_failures": 0,
+    "validation_failures": 0,
+    "final_realized_unplaced": 0,
+    "max_online_decision_seconds": 56.07447300013155,
+    "csv_sha256": "79722d3d7dc14f3e1f065c96ca146858999764a87a1edff3eb7627199771fd2e",
+    "manifest_sha256": "ca1ed36ff741e0b4cb7589349afaeb16e09739532355f901a561e2810699232a",
+    "report": "docs/reports/tre_v173_preflight_candidate_v5_audit.md",
+    "formal_authorization": false
+  },
   "runtime_fix_v1_7_3": {
     "status": "passed_three_failure_instance_directional_regression",
     "implementation_commit": "bdd4f5331c3aea7d33bdcca57e3dd727908acfbb",
@@ -304,12 +331,79 @@
     "preflight_rerun_required": true,
     "formal_authorization": false
   },
+  "confirmatory_formal_plan": {
+    "status": "frozen_authorized_not_generated",
+    "formal_freeze_tag": "rolling-v4.6-objective-only-stability-formal-input-rc1",
+    "execution_plan": "docs/specs/tre_v3_formal_execution_plan.json",
+    "instance_generation_entry_point": "scripts/prepare_tre_v3_formal_instances.py",
+    "formal_seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],
+    "execution_mode": "sequential_single_process_on_exclusive_host",
+    "threads_per_method": 1,
+    "mip_gap": 0.01,
+    "operation_weight_profile": "business",
+    "semisynthetic": {
+      "unique_bundles": 80,
+      "central_main_rows": 50,
+      "robustness_rows": 140,
+      "operation_weight_sensitivity_additional_rows": 60,
+      "dra_parameter_sensitivity_additional_rows": 60,
+      "expected_result_rows": 310,
+      "operation_weight_profiles": ["equal_weight_ablation", "weak", "business", "strong_distance"],
+      "dra_parameter_profiles": ["mu_low", "mu_high", "nu_low", "nu_high", "discount_low", "discount_high", "frozen"]
+    },
+    "fully_synthetic": {
+      "unique_performance_bundles": 180,
+      "mechanism_bundles": 20,
+      "expected_performance_rows": 680,
+      "expected_mechanism_rows": 60,
+      "expected_result_rows": 740
+    },
+    "expected_total_result_rows": 1050,
+    "time_budget_sensitivity": {
+      "included": false,
+      "reason": "optional enhancement omitted before confirmatory freeze because the prespecified scale panel already uses 20, 60, and 120 second budgets and the primary study is already extensive"
+    }
+  },
   "publication_analysis_policy": {
-    "confidence_interval": "two-sided Student-t 95%",
-    "paired_test": "two-sided Wilcoxon with at least five nonzero pairs",
-    "multiple_comparison_correction": "Holm within metric",
+    "independent_replication_unit": "seed within one prespecified scenario cell",
+    "cross_cell_pooling_for_inference": false,
+    "confidence_interval": "two-sided Student-t 95% on paired differences within a cell",
+    "paired_test": "two-sided Wilcoxon with at least five nonzero seed pairs within a cell",
+    "primary_metric_family": [
+      "total_online_decision_time",
+      "stability_cost",
+      "mean_cycle_normalized_operations_score",
+      "realized_distance",
+      "realized_in_out_conflict"
+    ],
+    "secondary_metrics": [
+      "revision_rate",
+      "mean_realized_bays_per_ship_pod",
+      "max_realized_peak_block_utilization",
+      "mean_realized_utilization_deviation",
+      "fallback_rate",
+      "physical_recovery_placement",
+      "physical_recovery_displaced_reservation"
+    ],
+    "feasibility_gate_metrics": [
+      "ok",
+      "validation_failure_count",
+      "online_deadline_miss_count",
+      "realized_unplaced"
+    ],
+    "multiple_comparison_correction": "Holm within each scenario cell and prespecified metric family across declared method comparisons",
+    "sensitivity_inference": "descriptive paired effects and confidence intervals; no post-hoc retuning",
     "mixed_protocol_default": "reject",
-    "formal_manifest_default": "required_complete_all_ok"
+    "formal_manifest_default": "complete row matrix required; all_ok may be false only when prespecified algorithmic failures are retained and reported"
+  },
+  "formal_failure_policy": {
+    "retain_every_requested_row": true,
+    "selective_rerun": false,
+    "algorithmic_deadline_or_no_incumbent": "retain as a negative outcome and report the method failure rate",
+    "validation_failure": "retain for failure accounting but exclude its quality metrics from paired summaries",
+    "quality_pair_requirement": "both method rows must be valid and within the declared online deadline",
+    "environmental_invalidation": "invalidate the whole affected batch before outcome interpretation, retain it in quarantine, and restart the complete batch in a fresh output root",
+    "failed_instance_deletion": false
   },
   "historical_development_smoke_gate": {
     "evidence_role": "historical_pre_v1.7_development_only",
@@ -320,5 +414,5 @@
     "all_zero_realized_unplaced": true,
     "result_root": "local_results/protocol_v3_tre_objective"
   },
-  "freeze_authorization": false
+  "freeze_authorization": true
 }
