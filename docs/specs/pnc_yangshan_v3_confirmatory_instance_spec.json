@@ -1,6 +1,6 @@
 {
   "schema": "pnc-yangshan-confirmatory-instance-spec-v1",
-  "status": "frozen_authorized_not_generated",
+  "status": "frozen_authorized_regeneration_pending_after_quarantined_rc1_path_failure",
   "data_protocol_version": "pnc-yangshan-formal-instance-v2",
   "problem_protocol": "rolling-v4.6-objective-only-stability",
   "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3",
@@ -82,7 +82,7 @@
   },
   "generation_gate": {
     "authorized_entry_point": "scripts/prepare_pnc_yangshan_v3_confirmatory_instances.py",
-    "output_root": "local_results/protocol_v3_tre_objective/formal_instances/confirmatory_seed2000_2009_rc1/pnc_yangshan",
+    "output_root": "local_results/tre_v3_rc2/instances/pnc_yangshan",
     "explicit_seed_open_confirmation_required": true,
     "overwrite": false,
     "resume": false,

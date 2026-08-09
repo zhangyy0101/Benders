@@ -1,6 +1,8 @@
 import json
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import config
 from scripts.prepare_tre_v3_formal_instances import (
@@ -10,6 +12,8 @@ from scripts.prepare_tre_v3_formal_instances import (
     DEFAULT_SYNTHETIC_SPEC,
     generation_commands,
     load_design,
+    planned_longest_temporary_path,
+    validate_windows_path_budget,
 )
 
 
@@ -40,6 +44,31 @@ class TreV3FormalPreparationTests(unittest.TestCase):
         )
         self.assertEqual(sum("forecast_error" in item for item in rendered), 7)
         self.assertEqual(sum("repair_mechanism" in item for item in rendered), 1)
+
+    def test_frozen_rc2_output_root_has_a_safe_windows_path_budget(self):
+        self.assertEqual(DEFAULT_OUTPUT, Path("local_results/tre_v3_rc2/instances"))
+        gate = validate_windows_path_budget(DEFAULT_OUTPUT)
+        self.assertEqual(
+            gate["planned_longest_temporary_path"],
+            str(planned_longest_temporary_path(DEFAULT_OUTPUT)),
+        )
+        self.assertLessEqual(
+            gate["planned_longest_temporary_path_length"],
+            gate["windows_safe_limit"],
+        )
+
+    def test_unsafe_windows_output_root_is_rejected_before_generation(self):
+        unsafe = Path("C:/") / ("x" * 300)
+        with (
+            patch.object(os, "name", "nt"),
+            patch(
+                "scripts.prepare_tre_v3_formal_instances."
+                "planned_longest_temporary_path",
+                return_value=unsafe,
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Windows path budget"):
+                validate_windows_path_budget(Path("unused"))
 
     def test_execution_plan_reconciles_all_frozen_batches(self):
         plan = json.loads(

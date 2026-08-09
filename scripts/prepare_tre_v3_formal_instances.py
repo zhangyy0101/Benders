@@ -36,15 +36,74 @@ DEFAULT_SYNTHETIC_SPEC = Path(
     "docs/specs/fully_synthetic_formal_matrix_v2.json"
 )
 DEFAULT_MANIFEST = Path("docs/specs/formal_run_manifest_v3.json")
-DEFAULT_OUTPUT = Path(
-    "local_results/protocol_v3_tre_objective/formal_instances/"
-    "confirmatory_seed2000_2009_rc1"
-)
+DEFAULT_OUTPUT = Path("local_results/tre_v3_rc2/instances")
 DEFAULT_PNC_SOURCE_ROOT = Path("local_results/protocol_v2_pnc_yangshan")
 DEFAULT_ATTRIBUTE_ROOT = (
     DEFAULT_PNC_SOURCE_ROOT / "pnc_export_attribute_disaggregation"
 )
 DEFAULT_YARD_ROOT = DEFAULT_PNC_SOURCE_ROOT / "yangshan_calibrated_virtual_yard"
+
+
+def planned_longest_temporary_path(output_root: Path) -> Path:
+    """Return the longest known generated path before any seed is opened."""
+
+    seed = max(config.FORMAL_SEEDS)
+    candidates = (
+        output_root
+        / "pnc_yangshan"
+        / "yard_high_pressure"
+        / f"seed_{seed}"
+        / (
+            ".pnc_yangshan_yard_high_pressure_observed_n4_"
+            f"seed{seed}.instance.json.tmp"
+        ),
+        output_root
+        / "fully_synthetic"
+        / "scale_pressure"
+        / (
+            ".synthetic_xlarge_high_pressure_e0.1_mixed_u0.55_"
+            f"seed{seed}.instance.json.tmp"
+        ),
+        output_root
+        / "fully_synthetic"
+        / "initial_utilization_u065"
+        / (
+            ".synthetic_medium_e0.1_mixed_u0.65_"
+            f"seed{seed}.instance.json.tmp"
+        ),
+        output_root
+        / "fully_synthetic"
+        / "forecast_error"
+        / "error_010_booking_add_cancel"
+        / (
+            ".synthetic_medium_e0.1_booking_add_cancel_u0.55_"
+            f"seed{seed}.instance.json.tmp"
+        ),
+        output_root
+        / "fully_synthetic"
+        / "repair_mechanism"
+        / f".pressure_global_seed{seed}.instance.json.tmp",
+    )
+    resolved = tuple(candidate.resolve() for candidate in candidates)
+    return max(resolved, key=lambda path: len(str(path)))
+
+
+def validate_windows_path_budget(output_root: Path) -> dict[str, object]:
+    """Fail before generation when a classic Windows path would be unsafe."""
+
+    longest = planned_longest_temporary_path(output_root)
+    length = len(str(longest))
+    safe_limit = 248
+    if os.name == "nt" and length > safe_limit:
+        raise RuntimeError(
+            "formal output root exceeds the frozen Windows path budget: "
+            f"planned_length={length}, safe_limit={safe_limit}, path={longest}"
+        )
+    return {
+        "planned_longest_temporary_path": str(longest),
+        "planned_longest_temporary_path_length": length,
+        "windows_safe_limit": safe_limit,
+    }
 
 
 def load_design(
@@ -53,6 +112,9 @@ def load_design(
     manifest_path: Path,
 ) -> tuple[dict, dict, dict]:
     pnc_spec, _base = load_confirmatory_spec(pnc_spec_path)
+    pnc_output = Path(pnc_spec["generation_gate"]["output_root"])
+    if pnc_output.resolve() != (DEFAULT_OUTPUT / "pnc_yangshan").resolve():
+        raise RuntimeError("PNC output root differs from the frozen RC2 root")
     synthetic = json.loads(synthetic_spec_path.read_text(encoding="utf-8"))
     if synthetic.get("schema") != "fully-synthetic-formal-matrix-v2":
         raise RuntimeError("unexpected confirmatory synthetic matrix schema")
@@ -72,6 +134,10 @@ def load_design(
         raise RuntimeError("historical synthetic base-design hash mismatch")
     if synthetic["counts"]["expected_total_result_rows"] != 740:
         raise RuntimeError("confirmatory synthetic row count mismatch")
+    if Path(synthetic["output_root"]).resolve() != (
+        DEFAULT_OUTPUT / "fully_synthetic"
+    ).resolve():
+        raise RuntimeError("synthetic output root differs from the frozen RC2 root")
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != "formal-run-manifest-v3":
@@ -94,6 +160,20 @@ def load_design(
         "counts"
     ]["expected_total_result_rows"]:
         raise RuntimeError("fully synthetic plan count mismatch")
+    execution_path = Path(plan["execution_plan"])
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    if execution.get("schema") != "tre-v3-formal-execution-plan-v1":
+        raise RuntimeError("unexpected formal execution plan schema")
+    if tuple(execution.get("formal_seeds", ())) != config.FORMAL_SEEDS:
+        raise RuntimeError("formal execution plan seed mismatch")
+    if execution.get("formal_freeze_tag") != config.FORMAL_FREEZE_TAG:
+        raise RuntimeError("formal execution plan freeze tag mismatch")
+    if execution.get("execution", {}).get("mode") != config.FORMAL_EXECUTION_MODE:
+        raise RuntimeError("formal execution mode mismatch")
+    if Path(execution.get("instance_root", "")).resolve() != DEFAULT_OUTPUT.resolve():
+        raise RuntimeError("formal execution instance root mismatch")
+    if execution.get("expected_total_rows") != 1050:
+        raise RuntimeError("formal execution row count mismatch")
     return pnc_spec, synthetic, manifest
 
 
@@ -319,6 +399,11 @@ def main() -> int:
     args = parser.parse_args()
     check_only = not args.generate
 
+    if args.output_root.resolve() != DEFAULT_OUTPUT.resolve():
+        raise RuntimeError(
+            "the frozen RC2 design requires output root "
+            f"{DEFAULT_OUTPUT}; found={args.output_root}"
+        )
     git = git_identity()
     if not git["clean"]:
         raise RuntimeError("formal readiness requires a clean Git commit")
@@ -341,6 +426,7 @@ def main() -> int:
             + ", ".join(missing_sources)
         )
     preflight = validate_controlled_preflight(pnc_spec)
+    path_budget = validate_windows_path_budget(args.output_root)
     if args.output_root.exists():
         raise FileExistsError("confirmatory formal output root already exists")
     commands = generation_commands(
@@ -360,6 +446,7 @@ def main() -> int:
         "formal_result_authorized": bool(config.FORMAL_RESULT_AUTHORIZED),
         "formal_seeds": list(config.FORMAL_SEEDS),
         "preflight": preflight,
+        "path_budget": path_budget,
         "pnc_source_file_count": len(
             required_source_paths(
                 args.attribute_root,
@@ -370,6 +457,9 @@ def main() -> int:
         "pnc_spec_sha256": sha256_file(args.pnc_spec),
         "synthetic_spec_sha256": sha256_file(args.synthetic_spec),
         "manifest_sha256": sha256_file(args.manifest),
+        "execution_plan_sha256": sha256_file(
+            Path(manifest["confirmatory_formal_plan"]["execution_plan"])
+        ),
         "expected_semisynthetic_rows": pnc_spec["expected_counts"]["total_semisynthetic_result_rows"],
         "expected_fully_synthetic_rows": synthetic_spec["counts"]["expected_total_result_rows"],
         "expected_total_result_rows": manifest["confirmatory_formal_plan"]["expected_total_result_rows"],

@@ -194,9 +194,26 @@ non-dominance reporting boundary are recorded in
 `docs/reports/tre_v173_preflight_candidate_v5_audit.md`.
 
 This passes the V3 preflight gate. The untouched seeds `2000--2009`, exact
-1,050-row matrix and execution policy were subsequently registered without
-generating an instance. Formal instance generation remains separately guarded
+1,050-row matrix and execution policy were subsequently registered before any
+instance was generated. Formal instance generation remains separately guarded
 by the clean exact formal-input tag and an explicit seed-opening confirmation.
+
+## Formal-input RC1 run-control incident and RC2 correction
+
+RC1 began deterministic construction of the preregistered seeds on 2026-08-08
+and stopped after 70 PNC--Yangshan bundles because a Windows temporary path was
+264 characters long. It produced no instance index, synthetic bundle or
+algorithm result. The complete partial output is quarantined and cannot be
+resumed or used as evidence.
+
+RC2 changes only filesystem run control: instance and result roots are
+shortened to `local_results/tre_v3_rc2`, and the generator validates its
+longest planned temporary path before opening a seed. All 280 bundles must be
+regenerated from zero. The model, algorithm, sources, seeds, weights, methods,
+budgets, matrix and statistical policy are unchanged. Because no algorithm
+outcome was produced or used to alter an experimental choice, the originally
+registered seeds `2000--2009` remain the confirmatory set. The complete audit
+is in `docs/reports/tre_v173_formal_generation_rc1_incident.md`.
 
 ## Formal-input freeze checklist
 

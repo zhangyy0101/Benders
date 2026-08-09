@@ -37,8 +37,7 @@ DEFAULT_SPEC = Path(
     "docs/specs/pnc_yangshan_v3_confirmatory_instance_spec.json"
 )
 DEFAULT_OUTPUT = Path(
-    "local_results/protocol_v3_tre_objective/formal_instances/"
-    "pnc_yangshan_confirmatory_v3"
+    "local_results/tre_v3_rc2/instances/pnc_yangshan"
 )
 
 
@@ -200,6 +199,12 @@ def main() -> None:
         raise RuntimeError("formal seed preparation requires a clean Git commit")
     spec, base_spec = load_confirmatory_spec(args.spec)
     preflight = validate_controlled_preflight(spec)
+    frozen_output = Path(spec["generation_gate"]["output_root"])
+    if args.output_root.resolve() != frozen_output.resolve():
+        raise RuntimeError(
+            "PNC--Yangshan output root differs from the frozen specification: "
+            f"expected={frozen_output}, found={args.output_root}"
+        )
     profiles = base_spec["profiles"]
     missing = [
         str(path)

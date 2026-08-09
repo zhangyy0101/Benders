@@ -29,7 +29,7 @@ FORMAL_SEEDS = tuple(range(2000, 2010))
 FORMAL_RESULT_AUTHORIZED = True
 FORMAL_EXECUTION_MODE = "sequential_single_process"
 FORMAL_FREEZE_TAG = (
-    "rolling-v4.6-objective-only-stability-formal-input-rc1"
+    "rolling-v4.6-objective-only-stability-formal-input-rc2"
 )
 FORMAL_OPERATION_WEIGHT_SENSITIVITY_PROFILES = (
     "equal_weight_ablation",

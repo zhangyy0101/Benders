@@ -1,6 +1,6 @@
 {
   "schema": "formal-run-manifest-v3",
-  "status": "confirmatory_design_frozen_generation_authorized_not_started",
+  "status": "confirmatory_design_frozen_generation_authorized_regeneration_pending_rc2",
   "parent_freeze": {
     "git_commit": "fd506b08c3b0c85d2c576ccf578bb3742d2f6ecc",
     "git_tag": "rolling-v4.4-objective-equal-weight-freeze-v1",
@@ -331,9 +331,32 @@
     "preflight_rerun_required": true,
     "formal_authorization": false
   },
+  "formal_input_freeze_history": {
+    "rc1": {
+      "git_commit": "178802f2d22ebc40f37312cb6fb056f66ea096f9",
+      "git_tag": "rolling-v4.6-objective-only-stability-formal-input-rc1",
+      "generation_started_at": "2026-08-08T01:46:03+08:00",
+      "status": "environmental_path_length_failure_before_any_index_or_result",
+      "completed_partial_bundles": 70,
+      "completed_partial_audits": 70,
+      "index_count": 0,
+      "formal_result_row_count": 0,
+      "failure": "classic Windows absolute temporary path length was 264 characters",
+      "quarantine": "local_results/quarantine_rc1_path_failure_20260808",
+      "stdout_sha256": "fbd87b7c356aeea5fd5db29dbf92585f3aa778c9e87494beb8fa29d8fd830ece",
+      "stderr_sha256": "3f02a53a898a32f8b6c5e880aa520062960a3490bb9abc2c9dda8bddee1ba379",
+      "disposition": "retain quarantine; do not resume or use partial bundles"
+    },
+    "rc2": {
+      "git_tag": "rolling-v4.6-objective-only-stability-formal-input-rc2",
+      "change_scope": "run-control only: shorten formal input/output roots and reject unsafe Windows path lengths before generation",
+      "model_algorithm_data_seeds_and_matrix_changed": false,
+      "restart_policy": "regenerate the complete 280-bundle matrix from zero with the preregistered seeds 2000--2009"
+    }
+  },
   "confirmatory_formal_plan": {
-    "status": "frozen_authorized_not_generated",
-    "formal_freeze_tag": "rolling-v4.6-objective-only-stability-formal-input-rc1",
+    "status": "frozen_authorized_regeneration_pending_rc2",
+    "formal_freeze_tag": "rolling-v4.6-objective-only-stability-formal-input-rc2",
     "execution_plan": "docs/specs/tre_v3_formal_execution_plan.json",
     "instance_generation_entry_point": "scripts/prepare_tre_v3_formal_instances.py",
     "formal_seeds": [2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009],

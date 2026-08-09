@@ -1,6 +1,6 @@
 {
   "schema": "fully-synthetic-formal-matrix-v2",
-  "status": "frozen_authorized_not_generated",
+  "status": "frozen_authorized_not_generated_rc2",
   "base_design": {
     "path": "docs/specs/fully_synthetic_formal_matrix_v1.json",
     "sha256": "721b92c99c2522964d345767d9f9fe1710b7909037d23898c542565faa927d80",
@@ -24,7 +24,7 @@
     "problem_protocol": "rolling-v4.6-objective-only-stability",
     "algorithm_version": "lead-aware-aggregate-lp-residual-global-repair-v1.7.3"
   },
-  "output_root": "local_results/protocol_v3_tre_objective/formal_instances/confirmatory_seed2000_2009_rc1/fully_synthetic",
+  "output_root": "local_results/tre_v3_rc2/instances/fully_synthetic",
   "panels": [
     {
       "panel": "scale_pressure",

@@ -357,6 +357,11 @@ failure-accounting rules and sequential execution order are registered in the
 V3 specifications. Seeds `1000--1009` are permanently historical/exploratory.
 `FORMAL_RESULT_AUTHORIZED=True` authorizes only this frozen generation design;
 it does not bypass the clean exact-tag or explicit seed-opening guards.
+The RC1 generation attempt was quarantined after a Windows path-length failure
+at 70 PNC--Yangshan bundles, before any index or result. RC2 changes run control
+only, uses the shorter root `local_results/tre_v3_rc2`, and requires complete
+regeneration from zero; see
+`docs/reports/tre_v173_formal_generation_rc1_incident.md`.
 The sole current all-panel readiness/generation entry point is:
 
 ```powershell
