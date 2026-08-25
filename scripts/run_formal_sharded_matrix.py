@@ -108,7 +108,7 @@ def write_shard_indexes(
                 / str(entry["instance_bundle_filename"])
             ).resolve()
             child["instance_bundle_filename"] = Path(
-                os.path.relpath(bundle_path, shard_directory)
+                os.path.relpath(bundle_path, shard_directory.resolve())
             ).as_posix()
             rewritten.append(child)
         shard_payload = {

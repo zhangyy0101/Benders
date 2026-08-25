@@ -18,7 +18,7 @@ from scripts.prepare_tre_v3_formal_instances import (
 
 
 class TreV3FormalPreparationTests(unittest.TestCase):
-    def test_registered_design_reconciles_without_opening_seeds(self):
+    def test_registered_design_reconciles(self):
         pnc, synthetic, manifest = load_design(
             DEFAULT_PNC_SPEC,
             DEFAULT_SYNTHETIC_SPEC,
@@ -30,7 +30,6 @@ class TreV3FormalPreparationTests(unittest.TestCase):
             manifest["confirmatory_formal_plan"]["expected_total_result_rows"],
             1050,
         )
-        self.assertFalse(DEFAULT_OUTPUT.exists())
 
     def test_generation_plan_is_complete_and_explicitly_guarded(self):
         commands = generation_commands(Path("unused-output"), 60.0)

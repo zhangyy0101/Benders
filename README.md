@@ -229,17 +229,20 @@ explicitly `None` when the attributes are unavailable; root relaxation is also
 
 ## Running
 
-The reproducible reference environment is Python 3.12 with the exact package
+The current development environment is Python 3.13 with the exact package
 versions in `requirements.txt`. Create an isolated environment and install it
 before running tests or scripts:
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pytest -q
 ```
+
+On Windows, create and activate the same environment with
+`py -3.13 -m venv .venv` and `.\.venv\Scripts\Activate.ps1`.
 
 Gurobi also requires a valid local licence. Package installation alone does
 not supply that licence. The repository currently has no declared software
